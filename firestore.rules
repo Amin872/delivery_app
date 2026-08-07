@@ -1,0 +1,66 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // users/{userId} doc id == auth uid, created at sign-up.
+    match /users/{userId} {
+      allow read: if isSelf(userId);
+      allow create: if isSelf(userId) && request.resource.data.role in ['customer', 'driver', 'vendor'];
+      // Role is fixed at sign-up; only profile fields may change afterwards.
+      allow update: if isSelf(userId) && request.resource.data.role == resource.data.role;
+      allow delete: if false;
+    }
+
+    // vendors/{vendorId} — public storefront, editable by its owner only.
+    match /vendors/{vendorId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      match /menuItems/{itemId} {
+        allow read: if true;
+        allow write: if isSignedIn() &&
+          get(/databases/$(database)/documents/vendors/$(vendorId)).data.ownerId == request.auth.uid;
+      }
+    }
+
+    // drivers/{driverId} doc id == auth uid. Availability/location visible
+    // to any signed-in user (needed for live order tracking); editable only
+    // by the driver themself.
+    match /drivers/{driverId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSelf(driverId);
+      allow delete: if false;
+    }
+
+    // orders/{orderId} — visible to the customer who placed it, the vendor
+    // that owns it, and the driver assigned to deliver it.
+    match /orders/{orderId} {
+      allow read: if isSignedIn() && (
+        resource.data.customerId == request.auth.uid ||
+        resource.data.driverId == request.auth.uid ||
+        get(/databases/$(database)/documents/vendors/$(resource.data.vendorId)).data.ownerId == request.auth.uid
+      );
+
+      allow create: if isSignedIn() && request.resource.data.customerId == request.auth.uid;
+
+      // Status transitions before a driver is assigned are handled by the
+      // vendor; driver assignment itself goes through the `acceptDelivery`
+      // callable Cloud Function (admin SDK, runs a transaction), not a
+      // direct client write, so no client-side driver-assignment rule exists here.
+      allow update: if isSignedIn() &&
+        get(/databases/$(database)/documents/vendors/$(resource.data.vendorId)).data.ownerId == request.auth.uid;
+
+      allow delete: if false;
+    }
+  }
+}

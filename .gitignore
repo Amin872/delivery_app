@@ -1,0 +1,17 @@
+# Node / Cloud Functions
+functions/node_modules/
+functions/lib/
+npm-debug.log*
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.runtimeconfig.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

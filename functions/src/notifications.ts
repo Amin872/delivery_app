@@ -1,0 +1,20 @@
+import { db, messaging } from "./admin";
+
+/**
+ * Looks up the FCM token stored on a user's document (written by the client
+ * after `FirebaseMessaging.instance.getToken()`) and sends a push notification.
+ * Silently no-ops if the user has no token registered yet.
+ */
+export async function notifyUser(
+  userId: string,
+  notification: { title: string; body: string }
+): Promise<void> {
+  const userDoc = await db.collection("users").doc(userId).get();
+  const fcmToken = userDoc.data()?.fcmToken as string | undefined;
+  if (!fcmToken) return;
+
+  await messaging.send({
+    token: fcmToken,
+    notification,
+  });
+}
