@@ -46,15 +46,21 @@ firebase deploy --only storage
 `firebase.json` runs `npm run lint && npm run build` in `functions/` automatically as a predeploy hook
 for `firebase deploy --only functions` — a broken build or lint error blocks deploy.
 
-## First-time setup required before running
+## Firebase project
 
-The scaffold has no real Firebase project wired in yet:
+Wired to `orient-food-9c1e0` (see `.firebaserc`) — an existing, already-active project (Firestore
+Native mode, Auth, and Storage all provisioned; it also has pre-existing `orient_food` Android/web apps
+and users unrelated to this codebase). `flutterfire configure -p orient-food-9c1e0 -y --platforms=android,ios,web`
+has been run, generating `mobile/lib/firebase_options.dart` (wired into `lib/main.dart` via
+`DefaultFirebaseOptions.currentPlatform`) and `mobile/android/app/google-services.json`.
 
-1. Replace the placeholder project ID in `.firebaserc`.
-2. From `mobile/`, run `flutterfire configure` — this generates `lib/firebase_options.dart` (not yet
-   present) and the native config files (`google-services.json`, `GoogleService-Info.plist`). Without
-   this, `Firebase.initializeApp()` in `lib/main.dart` fails at runtime.
-3. `google_maps_flutter` needs a Maps API key added to the Android manifest / iOS `AppDelegate.swift`.
+`ios/Runner/GoogleService-Info.plist` was **not** generated — FlutterFire CLI only embeds it into the
+Xcode project from macOS. Re-run the same `flutterfire configure` command from a Mac before building
+for iOS. Still needed regardless of platform: a Maps API key for `google_maps_flutter`, added to the
+Android manifest / iOS `AppDelegate.swift`.
+
+To repoint this app at a different Firebase project: update `.firebaserc`, then re-run
+`flutterfire configure -p <project-id> -y --platforms=android,ios,web` from `mobile/`.
 
 ## Architecture
 
