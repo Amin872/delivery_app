@@ -65,8 +65,14 @@ class FirestoreService {
   }
 
   Stream<List<DeliveryOrder>> watchAvailableOrdersForDrivers() {
+    // Both filters are required, not just for correctness: firestore.rules
+    // only grants drivers read access to unclaimed readyForPickup orders,
+    // and Firestore rejects a list query unless its own filters guarantee
+    // that condition for every possible result — the rule can't be proven
+    // from a status-only filter.
     return _orders
         .where('status', isEqualTo: OrderStatus.readyForPickup.name)
+        .where('driverId', isNull: true)
         .snapshots()
         .map((snap) => snap.docs
             .map((doc) => DeliveryOrder.fromMap(doc.id, doc.data()))

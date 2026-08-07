@@ -11,6 +11,11 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function hasRole(role) {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+
     // users/{userId} doc id == auth uid, created at sign-up.
     match /users/{userId} {
       allow read: if isSelf(userId);
@@ -43,12 +48,14 @@ service cloud.firestore {
     }
 
     // orders/{orderId} — visible to the customer who placed it, the vendor
-    // that owns it, and the driver assigned to deliver it.
+    // that owns it, the driver assigned to deliver it, and (for the unclaimed
+    // "readyForPickup" queue only) any signed-in driver browsing for work.
     match /orders/{orderId} {
       allow read: if isSignedIn() && (
         resource.data.customerId == request.auth.uid ||
         resource.data.driverId == request.auth.uid ||
-        get(/databases/$(database)/documents/vendors/$(resource.data.vendorId)).data.ownerId == request.auth.uid
+        get(/databases/$(database)/documents/vendors/$(resource.data.vendorId)).data.ownerId == request.auth.uid ||
+        (resource.data.status == 'readyForPickup' && resource.data.driverId == null && hasRole('driver'))
       );
 
       allow create: if isSignedIn() && request.resource.data.customerId == request.auth.uid;
