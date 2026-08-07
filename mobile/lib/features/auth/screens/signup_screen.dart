@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../models/app_user.dart';
 import '../providers/auth_provider.dart';
@@ -98,6 +99,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Text('Create account'),
+            ),
+            TextButton(
+              onPressed: () => context.go('/login'),
+              child: const Text('Already have an account? Sign in'),
             ),
           ],
         ),
