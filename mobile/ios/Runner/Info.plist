@@ -47,5 +47,7 @@
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Used to pick a storefront or menu item photo to upload.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Used to share your location for live delivery tracking.</string>
 </dict>
 </plist>
