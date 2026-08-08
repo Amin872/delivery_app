@@ -78,3 +78,67 @@ export const acceptDelivery = onCall(async (request) => {
 
   return { orderId, driverId: driverUid };
 });
+
+// The only two forward transitions a driver drives once acceptDelivery has
+// already moved the order to "pickedUp" — nothing else (not yet picked up,
+// already delivered, cancelled) has a next step here.
+const DRIVER_PROGRESSION: Record<string, string> = {
+  pickedUp: "delivering",
+  delivering: "delivered",
+};
+
+/**
+ * Resolves the next status for an order once its assigned driver calls
+ * `advanceDelivery`, or throws the `HttpsError` that call should surface.
+ * Split out from the transaction body so it's testable without a Firestore
+ * instance — same reasoning as `assertIsDriver` in auth.ts.
+ */
+export function nextDeliveryStatus(
+  order: { status?: string; driverId?: string } | undefined,
+  driverUid: string
+): string {
+  if (!order) {
+    throw new HttpsError("not-found", "Order does not exist.");
+  }
+  if (order.driverId !== driverUid) {
+    throw new HttpsError("permission-denied", "You are not assigned to this order.");
+  }
+  const next = DRIVER_PROGRESSION[order.status ?? ""];
+  if (!next) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Order cannot be advanced from its current status."
+    );
+  }
+  return next;
+}
+
+/**
+ * Atomically advances the calling driver's assigned order to its next
+ * status (pickedUp -> delivering -> delivered). Driver-initiated order
+ * writes go through a callable rather than a client-side Firestore rule —
+ * see the architecture note in CLAUDE.md — so this is the only path past
+ * "pickedUp".
+ */
+export const advanceDelivery = onCall(async (request) => {
+  const driverUid = request.auth?.uid;
+  if (!driverUid) {
+    throw new HttpsError("unauthenticated", "Must be signed in as a driver.");
+  }
+
+  const orderId = request.data?.orderId as string | undefined;
+  if (!orderId) {
+    throw new HttpsError("invalid-argument", "orderId is required.");
+  }
+
+  const orderRef = db.collection("orders").doc(orderId);
+
+  const status = await db.runTransaction(async (transaction) => {
+    const orderSnap = await transaction.get(orderRef);
+    const next = nextDeliveryStatus(orderSnap.data(), driverUid);
+    transaction.update(orderRef, { status: next });
+    return next;
+  });
+
+  return { orderId, status };
+});

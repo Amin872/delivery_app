@@ -1,1 +1,1 @@
-export { onOrderCreated, onOrderStatusChanged, acceptDelivery } from "./orders";
+export { onOrderCreated, onOrderStatusChanged, acceptDelivery, advanceDelivery } from "./orders";

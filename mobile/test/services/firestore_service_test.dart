@@ -107,4 +107,37 @@ void main() {
     expect(delivered.length, 2);
     expect(delivered.every((order) => order.status == OrderStatus.delivered), isTrue);
   });
+
+  test('watchActiveDriverOrder resolves the in-flight order for a driver, or null', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    // Delivered already — shouldn't count as "active".
+    await firestore.collection('orders').add(_orderMap(
+          vendorId: 'vendor-1',
+          status: 'delivered',
+          total: 20,
+          driverId: 'driver-1',
+        ));
+    // Belongs to a different driver.
+    await firestore.collection('orders').add(_orderMap(
+          vendorId: 'vendor-1',
+          status: 'delivering',
+          total: 30,
+          driverId: 'driver-2',
+        ));
+
+    expect(await service.watchActiveDriverOrder('driver-1').first, isNull);
+
+    final activeRef = await firestore.collection('orders').add(_orderMap(
+          vendorId: 'vendor-1',
+          status: 'pickedUp',
+          total: 40,
+          driverId: 'driver-1',
+        ));
+
+    final active = await service.watchActiveDriverOrder('driver-1').first;
+    expect(active?.id, activeRef.id);
+    expect(active?.status, OrderStatus.pickedUp);
+  });
 }

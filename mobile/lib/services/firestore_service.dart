@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../core/errors/guard.dart';
+import '../models/driver.dart';
 import '../models/order.dart';
 import '../models/vendor.dart';
 
@@ -19,6 +20,9 @@ class FirestoreService {
 
   CollectionReference<Map<String, dynamic>> get _vendors =>
       _db.collection('vendors');
+
+  CollectionReference<Map<String, dynamic>> get _drivers =>
+      _db.collection('drivers');
 
   Stream<List<Vendor>> watchOpenVendors() {
     return guardStream(_vendors
@@ -202,6 +206,29 @@ class FirestoreService {
     }
     return guardStream(query.snapshots().map((snap) =>
         snap.docs.map((doc) => DeliveryOrder.fromMap(doc.id, doc.data())).toList()));
+  }
+
+  Stream<Driver> watchDriver(String driverId) {
+    return guardStream(_drivers
+        .doc(driverId)
+        .snapshots()
+        .map((doc) => Driver.fromMap(doc.id, doc.data()!)));
+  }
+
+  // Null when the driver has no delivery currently in flight — `pickedUp`
+  // and `delivering` are the only statuses between accepting an order
+  // (acceptDelivery) and it being marked delivered.
+  Stream<DeliveryOrder?> watchActiveDriverOrder(String driverId) {
+    return guardStream(_orders
+        .where('driverId', isEqualTo: driverId)
+        .where('status', whereIn: [
+          OrderStatus.pickedUp.name,
+          OrderStatus.delivering.name,
+        ])
+        .snapshots()
+        .map((snap) => snap.docs.isEmpty
+            ? null
+            : DeliveryOrder.fromMap(snap.docs.first.id, snap.docs.first.data())));
   }
 
   Future<int> countDriverDeliveries(String driverId) {

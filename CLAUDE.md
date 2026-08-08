@@ -56,8 +56,12 @@ has been run, generating `mobile/lib/firebase_options.dart` (wired into `lib/mai
 
 `ios/Runner/GoogleService-Info.plist` was **not** generated — FlutterFire CLI only embeds it into the
 Xcode project from macOS. Re-run the same `flutterfire configure` command from a Mac before building
-for iOS. Still needed regardless of platform: a Maps API key for `google_maps_flutter`, added to the
-Android manifest / iOS `AppDelegate.swift`.
+for iOS. The Maps API key wiring for `google_maps_flutter` (live delivery tracking) is in place —
+`android/app/src/main/AndroidManifest.xml`'s `com.google.android.geo.API_KEY` meta-data and
+`ios/Runner/AppDelegate.swift`'s `GMSServices.provideAPIKey(...)` call — but both still hold the
+placeholder `"YOUR_MAPS_API_KEY_HERE"`; swap in a real Maps SDK key from the Google Cloud Console
+(same project as `orient-food-9c1e0`, or any project with Maps SDK for Android/iOS enabled) before
+`GoogleMap` widgets will render actual tiles instead of a blank grey view.
 
 To repoint this app at a different Firebase project: update `.firebaserc`, then re-run
 `flutterfire configure -p <project-id> -y --platforms=android,ios,web` from `mobile/`.

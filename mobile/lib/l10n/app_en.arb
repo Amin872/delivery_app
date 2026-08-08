@@ -94,6 +94,7 @@
 
   "orderTrackingTitle": "Track order",
   "myOrdersTitle": "My orders",
+  "waitingForDriverLocationMessage": "Waiting for the driver's location…",
 
   "menuManagementTitle": "Manage menu",
   "noMenuItemsMessage": "No menu items yet.",

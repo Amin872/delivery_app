@@ -86,6 +86,7 @@
 
   "orderTrackingTitle": "تتبع الطلب",
   "myOrdersTitle": "طلباتي",
+  "waitingForDriverLocationMessage": "بانتظار موقع السائق…",
 
   "menuManagementTitle": "إدارة القائمة",
   "noMenuItemsMessage": "لا توجد عناصر في القائمة بعد.",

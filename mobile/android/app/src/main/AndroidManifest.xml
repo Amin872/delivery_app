@@ -30,6 +30,14 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- google_maps_flutter requires a Maps SDK for Android key from the
+             Google Cloud Console (same project as orient-food-9c1e0, or any
+             project with the Maps SDK for Android enabled). Replace the
+             placeholder below — without a real key, GoogleMap widgets render
+             a blank grey tile instead of map tiles. -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="YOUR_MAPS_API_KEY_HERE" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

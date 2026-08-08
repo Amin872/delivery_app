@@ -18,4 +18,15 @@ class FunctionsService {
     return guardFuture(() =>
         _functions.httpsCallable('acceptDelivery').call({'orderId': orderId}));
   }
+
+  /// Calls the `advanceDelivery` callable, which atomically moves [orderId]
+  /// to its next status (pickedUp -> delivering -> delivered) for the
+  /// signed-in driver assigned to it (see functions/src/orders.ts). Throws
+  /// an [AppException] — `action-no-longer-available` if the order has no
+  /// next step from its current status, `permission-denied` if the caller
+  /// isn't the assigned driver.
+  Future<void> advanceDelivery(String orderId) {
+    return guardFuture(() =>
+        _functions.httpsCallable('advanceDelivery').call({'orderId': orderId}));
+  }
 }

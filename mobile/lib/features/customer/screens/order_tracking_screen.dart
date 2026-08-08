@@ -10,6 +10,7 @@ import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
+import '../widgets/driver_tracking_map.dart';
 import 'customer_home_screen.dart' show firestoreServiceProvider;
 
 final orderTrackingProvider = StreamProvider.family<DeliveryOrder, String>((ref, orderId) {
@@ -53,9 +54,17 @@ class OrderTrackingScreen extends ConsumerWidget {
               ? -1
               : _trackedStatuses.indexOf(order.status);
           final colorScheme = Theme.of(context).colorScheme;
+          final showDriverMap = order.driverId != null &&
+              (order.status == OrderStatus.pickedUp ||
+                  order.status == OrderStatus.delivering);
           return ListView(
             padding: const EdgeInsets.symmetric(vertical: 8),
             children: [
+              if (showDriverMap)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: DriverTrackingMap(driverId: order.driverId!),
+                ),
               if (order.status == OrderStatus.cancelled)
                 ListTile(
                   leading: Icon(Icons.cancel, color: colorScheme.error),
