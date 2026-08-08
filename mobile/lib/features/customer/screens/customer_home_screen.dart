@@ -5,6 +5,7 @@ import '../../../core/errors/error_messages.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
+import '../../../core/widgets/star_rating.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
 import '../../../services/firestore_service.dart';
@@ -67,7 +68,17 @@ class CustomerHomeScreen extends ConsumerWidget {
                     child: vendor.imageUrl == null ? const Icon(Icons.storefront_outlined) : null,
                   ),
                   title: Text(vendor.name),
-                  subtitle: Text(vendor.description),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(vendor.description),
+                      const SizedBox(height: 2),
+                      vendor.ratingCount == 0
+                          ? Text(l10n.notRatedYetLabel, style: Theme.of(context).textTheme.bodySmall)
+                          : StarRatingDisplay(rating: vendor.averageRating, count: vendor.ratingCount),
+                    ],
+                  ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => VendorMenuScreen(vendor: vendor)),

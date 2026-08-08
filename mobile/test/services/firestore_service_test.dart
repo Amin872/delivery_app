@@ -2,6 +2,7 @@ import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:delivery_app/models/order.dart';
+import 'package:delivery_app/models/review.dart';
 import 'package:delivery_app/models/vendor.dart';
 import 'package:delivery_app/services/firestore_service.dart';
 
@@ -172,5 +173,57 @@ void main() {
 
     final updated = await vendorRef.get();
     expect(updated.data()!['imageUrl'], 'https://example.com/photo.jpg');
+  });
+
+  test('submitReview writes to reviews/{orderId}, and watchReviewForOrder resolves it', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    expect(await service.watchReviewForOrder('order-1').first, isNull);
+
+    final review = Review(
+      id: 'order-1',
+      orderId: 'order-1',
+      customerId: 'customer-1',
+      vendorId: 'vendor-1',
+      driverId: 'driver-1',
+      vendorRating: 5,
+      driverRating: 4,
+      comment: 'Great food!',
+      createdAt: DateTime.now(),
+    );
+    await service.submitReview(review);
+
+    final stored = await firestore.collection('reviews').doc('order-1').get();
+    expect(stored.data()!['vendorRating'], 5);
+
+    final watched = await service.watchReviewForOrder('order-1').first;
+    expect(watched?.driverRating, 4);
+    expect(watched?.comment, 'Great food!');
+  });
+
+  test('watchVendorReviews returns only that vendor\'s reviews, newest first', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    Future<void> addReview(String orderId, String vendorId, DateTime createdAt) {
+      return service.submitReview(Review(
+        id: orderId,
+        orderId: orderId,
+        customerId: 'customer-1',
+        vendorId: vendorId,
+        driverId: 'driver-1',
+        vendorRating: 3,
+        driverRating: 3,
+        createdAt: createdAt,
+      ));
+    }
+
+    await addReview('order-1', 'vendor-1', DateTime(2024, 1, 1));
+    await addReview('order-2', 'vendor-1', DateTime(2024, 1, 2));
+    await addReview('order-3', 'vendor-2', DateTime(2024, 1, 3));
+
+    final reviews = await service.watchVendorReviews('vendor-1').first;
+    expect(reviews.map((r) => r.id).toList(), ['order-2', 'order-1']);
   });
 }

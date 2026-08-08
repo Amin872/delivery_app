@@ -10,6 +10,11 @@ class Vendor {
   final String? imageUrl;
   final bool isOpen;
   final VendorApprovalStatus approvalStatus;
+  // Written only by the `onReviewCreated` Cloud Function trigger (Admin SDK,
+  // bypasses firestore.rules) via FieldValue.increment — see the ratings
+  // architecture note in CLAUDE.md. Owners cannot self-inflate these.
+  final num ratingSum;
+  final int ratingCount;
 
   const Vendor({
     required this.id,
@@ -19,7 +24,11 @@ class Vendor {
     this.imageUrl,
     required this.isOpen,
     required this.approvalStatus,
+    this.ratingSum = 0,
+    this.ratingCount = 0,
   });
+
+  double? get averageRating => ratingCount == 0 ? null : ratingSum / ratingCount;
 
   factory Vendor.fromMap(String id, Map<String, dynamic> map) {
     return Vendor(
@@ -33,6 +42,8 @@ class Vendor {
         VendorApprovalStatus.values,
         map['approvalStatus'] as String? ?? 'pending',
       ),
+      ratingSum: map['ratingSum'] as num? ?? 0,
+      ratingCount: map['ratingCount'] as int? ?? 0,
     );
   }
 
@@ -44,6 +55,8 @@ class Vendor {
       'imageUrl': imageUrl,
       'isOpen': isOpen,
       'approvalStatus': approvalStatus.name,
+      'ratingSum': ratingSum,
+      'ratingCount': ratingCount,
     };
   }
 }

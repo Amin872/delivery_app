@@ -34,10 +34,16 @@ service cloud.firestore {
       allow create: if isSignedIn() &&
         request.resource.data.ownerId == request.auth.uid &&
         request.resource.data.approvalStatus == 'pending';
+      // ratingSum/ratingCount are aggregated by the onReviewCreated Cloud
+      // Function (Admin SDK, bypasses these rules) — an owner may update
+      // everything else about their own storefront, but not self-inflate
+      // their own rating.
       allow update: if isSignedIn() && (
         (resource.data.ownerId == request.auth.uid &&
           request.resource.data.ownerId == resource.data.ownerId &&
-          request.resource.data.approvalStatus == resource.data.approvalStatus) ||
+          request.resource.data.approvalStatus == resource.data.approvalStatus &&
+          request.resource.data.get('ratingSum', 0) == resource.data.get('ratingSum', 0) &&
+          request.resource.data.get('ratingCount', 0) == resource.data.get('ratingCount', 0)) ||
         (hasRole('admin') &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvalStatus']))
       );
@@ -52,10 +58,14 @@ service cloud.firestore {
 
     // drivers/{driverId} doc id == auth uid. Availability/location visible
     // to any signed-in user (needed for live order tracking); editable only
-    // by the driver themself.
+    // by the driver themself — except ratingSum/ratingCount, which only the
+    // onReviewCreated Cloud Function (Admin SDK) may touch, same reasoning
+    // as vendors/{vendorId} above.
     match /drivers/{driverId} {
       allow read: if isSignedIn();
-      allow create, update: if isSelf(driverId);
+      allow create: if isSelf(driverId);
+      allow update: if isSelf(driverId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ratingSum', 'ratingCount']);
       allow delete: if false;
     }
 
@@ -93,6 +103,31 @@ service cloud.firestore {
       );
 
       allow delete: if false;
+    }
+
+    // reviews/{orderId} — doc id is the order's id, not auto-generated, so
+    // "one review per order" falls out of create-only semantics (a second
+    // write to the same id is an update, and no update rule allows one).
+    // Public read, like vendors, since these are storefront testimonials.
+    // ratingSum/ratingCount on vendors/{vendorId} and drivers/{driverId} are
+    // aggregated from these by the onReviewCreated Cloud Function — see the
+    // architecture note in CLAUDE.md.
+    match /reviews/{orderId} {
+      allow read: if true;
+      allow create: if isSignedIn() &&
+        request.resource.data.orderId == orderId &&
+        request.resource.data.customerId == request.auth.uid &&
+        get(/databases/$(database)/documents/orders/$(orderId)).data.customerId == request.auth.uid &&
+        get(/databases/$(database)/documents/orders/$(orderId)).data.status == 'delivered' &&
+        request.resource.data.vendorId ==
+          get(/databases/$(database)/documents/orders/$(orderId)).data.vendorId &&
+        request.resource.data.driverId ==
+          get(/databases/$(database)/documents/orders/$(orderId)).data.driverId &&
+        request.resource.data.vendorRating is int &&
+        request.resource.data.vendorRating >= 1 && request.resource.data.vendorRating <= 5 &&
+        request.resource.data.driverRating is int &&
+        request.resource.data.driverRating >= 1 && request.resource.data.driverRating <= 5;
+      allow update, delete: if false;
     }
   }
 }

@@ -8,6 +8,7 @@ import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/stat_card.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../models/driver.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
 
 class DriverStats {
@@ -23,6 +24,10 @@ final driverStatsProvider = FutureProvider.family<DriverStats, String>((ref, dri
   return DriverStats(deliveredCount: count);
 });
 
+final driverRatingProvider = StreamProvider.family<Driver, String>((ref, driverId) {
+  return ref.watch(firestoreServiceProvider).watchDriver(driverId);
+});
+
 class DriverStatsScreen extends ConsumerWidget {
   const DriverStatsScreen({required this.driverId, super.key});
 
@@ -31,6 +36,7 @@ class DriverStatsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final statsAsync = ref.watch(driverStatsProvider(driverId));
+    final driver = ref.watch(driverRatingProvider(driverId)).valueOrNull;
     final l10n = AppLocalizations.of(context)!;
     final currencyFormat = NumberFormat.currency(
       locale: Localizations.localeOf(context).toString(),
@@ -63,6 +69,14 @@ class DriverStatsScreen extends ConsumerWidget {
                     label: l10n.totalEarningsLabel,
                     value: currencyFormat.format(stats.earnings),
                     icon: Icons.payments,
+                  ),
+                  const SizedBox(width: 12),
+                  StatCard(
+                    label: l10n.ratingStatLabel,
+                    value: driver == null || driver.ratingCount == 0
+                        ? l10n.notRatedYetLabel
+                        : driver.averageRating!.toStringAsFixed(1),
+                    icon: Icons.star,
                   ),
                 ],
               ),

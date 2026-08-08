@@ -95,12 +95,15 @@ live — don't put raw `FirebaseFirestore.instance.collection(...)` calls in scr
   Firebase Auth UID
 - `vendors/{vendorId}` — storefront, `ownerId` links back to a `users` doc; `approvalStatus`
   (`pending` | `approved` | `rejected`, see `VendorApprovalStatus` in `lib/models/vendor.dart`);
-  `menuItems` subcollection
-- `drivers/{uid}` — availability + `lastKnownLocation`; doc ID is also the Auth UID
+  `ratingSum` / `ratingCount` (aggregated from `reviews`, see below); `menuItems` subcollection
+- `drivers/{uid}` — availability + `lastKnownLocation` + `ratingSum` / `ratingCount`; doc ID is also
+  the Auth UID
 - `orders/{orderId}` — `items[]`, `status` (see `OrderStatus` enum in `lib/models/order.dart`), and
   `customerId` / `vendorId` / `driverId` foreign keys
+- `reviews/{orderId}` — one customer review per delivered order (doc ID **is** the order ID, not
+  auto-generated); `vendorRating` / `driverRating` (1-5) + optional `comment`, see `lib/models/review.dart`
 
-All four collections' rules in `firestore.rules` key off these same relationships (e.g. an order is
+All five collections' rules in `firestore.rules` key off these same relationships (e.g. an order is
 readable by whoever's uid matches `customerId`, `driverId`, or the owner of `vendorId`) — when adding
 a field that changes who should read/write a doc, update the rule in the matching `match` block, not
 just the Dart model.
@@ -136,3 +139,19 @@ token is cleared on sign-out in `AuthService.signOut`. Order-lifecycle triggers 
 notifies the vendor owner, `onOrderStatusChanged` notifies the customer) live in
 `functions/src/orders.ts` alongside `acceptDelivery`, since they all operate on the same
 `orders/{orderId}` trigger surface.
+
+### Ratings: a client-written review, aggregated by a trigger, never a client-written average
+
+A customer rates one delivered order via `FirestoreService.submitReview`, which writes straight to
+`reviews/{orderId}` (see `RateOrderDialog` in `lib/features/customer/widgets/`) — the doc ID *is* the
+order ID rather than auto-generated, so `firestore.rules`' create-only-if-absent semantics enforce
+"one review per order" without a query or a callable. The `reviews/{orderId}` create rule cross-checks
+`vendorId`/`driverId`/`customerId` and `status == 'delivered'` against the referenced `orders/{orderId}`
+doc, so a review can't be forged for an order that isn't the caller's or isn't finished yet. From there,
+`functions/src/reviews.ts`'s `onReviewCreated` trigger is what actually updates `vendors/{vendorId}.ratingSum`
+/`ratingCount` and `drivers/{driverId}.ratingSum`/`ratingCount`, via `FieldValue.increment` — no
+transaction needed (increments commute, and a review can only be created once). `firestore.rules`
+deliberately blocks a vendor or driver from touching their own `ratingSum`/`ratingCount` when updating
+the rest of their own doc, mirroring the "no client-side write for anything that must stay consistent"
+reasoning in the driver-assignment note above — those two fields are Admin-SDK-only in practice, even
+though the rest of `vendors`/`drivers` is a plain client write.

@@ -12,12 +12,18 @@ import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
+import '../../../models/review.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../widgets/driver_tracking_map.dart';
+import '../widgets/rate_order_dialog.dart';
 import 'customer_home_screen.dart' show firestoreServiceProvider;
 
 final orderTrackingProvider = StreamProvider.family<DeliveryOrder, String>((ref, orderId) {
   return ref.watch(firestoreServiceProvider).watchOrder(orderId);
+});
+
+final reviewForOrderProvider = StreamProvider.family<Review?, String>((ref, orderId) {
+  return ref.watch(firestoreServiceProvider).watchReviewForOrder(orderId);
 });
 
 // `cancelled` is shown as a standalone terminal state rather than a stage in
@@ -43,6 +49,19 @@ class OrderTrackingScreen extends ConsumerStatefulWidget {
 
 class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
   bool _cancelling = false;
+
+  Future<void> _rateOrder(DeliveryOrder order) async {
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (_) => RateOrderDialog(order: order),
+    );
+    if (submitted == true && mounted) {
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        buildAppSnackBar(Theme.of(context).colorScheme, l10n.reviewSubmittedMessage),
+      );
+    }
+  }
 
   Future<void> _confirmCancel(DeliveryOrder order) async {
     final l10n = AppLocalizations.of(context)!;
@@ -166,6 +185,26 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                       ),
                     ],
                   ),
+                ),
+              if (order.status == OrderStatus.delivered)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: ref.watch(reviewForOrderProvider(order.id)).when(
+                        data: (review) => review == null
+                            ? OutlinedButton(
+                                onPressed: () => _rateOrder(order),
+                                child: Text(l10n.rateOrderButton),
+                              )
+                            : Row(
+                                children: [
+                                  Icon(Icons.check_circle_outline, color: colorScheme.primary),
+                                  const SizedBox(width: 8),
+                                  Text(l10n.orderRatedMessage),
+                                ],
+                              ),
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, __) => const SizedBox.shrink(),
+                      ),
                 ),
               if (canCancel)
                 Padding(

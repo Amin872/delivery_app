@@ -44,9 +44,11 @@ flutter run
 ## Data model
 
 - `users/{uid}` — profile + `role` (`customer` | `driver` | `vendor` | `admin`)
-- `vendors/{vendorId}` — storefront, owned by a `vendor` user; `menuItems` subcollection
-- `drivers/{uid}` — availability + last known location
+- `vendors/{vendorId}` — storefront, owned by a `vendor` user; `ratingSum`/`ratingCount`; `menuItems` subcollection
+- `drivers/{uid}` — availability + last known location + `ratingSum`/`ratingCount`
 - `orders/{orderId}` — items, status, links to `customerId` / `vendorId` / `driverId`
+- `reviews/{orderId}` — one customer rating (vendor + driver, 1-5) per delivered order; doc id is the order id
 
 Order status flows: `pending → accepted → preparing → readyForPickup → pickedUp → delivering → delivered`
-(or `cancelled` at any point before `delivered`).
+(or `cancelled` at any point before `delivered`). Once an order is `delivered`, the customer may leave
+one review, which a Cloud Function aggregates into the vendor's and driver's rating totals.

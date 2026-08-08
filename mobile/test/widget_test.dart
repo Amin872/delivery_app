@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:delivery_app/models/app_user.dart';
 import 'package:delivery_app/models/order.dart';
+import 'package:delivery_app/models/review.dart';
 
 void main() {
   test('AppUser round-trips through toMap/fromMap', () {
@@ -54,5 +55,30 @@ void main() {
     expect(restored.deliveryAddress, order.deliveryAddress);
     expect(restored.createdAt, order.createdAt);
     expect(restored.proofImageUrl, order.proofImageUrl);
+  });
+
+  test('Review round-trips through toMap/fromMap, including a null comment', () {
+    final review = Review(
+      id: 'order-1',
+      orderId: 'order-1',
+      customerId: 'customer-1',
+      vendorId: 'vendor-1',
+      driverId: 'driver-1',
+      vendorRating: 5,
+      driverRating: 4,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(1700000000000),
+    );
+
+    final restored = Review.fromMap(review.id, review.toMap());
+
+    expect(restored.id, review.id);
+    expect(restored.orderId, review.orderId);
+    expect(restored.customerId, review.customerId);
+    expect(restored.vendorId, review.vendorId);
+    expect(restored.driverId, review.driverId);
+    expect(restored.vendorRating, review.vendorRating);
+    expect(restored.driverRating, review.driverRating);
+    expect(restored.comment, isNull);
+    expect(restored.createdAt, review.createdAt);
   });
 }

@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../core/errors/guard.dart';
 import '../models/driver.dart';
 import '../models/order.dart';
+import '../models/review.dart';
 import '../models/vendor.dart';
 
 /// Thin wrapper around Firestore collections used across features.
@@ -23,6 +24,9 @@ class FirestoreService {
 
   CollectionReference<Map<String, dynamic>> get _drivers =>
       _db.collection('drivers');
+
+  CollectionReference<Map<String, dynamic>> get _reviews =>
+      _db.collection('reviews');
 
   Stream<List<Vendor>> watchOpenVendors() {
     return guardStream(_vendors
@@ -247,5 +251,26 @@ class FirestoreService {
           .get();
       return snapshot.count ?? 0;
     });
+  }
+
+  // Doc id is the order id (see Review's doc comment), so this both creates
+  // the review and enforces "one review per order" — firestore.rules' create
+  // rule fires only when no doc exists yet at that id.
+  Future<void> submitReview(Review review) {
+    return guardFuture(() => _reviews.doc(review.id).set(review.toMap()));
+  }
+
+  Stream<Review?> watchReviewForOrder(String orderId) {
+    return guardStream(_reviews.doc(orderId).snapshots().map(
+        (doc) => doc.exists ? Review.fromMap(doc.id, doc.data()!) : null));
+  }
+
+  Stream<List<Review>> watchVendorReviews(String vendorId) {
+    return guardStream(_reviews
+        .where('vendorId', isEqualTo: vendorId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((doc) => Review.fromMap(doc.id, doc.data())).toList()));
   }
 }

@@ -131,6 +131,24 @@
   "proofOfDeliveryHint": "Attach a photo before marking delivered.",
   "proofOfDeliveryLabel": "Proof of delivery",
 
+  "rateOrderButton": "Rate your order",
+  "rateOrderDialogTitle": "Rate your order",
+  "vendorRatingLabel": "Vendor",
+  "driverRatingLabel": "Driver",
+  "reviewCommentLabel": "Comment (optional)",
+  "submitReviewButton": "Submit review",
+  "reviewSubmittedMessage": "Thanks for your feedback!",
+  "orderRatedMessage": "You've rated this order.",
+  "reviewsTitle": "Reviews",
+  "noReviewsMessage": "No reviews yet.",
+  "notRatedYetLabel": "Not rated yet",
+  "reviewCountLabel": "({count})",
+  "@reviewCountLabel": {
+    "description": "Parenthetical review count shown next to a star rating.",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "ratingStatLabel": "Rating",
+
   "genericErrorMessage": "Something went wrong. Please try again.",
   "invalidCredentialMessage": "Incorrect email or password.",
   "emailAlreadyInUseMessage": "An account already exists with this email.",

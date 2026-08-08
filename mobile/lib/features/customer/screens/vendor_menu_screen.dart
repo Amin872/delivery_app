@@ -7,7 +7,9 @@ import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
+import '../../../core/widgets/star_rating.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../models/review.dart';
 import '../../../models/vendor.dart';
 import '../providers/cart_provider.dart';
 import 'cart_screen.dart';
@@ -15,6 +17,10 @@ import 'customer_home_screen.dart' show firestoreServiceProvider;
 
 final vendorMenuProvider = StreamProvider.family<List<MenuItem>, String>((ref, vendorId) {
   return ref.watch(firestoreServiceProvider).watchMenu(vendorId);
+});
+
+final vendorReviewsProvider = StreamProvider.family<List<Review>, String>((ref, vendorId) {
+  return ref.watch(firestoreServiceProvider).watchVendorReviews(vendorId);
 });
 
 class VendorMenuScreen extends ConsumerWidget {
@@ -73,31 +79,66 @@ class VendorMenuScreen extends ConsumerWidget {
       body: menuAsync.when(
         data: (items) {
           final available = items.where((item) => item.available).toList();
-          if (available.isEmpty) {
-            return Center(child: Text(l10n.vendorMenuEmptyMessage));
-          }
-          return ListView.builder(
+          final reviewsAsync = ref.watch(vendorReviewsProvider(vendor.id));
+          return ListView(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: available.length,
-            itemBuilder: (context, index) {
-              final item = available[index];
-              return Card(
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundImage:
-                        item.imageUrl != null ? NetworkImage(item.imageUrl!) : null,
-                    child: item.imageUrl == null ? const Icon(Icons.fastfood_outlined) : null,
-                  ),
-                  title: Text(item.name),
-                  subtitle: Text(currencyFormat.format(item.price)),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.add_circle_outline),
-                    tooltip: l10n.addToCartTooltip,
-                    onPressed: () => _addToCart(context, ref, item),
-                  ),
-                ),
-              ).staggeredEntrance(index);
-            },
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: vendor.ratingCount == 0
+                    ? Text(l10n.notRatedYetLabel, style: Theme.of(context).textTheme.bodySmall)
+                    : StarRatingDisplay(rating: vendor.averageRating, count: vendor.ratingCount),
+              ),
+              if (available.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(l10n.vendorMenuEmptyMessage),
+                )
+              else
+                for (var index = 0; index < available.length; index++)
+                  Card(
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundImage: available[index].imageUrl != null
+                            ? NetworkImage(available[index].imageUrl!)
+                            : null,
+                        child: available[index].imageUrl == null
+                            ? const Icon(Icons.fastfood_outlined)
+                            : null,
+                      ),
+                      title: Text(available[index].name),
+                      subtitle: Text(currencyFormat.format(available[index].price)),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.add_circle_outline),
+                        tooltip: l10n.addToCartTooltip,
+                        onPressed: () => _addToCart(context, ref, available[index]),
+                      ),
+                    ),
+                  ).staggeredEntrance(index),
+              const Divider(),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: Text(l10n.reviewsTitle, style: Theme.of(context).textTheme.titleMedium),
+              ),
+              reviewsAsync.when(
+                data: (reviews) => reviews.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Text(l10n.noReviewsMessage),
+                      )
+                    : Column(
+                        children: [
+                          for (final review in reviews)
+                            ListTile(
+                              title: StarRatingDisplay(rating: review.vendorRating.toDouble(), size: 14),
+                              subtitle: review.comment == null ? null : Text(review.comment!),
+                            ),
+                        ],
+                      ),
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+              ),
+            ],
           );
         },
         loading: () => const ListSkeletonLoader(),
