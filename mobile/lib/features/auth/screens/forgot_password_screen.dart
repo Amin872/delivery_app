@@ -8,6 +8,7 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_messages.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_spinner.dart';
+import '../../../core/widgets/centered_scroll_body.dart';
 import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../l10n/app_localizations.dart';
@@ -82,8 +83,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       body: Container(
         decoration: BoxDecoration(gradient: AppGradients.surface(colorScheme)),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
+          child: CenteredScrollBody(
             child: Form(
               key: _formKey,
               child: Column(
