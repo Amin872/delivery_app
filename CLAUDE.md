@@ -114,8 +114,12 @@ race-condition reason.
 ### Push notifications: FCM token on the user doc, not a separate collection
 
 `functions/src/notifications.ts`'s `notifyUser(userId, ...)` reads `fcmToken` off `users/{userId}` and
-no-ops if absent. The client side of writing that token (`FirebaseMessaging.instance.getToken()` →
-`users/{uid}.fcmToken`) is not yet implemented in `mobile/` — needed before notifications actually
-reach a device. Order-lifecycle triggers (`onOrderCreated` notifies the vendor owner, `onOrderStatusChanged`
-notifies the customer) live in `functions/src/orders.ts` alongside `acceptDelivery`, since they all
-operate on the same `orders/{orderId}` trigger surface.
+no-ops if absent. The client side lives in `mobile/lib/services/push_notification_service.dart`
+(`registerToken` requests permission and writes the token, `onTokenRefresh` keeps it current) and is
+wired up as a side-effect Riverpod provider, `pushNotificationSyncProvider` in
+`lib/features/notifications/providers/push_notification_provider.dart`, which re-runs on every
+auth-state change so it covers both a fresh sign-in and an app restart with an existing session; the
+token is cleared on sign-out in `AuthService.signOut`. Order-lifecycle triggers (`onOrderCreated`
+notifies the vendor owner, `onOrderStatusChanged` notifies the customer) live in
+`functions/src/orders.ts` alongside `acceptDelivery`, since they all operate on the same
+`orders/{orderId}` trigger surface.
