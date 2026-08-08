@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -5,6 +7,7 @@ import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_spinner.dart';
+import '../../../core/widgets/image_picker_avatar.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
@@ -13,6 +16,7 @@ import '../../../models/order.dart';
 import '../../../services/functions_service.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
+import '../../vendor/screens/menu_management_screen.dart' show storageServiceProvider;
 import '../providers/driver_location_provider.dart';
 import 'driver_stats_screen.dart';
 
@@ -56,6 +60,7 @@ class DriverHomeScreen extends ConsumerStatefulWidget {
 class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
   final _acceptingOrderIds = <String>{};
   bool _advancing = false;
+  File? _proofImage;
 
   Future<void> _accept(DeliveryOrder order) async {
     setState(() => _acceptingOrderIds.add(order.id));
@@ -76,12 +81,21 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
     }
   }
 
-  Future<void> _advance(DeliveryOrder order) async {
+  Future<void> _advance(DeliveryOrder order, {required bool needsProof}) async {
     setState(() => _advancing = true);
     final messenger = ScaffoldMessenger.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     try {
-      await ref.read(functionsServiceProvider).advanceDelivery(order.id);
+      String? proofImageUrl;
+      if (needsProof && _proofImage != null) {
+        proofImageUrl = await ref
+            .read(storageServiceProvider)
+            .uploadOrderProof(order.id, _proofImage!);
+      }
+      await ref
+          .read(functionsServiceProvider)
+          .advanceDelivery(order.id, proofImageUrl: proofImageUrl);
+      if (mounted) setState(() => _proofImage = null);
     } catch (error) {
       if (mounted) {
         messenger.showSnackBar(
@@ -96,21 +110,48 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
   Widget _buildActiveDeliveryCard(BuildContext context, DeliveryOrder order) {
     final l10n = AppLocalizations.of(context)!;
     final next = _nextDriverStatus(order.status);
+    // Only the final hop (delivering -> delivered) asks for a photo — the
+    // driver hasn't reached the customer yet on the step before it.
+    final needsProof = next == OrderStatus.delivered;
+    final canAdvance = next != null && (!needsProof || _proofImage != null);
     return Card(
       color: Theme.of(context).colorScheme.primaryContainer,
-      child: ListTile(
-        title: Text(l10n.orderLabel(order.id)),
-        subtitle: Text(
-          '${orderStatusLabel(context, order.status)} · ${order.deliveryAddress}',
-        ),
-        trailing: next == null
-            ? null
-            : FilledButton(
-                onPressed: _advancing ? null : () => _advance(order),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListTile(
+            title: Text(l10n.orderLabel(order.id)),
+            subtitle: Text(
+              '${orderStatusLabel(context, order.status)} · ${order.deliveryAddress}',
+            ),
+          ),
+          if (needsProof)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Row(
+                children: [
+                  ImagePickerAvatar(
+                    radius: 28,
+                    localFile: _proofImage,
+                    onPicked: (file) => setState(() => _proofImage = file),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(l10n.proofOfDeliveryHint)),
+                ],
+              ),
+            ),
+          if (next != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: FilledButton(
+                onPressed:
+                    (_advancing || !canAdvance) ? null : () => _advance(order, needsProof: needsProof),
                 child: _advancing
                     ? buttonSpinner(Theme.of(context).colorScheme.onPrimary, size: 16)
                     : Text(l10n.advanceStatusButtonLabel(orderStatusLabel(context, next))),
               ),
+            ),
+        ],
       ),
     );
   }

@@ -116,6 +116,8 @@
   "totalEarningsLabel": "إجمالي الأرباح",
 
   "advanceStatusButtonLabel": "الانتقال إلى {status}",
+  "proofOfDeliveryHint": "أرفق صورة قبل تعليم الطلب كمُسلَّم.",
+  "proofOfDeliveryLabel": "إثبات التسليم",
 
   "genericErrorMessage": "حدث خطأ ما. الرجاء المحاولة مرة أخرى.",
   "invalidCredentialMessage": "البريد الإلكتروني أو كلمة المرور غير صحيحة.",

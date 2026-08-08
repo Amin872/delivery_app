@@ -152,6 +152,21 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                   subtitle: Text(order.deliveryAddress),
                 ),
               ),
+              if (order.proofImageUrl != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(l10n.proofOfDeliveryLabel, style: Theme.of(context).textTheme.titleSmall),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(order.proofImageUrl!, height: 200, fit: BoxFit.cover),
+                      ),
+                    ],
+                  ),
+                ),
               if (canCancel)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

@@ -130,13 +130,23 @@ export const advanceDelivery = onCall(async (request) => {
   if (!orderId) {
     throw new HttpsError("invalid-argument", "orderId is required.");
   }
+  // Optional: the download URL of a proof-of-delivery photo the driver
+  // already uploaded to storage.rules' orderProofs/{orderId} path (a direct
+  // client write the driver is independently allowed to make). Only stored
+  // when this call actually lands the order on "delivered" — attaching it
+  // to an earlier transition wouldn't mean anything.
+  const proofImageUrl = request.data?.proofImageUrl as string | undefined;
 
   const orderRef = db.collection("orders").doc(orderId);
 
   const status = await db.runTransaction(async (transaction) => {
     const orderSnap = await transaction.get(orderRef);
     const next = nextDeliveryStatus(orderSnap.data(), driverUid);
-    transaction.update(orderRef, { status: next });
+    const update: Record<string, unknown> = { status: next };
+    if (next === "delivered" && proofImageUrl) {
+      update.proofImageUrl = proofImageUrl;
+    }
+    transaction.update(orderRef, update);
     return next;
   });
 

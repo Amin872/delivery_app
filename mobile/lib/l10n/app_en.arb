@@ -128,6 +128,8 @@
     "description": "Vendor button advancing an order to its next status.",
     "placeholders": {"status": {"type": "String"}}
   },
+  "proofOfDeliveryHint": "Attach a photo before marking delivered.",
+  "proofOfDeliveryLabel": "Proof of delivery",
 
   "genericErrorMessage": "Something went wrong. Please try again.",
   "invalidCredentialMessage": "Incorrect email or password.",

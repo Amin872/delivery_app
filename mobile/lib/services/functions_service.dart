@@ -24,9 +24,13 @@ class FunctionsService {
   /// signed-in driver assigned to it (see functions/src/orders.ts). Throws
   /// an [AppException] — `action-no-longer-available` if the order has no
   /// next step from its current status, `permission-denied` if the caller
-  /// isn't the assigned driver.
-  Future<void> advanceDelivery(String orderId) {
-    return guardFuture(() =>
-        _functions.httpsCallable('advanceDelivery').call({'orderId': orderId}));
+  /// isn't the assigned driver. [proofImageUrl] (already uploaded to
+  /// storage.rules' orderProofs/{orderId} path) is only persisted when this
+  /// call lands the order on `delivered`.
+  Future<void> advanceDelivery(String orderId, {String? proofImageUrl}) {
+    return guardFuture(() => _functions.httpsCallable('advanceDelivery').call({
+          'orderId': orderId,
+          if (proofImageUrl != null) 'proofImageUrl': proofImageUrl,
+        }));
   }
 }

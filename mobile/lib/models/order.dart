@@ -53,6 +53,10 @@ class DeliveryOrder {
   final double total;
   final String deliveryAddress;
   final DateTime createdAt;
+  // Set by the `advanceDelivery` callable when the assigned driver marks the
+  // order delivered with a photo attached — see functions/src/orders.ts and
+  // storage.rules' orderProofs/{orderId} match block.
+  final String? proofImageUrl;
 
   const DeliveryOrder({
     required this.id,
@@ -64,6 +68,7 @@ class DeliveryOrder {
     required this.total,
     required this.deliveryAddress,
     required this.createdAt,
+    this.proofImageUrl,
   });
 
   factory DeliveryOrder.fromMap(String id, Map<String, dynamic> map) {
@@ -81,6 +86,7 @@ class DeliveryOrder {
       createdAt: DateTime.fromMillisecondsSinceEpoch(
         map['createdAt'] as int,
       ),
+      proofImageUrl: map['proofImageUrl'] as String?,
     );
   }
 
@@ -94,6 +100,7 @@ class DeliveryOrder {
       'total': total,
       'deliveryAddress': deliveryAddress,
       'createdAt': createdAt.millisecondsSinceEpoch,
+      'proofImageUrl': proofImageUrl,
     };
   }
 }
