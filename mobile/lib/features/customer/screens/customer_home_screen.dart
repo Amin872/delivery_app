@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/errors/error_messages.dart';
+import '../../../core/widgets/language_toggle_button.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
 import '../../../services/firestore_service.dart';
 import '../../auth/providers/auth_provider.dart';
+import 'my_orders_screen.dart';
+import 'vendor_menu_screen.dart';
 
 final firestoreServiceProvider =
     Provider<FirestoreService>((ref) => FirestoreService());
@@ -18,13 +23,26 @@ class CustomerHomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final vendorsAsync = ref.watch(openVendorsProvider);
+    final l10n = AppLocalizations.of(context)!;
+    final customerId = ref.watch(currentAppUserProvider).valueOrNull?.id;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nearby vendors'),
+        title: Text(l10n.nearbyVendorsTitle),
         actions: [
+          const LanguageToggleButton(),
+          IconButton(
+            icon: const Icon(Icons.receipt_long),
+            tooltip: l10n.myOrdersTitle,
+            onPressed: customerId == null
+                ? null
+                : () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => MyOrdersScreen(customerId: customerId)),
+                    ),
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
+            tooltip: l10n.signOutTooltip,
             onPressed: () => ref.read(authServiceProvider).signOut(),
           ),
         ],
@@ -32,7 +50,7 @@ class CustomerHomeScreen extends ConsumerWidget {
       body: vendorsAsync.when(
         data: (vendors) {
           if (vendors.isEmpty) {
-            return const Center(child: Text('No open vendors right now.'));
+            return Center(child: Text(l10n.noOpenVendorsMessage));
           }
           return ListView.builder(
             itemCount: vendors.length,
@@ -41,12 +59,16 @@ class CustomerHomeScreen extends ConsumerWidget {
               return ListTile(
                 title: Text(vendor.name),
                 subtitle: Text(vendor.description),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => VendorMenuScreen(vendor: vendor)),
+                ),
               );
             },
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Error: $error')),
+        error: (error, _) =>
+            Center(child: Text(localizedErrorMessage(context, error))),
       ),
     );
   }

@@ -1,0 +1,134 @@
+{
+  "@@locale": "en",
+
+  "appTitle": "Delivery App",
+  "@appTitle": {"description": "Application title shown in the OS task switcher."},
+
+  "signInTitle": "Sign in",
+  "@signInTitle": {"description": "Login screen title and submit button label."},
+  "emailLabel": "Email",
+  "passwordLabel": "Password",
+  "createAccountNavButton": "Create an account",
+  "@createAccountNavButton": {"description": "Link on the login screen that navigates to sign-up."},
+
+  "createAccountTitle": "Create account",
+  "@createAccountTitle": {"description": "Sign-up screen title and submit button label."},
+  "displayNameLabel": "Display name",
+  "phoneNumberLabel": "Phone number",
+  "roleLabel": "I am a...",
+  "alreadyHaveAccountButton": "Already have an account? Sign in",
+
+  "forgotPasswordButton": "Forgot password?",
+  "resetPasswordTitle": "Reset password",
+  "resetPasswordInstructions": "Enter your email and we'll send you a reset link.",
+  "sendResetLinkButton": "Send reset link",
+  "resetLinkSentMessage": "If an account exists for that email, a reset link is on its way.",
+  "backToSignInButton": "Back to sign in",
+
+  "requiredFieldError": "This field is required.",
+  "invalidEmailFormatError": "Enter a valid email address.",
+  "passwordTooShortError": "Password must be at least 6 characters.",
+  "invalidPhoneFormatError": "Enter a valid phone number.",
+
+  "userRoleCustomer": "Customer",
+  "userRoleDriver": "Driver",
+  "userRoleVendor": "Vendor",
+  "userRoleAdmin": "Admin",
+
+  "nearbyVendorsTitle": "Nearby vendors",
+  "noOpenVendorsMessage": "No open vendors right now.",
+
+  "availableDeliveriesTitle": "Available deliveries",
+  "noDeliveriesMessage": "No deliveries ready yet.",
+  "orderLabel": "Order {orderId}",
+  "@orderLabel": {
+    "description": "List-tile title showing an order's id.",
+    "placeholders": {"orderId": {"type": "String"}}
+  },
+  "acceptButton": "Accept",
+  "orderAcceptedMessage": "Order accepted.",
+
+  "incomingOrdersTitle": "Incoming orders",
+  "noOrdersMessage": "No orders yet.",
+
+  "orderStatusPending": "Pending",
+  "orderStatusAccepted": "Accepted",
+  "orderStatusPreparing": "Preparing",
+  "orderStatusReadyForPickup": "Ready for pickup",
+  "orderStatusPickedUp": "Picked up",
+  "orderStatusDelivering": "Delivering",
+  "orderStatusDelivered": "Delivered",
+  "orderStatusCancelled": "Cancelled",
+
+  "vendorApprovalsTitle": "Vendor approvals",
+  "noVendorsAwaitingApprovalMessage": "No vendors awaiting approval.",
+  "noDescriptionPlaceholder": "(no description)",
+  "approveTooltip": "Approve",
+  "rejectTooltip": "Reject",
+
+  "signOutTooltip": "Sign out",
+  "languageToggleTooltip": "Change language",
+
+  "noProfileFoundMessage": "No profile found for this account.",
+  "retryButton": "Retry",
+  "signOutButton": "Sign out",
+
+  "confirmButton": "Confirm",
+  "cancelButton": "Cancel",
+
+  "vendorMenuEmptyMessage": "No items available right now.",
+  "addToCartTooltip": "Add to cart",
+  "cartTitle": "Cart",
+  "viewCartButton": "View cart",
+  "emptyCartMessage": "Your cart is empty.",
+  "deliveryAddressLabel": "Delivery address",
+  "totalLabel": "Total",
+  "placeOrderButton": "Place order (cash on delivery)",
+  "removeItemTooltip": "Remove",
+  "switchVendorConfirmTitle": "Start a new cart?",
+  "switchVendorConfirmMessage": "Your cart has items from another vendor. Adding this item will clear it.",
+  "orderPlacedMessage": "Order placed!",
+
+  "orderTrackingTitle": "Track order",
+  "myOrdersTitle": "My orders",
+
+  "menuManagementTitle": "Manage menu",
+  "noMenuItemsMessage": "No menu items yet.",
+  "addMenuItemTitle": "Add item",
+  "editMenuItemTitle": "Edit item",
+  "itemNameLabel": "Item name",
+  "priceLabel": "Price",
+  "availableLabel": "Available",
+  "saveButton": "Save",
+  "deleteMenuItemConfirmMessage": "Delete this item?",
+  "deleteTooltip": "Delete",
+  "editTooltip": "Edit",
+  "invalidPriceError": "Enter a valid price.",
+
+  "vendorStatsTitle": "Sales & orders",
+  "driverStatsTitle": "Earnings",
+  "totalOrdersLabel": "Total orders",
+  "totalSalesLabel": "Total sales",
+  "topItemsTitle": "Most ordered items",
+  "noCompletedOrdersMessage": "No completed orders yet.",
+  "deliveredOrdersLabel": "Delivered orders",
+  "totalEarningsLabel": "Total earnings",
+
+  "advanceStatusButtonLabel": "Move to {status}",
+  "@advanceStatusButtonLabel": {
+    "description": "Vendor button advancing an order to its next status.",
+    "placeholders": {"status": {"type": "String"}}
+  },
+
+  "genericErrorMessage": "Something went wrong. Please try again.",
+  "invalidCredentialMessage": "Incorrect email or password.",
+  "emailAlreadyInUseMessage": "An account already exists with this email.",
+  "weakPasswordMessage": "Password is too weak — use at least 6 characters.",
+  "invalidEmailMessage": "That email address doesn't look right.",
+  "userDisabledMessage": "This account has been disabled.",
+  "tooManyRequestsMessage": "Too many attempts. Please wait and try again.",
+  "networkErrorMessage": "No internet connection. Check your network and try again.",
+  "permissionDeniedMessage": "You don't have permission to do that.",
+  "notFoundMessage": "That item couldn't be found.",
+  "actionNoLongerAvailableMessage": "This action can no longer be completed — it may already be handled."
+}

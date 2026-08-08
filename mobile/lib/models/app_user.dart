@@ -1,4 +1,9 @@
-enum UserRole { customer, driver, vendor }
+import '../core/parsing/safe_enum.dart';
+
+// `admin` is intentionally not offered on the public signup form — accounts
+// are promoted to admin out-of-band (e.g. an operator flipping the role
+// field directly), not self-service.
+enum UserRole { customer, driver, vendor, admin }
 
 class AppUser {
   final String id;
@@ -20,7 +25,7 @@ class AppUser {
       id: id,
       email: map['email'] as String,
       displayName: map['displayName'] as String,
-      role: UserRole.values.byName(map['role'] as String),
+      role: enumByName(UserRole.values, map['role'] as String?),
       phoneNumber: map['phoneNumber'] as String?,
     );
   }

@@ -1,3 +1,5 @@
+import '../core/parsing/safe_enum.dart';
+
 enum OrderStatus {
   pending,
   accepted,
@@ -73,7 +75,7 @@ class DeliveryOrder {
       items: (map['items'] as List<dynamic>)
           .map((item) => OrderItem.fromMap(item as Map<String, dynamic>))
           .toList(),
-      status: OrderStatus.values.byName(map['status'] as String),
+      status: enumByName(OrderStatus.values, map['status'] as String?),
       total: (map['total'] as num).toDouble(),
       deliveryAddress: map['deliveryAddress'] as String,
       createdAt: DateTime.fromMillisecondsSinceEpoch(

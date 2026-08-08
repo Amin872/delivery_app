@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../core/errors/guard.dart';
 import '../models/order.dart';
 import '../models/vendor.dart';
 
@@ -20,48 +21,93 @@ class FirestoreService {
       _db.collection('vendors');
 
   Stream<List<Vendor>> watchOpenVendors() {
-    return _vendors.where('isOpen', isEqualTo: true).snapshots().map(
+    return guardStream(_vendors
+        .where('isOpen', isEqualTo: true)
+        .where('approvalStatus', isEqualTo: VendorApprovalStatus.approved.name)
+        .snapshots()
+        .map(
           (snap) => snap.docs
               .map((doc) => Vendor.fromMap(doc.id, doc.data()))
               .toList(),
-        );
+        ));
+  }
+
+  Stream<List<Vendor>> watchPendingVendors() {
+    return guardStream(_vendors
+        .where('approvalStatus', isEqualTo: VendorApprovalStatus.pending.name)
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((doc) => Vendor.fromMap(doc.id, doc.data()))
+              .toList(),
+        ));
+  }
+
+  Future<void> setVendorApprovalStatus(
+    String vendorId,
+    VendorApprovalStatus status,
+  ) {
+    return guardFuture(
+      () => _vendors.doc(vendorId).update({'approvalStatus': status.name}),
+    );
   }
 
   Stream<List<MenuItem>> watchMenu(String vendorId) {
-    return _vendors
+    return guardStream(_vendors
         .doc(vendorId)
         .collection('menuItems')
         .snapshots()
         .map((snap) => snap.docs
             .map((doc) => MenuItem.fromMap(doc.id, doc.data()))
-            .toList());
+            .toList()));
+  }
+
+  Future<String> addMenuItem(String vendorId, MenuItem item) {
+    return guardFuture(() async {
+      final doc = await _vendors.doc(vendorId).collection('menuItems').add(item.toMap());
+      return doc.id;
+    });
+  }
+
+  Future<void> updateMenuItem(String vendorId, MenuItem item) {
+    return guardFuture(() => _vendors
+        .doc(vendorId)
+        .collection('menuItems')
+        .doc(item.id)
+        .set(item.toMap()));
+  }
+
+  Future<void> deleteMenuItem(String vendorId, String itemId) {
+    return guardFuture(
+      () => _vendors.doc(vendorId).collection('menuItems').doc(itemId).delete(),
+    );
   }
 
   Stream<DeliveryOrder> watchOrder(String orderId) {
-    return _orders
+    return guardStream(_orders
         .doc(orderId)
         .snapshots()
-        .map((doc) => DeliveryOrder.fromMap(doc.id, doc.data()!));
+        .map((doc) => DeliveryOrder.fromMap(doc.id, doc.data()!)));
   }
 
   Stream<List<DeliveryOrder>> watchCustomerOrders(String customerId) {
-    return _orders
+    return guardStream(_orders
         .where('customerId', isEqualTo: customerId)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snap) => snap.docs
             .map((doc) => DeliveryOrder.fromMap(doc.id, doc.data()))
-            .toList());
+            .toList()));
   }
 
   Stream<List<DeliveryOrder>> watchVendorOrders(String vendorId) {
-    return _orders
+    return guardStream(_orders
         .where('vendorId', isEqualTo: vendorId)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snap) => snap.docs
             .map((doc) => DeliveryOrder.fromMap(doc.id, doc.data()))
-            .toList());
+            .toList()));
   }
 
   Stream<List<DeliveryOrder>> watchAvailableOrdersForDrivers() {
@@ -70,28 +116,91 @@ class FirestoreService {
     // and Firestore rejects a list query unless its own filters guarantee
     // that condition for every possible result — the rule can't be proven
     // from a status-only filter.
-    return _orders
+    return guardStream(_orders
         .where('status', isEqualTo: OrderStatus.readyForPickup.name)
         .where('driverId', isNull: true)
         .snapshots()
         .map((snap) => snap.docs
             .map((doc) => DeliveryOrder.fromMap(doc.id, doc.data()))
-            .toList());
+            .toList()));
   }
 
-  Future<String> createOrder(DeliveryOrder order) async {
-    final doc = await _orders.add(order.toMap());
-    return doc.id;
+  Future<String> createOrder(DeliveryOrder order) {
+    return guardFuture(() async {
+      final doc = await _orders.add(order.toMap());
+      return doc.id;
+    });
   }
 
   Future<void> updateOrderStatus(String orderId, OrderStatus status) {
-    return _orders.doc(orderId).update({'status': status.name});
+    return guardFuture(
+      () => _orders.doc(orderId).update({'status': status.name}),
+    );
   }
 
   Future<void> assignDriver(String orderId, String driverId) {
-    return _orders.doc(orderId).update({
-      'driverId': driverId,
-      'status': OrderStatus.pickedUp.name,
+    return guardFuture(() => _orders.doc(orderId).update({
+          'driverId': driverId,
+          'status': OrderStatus.pickedUp.name,
+        }));
+  }
+
+  Future<int> countVendorOrders(String vendorId) {
+    return guardFuture(() async {
+      final snapshot = await _orders.where('vendorId', isEqualTo: vendorId).count().get();
+      return snapshot.count ?? 0;
+    });
+  }
+
+  Future<double> sumVendorDeliveredSales(String vendorId) {
+    return guardFuture(() async {
+      final snapshot = await _orders
+          .where('vendorId', isEqualTo: vendorId)
+          .where('status', isEqualTo: OrderStatus.delivered.name)
+          .aggregate(sum('total'))
+          .get();
+      return snapshot.getSum('total') ?? 0;
+    });
+  }
+
+  Future<int> countVendorDeliveredOrders(String vendorId) {
+    return guardFuture(() async {
+      final snapshot = await _orders
+          .where('vendorId', isEqualTo: vendorId)
+          .where('status', isEqualTo: OrderStatus.delivered.name)
+          .count()
+          .get();
+      return snapshot.count ?? 0;
+    });
+  }
+
+  // Bounded sample used for the vendor's "most ordered items" tally —
+  // Firestore aggregation can't group by values inside an `items[]` array,
+  // so this is a deliberate approximation over recent history rather than a
+  // full scan, which is fine at this app's current scale.
+  Future<List<DeliveryOrder>> fetchRecentDeliveredOrders(
+    String vendorId, {
+    int limit = 200,
+  }) {
+    return guardFuture(() async {
+      final snapshot = await _orders
+          .where('vendorId', isEqualTo: vendorId)
+          .where('status', isEqualTo: OrderStatus.delivered.name)
+          .orderBy('createdAt', descending: true)
+          .limit(limit)
+          .get();
+      return snapshot.docs.map((doc) => DeliveryOrder.fromMap(doc.id, doc.data())).toList();
+    });
+  }
+
+  Future<int> countDriverDeliveries(String driverId) {
+    return guardFuture(() async {
+      final snapshot = await _orders
+          .where('driverId', isEqualTo: driverId)
+          .where('status', isEqualTo: OrderStatus.delivered.name)
+          .count()
+          .get();
+      return snapshot.count ?? 0;
     });
   }
 }

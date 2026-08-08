@@ -1,7 +1,9 @@
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import * as logger from "firebase-functions/logger";
 
 import { db } from "./admin";
+import { assertIsDriver } from "./auth";
 import { notifyUser } from "./notifications";
 
 export const onOrderCreated = onDocumentCreated("orders/{orderId}", async (event) => {
@@ -10,7 +12,13 @@ export const onOrderCreated = onDocumentCreated("orders/{orderId}", async (event
 
   const vendorDoc = await db.collection("vendors").doc(order.vendorId).get();
   const ownerId = vendorDoc.data()?.ownerId as string | undefined;
-  if (!ownerId) return;
+  if (!ownerId) {
+    logger.warn("onOrderCreated: vendor doc or ownerId missing, skipping notification", {
+      orderId: event.params.orderId,
+      vendorId: order.vendorId,
+    });
+    return;
+  }
 
   await notifyUser(ownerId, {
     title: "New order received",
@@ -43,6 +51,8 @@ export const acceptDelivery = onCall(async (request) => {
   if (!orderId) {
     throw new HttpsError("invalid-argument", "orderId is required.");
   }
+
+  await assertIsDriver(db, driverUid);
 
   const orderRef = db.collection("orders").doc(orderId);
 

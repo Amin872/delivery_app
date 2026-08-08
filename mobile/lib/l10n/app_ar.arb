@@ -1,0 +1,122 @@
+{
+  "@@locale": "ar",
+
+  "appTitle": "تطبيق التوصيل",
+
+  "signInTitle": "تسجيل الدخول",
+  "emailLabel": "البريد الإلكتروني",
+  "passwordLabel": "كلمة المرور",
+  "createAccountNavButton": "إنشاء حساب",
+
+  "createAccountTitle": "إنشاء حساب",
+  "displayNameLabel": "الاسم المعروض",
+  "phoneNumberLabel": "رقم الهاتف",
+  "roleLabel": "أنا...",
+  "alreadyHaveAccountButton": "لديك حساب بالفعل؟ تسجيل الدخول",
+
+  "forgotPasswordButton": "نسيت كلمة المرور؟",
+  "resetPasswordTitle": "إعادة تعيين كلمة المرور",
+  "resetPasswordInstructions": "أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة التعيين.",
+  "sendResetLinkButton": "إرسال رابط إعادة التعيين",
+  "resetLinkSentMessage": "إذا كان هناك حساب مسجّل بهذا البريد، فرابط إعادة التعيين في طريقه إليه.",
+  "backToSignInButton": "العودة لتسجيل الدخول",
+
+  "requiredFieldError": "هذا الحقل مطلوب.",
+  "invalidEmailFormatError": "أدخل بريداً إلكترونياً صالحاً.",
+  "passwordTooShortError": "يجب أن تتكون كلمة المرور من 6 أحرف على الأقل.",
+  "invalidPhoneFormatError": "أدخل رقم هاتف صالحاً.",
+
+  "userRoleCustomer": "عميل",
+  "userRoleDriver": "سائق",
+  "userRoleVendor": "بائع",
+  "userRoleAdmin": "مشرف",
+
+  "nearbyVendorsTitle": "المتاجر القريبة",
+  "noOpenVendorsMessage": "لا توجد متاجر مفتوحة حالياً.",
+
+  "availableDeliveriesTitle": "طلبات التوصيل المتاحة",
+  "noDeliveriesMessage": "لا توجد طلبات جاهزة للتوصيل بعد.",
+  "orderLabel": "الطلب {orderId}",
+  "acceptButton": "قبول",
+  "orderAcceptedMessage": "تم قبول الطلب.",
+
+  "incomingOrdersTitle": "الطلبات الواردة",
+  "noOrdersMessage": "لا توجد طلبات بعد.",
+
+  "orderStatusPending": "قيد الانتظار",
+  "orderStatusAccepted": "تم القبول",
+  "orderStatusPreparing": "قيد التحضير",
+  "orderStatusReadyForPickup": "جاهز للاستلام",
+  "orderStatusPickedUp": "تم الاستلام",
+  "orderStatusDelivering": "قيد التوصيل",
+  "orderStatusDelivered": "تم التوصيل",
+  "orderStatusCancelled": "ملغى",
+
+  "vendorApprovalsTitle": "الموافقة على المتاجر",
+  "noVendorsAwaitingApprovalMessage": "لا توجد متاجر بانتظار الموافقة.",
+  "noDescriptionPlaceholder": "(بدون وصف)",
+  "approveTooltip": "موافقة",
+  "rejectTooltip": "رفض",
+
+  "signOutTooltip": "تسجيل الخروج",
+  "languageToggleTooltip": "تغيير اللغة",
+
+  "noProfileFoundMessage": "لم يتم العثور على ملف تعريف لهذا الحساب.",
+  "retryButton": "إعادة المحاولة",
+  "signOutButton": "تسجيل الخروج",
+
+  "confirmButton": "تأكيد",
+  "cancelButton": "إلغاء",
+
+  "vendorMenuEmptyMessage": "لا توجد عناصر متوفرة حالياً.",
+  "addToCartTooltip": "أضف إلى السلة",
+  "cartTitle": "السلة",
+  "viewCartButton": "عرض السلة",
+  "emptyCartMessage": "سلتك فارغة.",
+  "deliveryAddressLabel": "عنوان التوصيل",
+  "totalLabel": "الإجمالي",
+  "placeOrderButton": "تأكيد الطلب (الدفع عند الاستلام)",
+  "removeItemTooltip": "إزالة",
+  "switchVendorConfirmTitle": "بدء سلة جديدة؟",
+  "switchVendorConfirmMessage": "سلتك تحتوي عناصر من متجر آخر. إضافة هذا العنصر ستُفرغها.",
+  "orderPlacedMessage": "تم إرسال الطلب!",
+
+  "orderTrackingTitle": "تتبع الطلب",
+  "myOrdersTitle": "طلباتي",
+
+  "menuManagementTitle": "إدارة القائمة",
+  "noMenuItemsMessage": "لا توجد عناصر في القائمة بعد.",
+  "addMenuItemTitle": "إضافة عنصر",
+  "editMenuItemTitle": "تعديل العنصر",
+  "itemNameLabel": "اسم العنصر",
+  "priceLabel": "السعر",
+  "availableLabel": "متوفر",
+  "saveButton": "حفظ",
+  "deleteMenuItemConfirmMessage": "حذف هذا العنصر؟",
+  "deleteTooltip": "حذف",
+  "editTooltip": "تعديل",
+  "invalidPriceError": "أدخل سعراً صالحاً.",
+
+  "vendorStatsTitle": "المبيعات والطلبات",
+  "driverStatsTitle": "الأرباح",
+  "totalOrdersLabel": "إجمالي الطلبات",
+  "totalSalesLabel": "إجمالي المبيعات",
+  "topItemsTitle": "الأكثر طلباً",
+  "noCompletedOrdersMessage": "لا توجد طلبات مكتملة بعد.",
+  "deliveredOrdersLabel": "الطلبات الموصلة",
+  "totalEarningsLabel": "إجمالي الأرباح",
+
+  "advanceStatusButtonLabel": "الانتقال إلى {status}",
+
+  "genericErrorMessage": "حدث خطأ ما. الرجاء المحاولة مرة أخرى.",
+  "invalidCredentialMessage": "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
+  "emailAlreadyInUseMessage": "يوجد حساب بالفعل بهذا البريد الإلكتروني.",
+  "weakPasswordMessage": "كلمة المرور ضعيفة جداً — استخدم 6 أحرف على الأقل.",
+  "invalidEmailMessage": "عنوان البريد الإلكتروني غير صحيح.",
+  "userDisabledMessage": "تم تعطيل هذا الحساب.",
+  "tooManyRequestsMessage": "محاولات كثيرة جداً. الرجاء الانتظار والمحاولة مرة أخرى.",
+  "networkErrorMessage": "لا يوجد اتصال بالإنترنت. تحقق من الشبكة وحاول مرة أخرى.",
+  "permissionDeniedMessage": "ليس لديك صلاحية للقيام بذلك.",
+  "notFoundMessage": "تعذر العثور على هذا العنصر.",
+  "actionNoLongerAvailableMessage": "لم يعد بالإمكان إتمام هذا الإجراء — ربما تمت معالجته بالفعل."
+}

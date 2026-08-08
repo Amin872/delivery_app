@@ -1,3 +1,7 @@
+import '../core/parsing/safe_enum.dart';
+
+enum VendorApprovalStatus { pending, approved, rejected }
+
 class Vendor {
   final String id;
   final String ownerId;
@@ -5,6 +9,7 @@ class Vendor {
   final String description;
   final String? imageUrl;
   final bool isOpen;
+  final VendorApprovalStatus approvalStatus;
 
   const Vendor({
     required this.id,
@@ -13,6 +18,7 @@ class Vendor {
     required this.description,
     this.imageUrl,
     required this.isOpen,
+    required this.approvalStatus,
   });
 
   factory Vendor.fromMap(String id, Map<String, dynamic> map) {
@@ -23,6 +29,10 @@ class Vendor {
       description: map['description'] as String,
       imageUrl: map['imageUrl'] as String?,
       isOpen: map['isOpen'] as bool? ?? false,
+      approvalStatus: enumByName(
+        VendorApprovalStatus.values,
+        map['approvalStatus'] as String? ?? 'pending',
+      ),
     );
   }
 
@@ -33,6 +43,7 @@ class Vendor {
       'description': description,
       'imageUrl': imageUrl,
       'isOpen': isOpen,
+      'approvalStatus': approvalStatus.name,
     };
   }
 }

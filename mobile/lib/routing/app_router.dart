@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/errors/error_messages.dart';
+import '../features/admin/screens/admin_dashboard_screen.dart';
 import '../features/auth/providers/auth_provider.dart';
 import '../features/auth/screens/login_screen.dart';
 import '../features/auth/screens/signup_screen.dart';
+import '../features/auth/screens/forgot_password_screen.dart';
 import '../features/customer/screens/customer_home_screen.dart';
 import '../features/driver/screens/driver_home_screen.dart';
 import '../features/vendor/screens/vendor_dashboard_screen.dart';
+import '../l10n/app_localizations.dart';
 import '../models/app_user.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -18,7 +22,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final isLoggedIn = authState.valueOrNull != null;
       final isAuthRoute = state.matchedLocation == '/login' ||
-          state.matchedLocation == '/signup';
+          state.matchedLocation == '/signup' ||
+          state.matchedLocation == '/forgot-password';
 
       if (!isLoggedIn && !isAuthRoute) return '/login';
       if (isLoggedIn && isAuthRoute) return '/';
@@ -32,6 +37,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/signup',
         builder: (context, state) => const SignupScreen(),
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        builder: (context, state) => const ForgotPasswordScreen(),
       ),
       GoRoute(
         path: '/',
@@ -53,8 +62,25 @@ class _RoleGate extends ConsumerWidget {
     return appUserAsync.when(
       data: (appUser) {
         if (appUser == null) {
-          return const Scaffold(
-            body: Center(child: Text('No profile found for this account.')),
+          final l10n = AppLocalizations.of(context)!;
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(l10n.noProfileFoundMessage),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: () => ref.invalidate(currentAppUserProvider),
+                    child: Text(l10n.retryButton),
+                  ),
+                  TextButton(
+                    onPressed: () => ref.read(authServiceProvider).signOut(),
+                    child: Text(l10n.signOutButton),
+                  ),
+                ],
+              ),
+            ),
           );
         }
         switch (appUser.role) {
@@ -64,12 +90,15 @@ class _RoleGate extends ConsumerWidget {
             return const DriverHomeScreen();
           case UserRole.vendor:
             return VendorDashboardScreen(vendorId: appUser.id);
+          case UserRole.admin:
+            return const AdminDashboardScreen();
         }
       },
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (error, _) =>
-          Scaffold(body: Center(child: Text('Error: $error'))),
+      error: (error, _) => Scaffold(
+        body: Center(child: Text(localizedErrorMessage(context, error))),
+      ),
     );
   }
 }

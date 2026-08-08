@@ -25,11 +25,23 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // vendors/{vendorId} — public storefront, editable by its owner only.
+    // vendors/{vendorId} — public storefront. Owners manage their own
+    // storefront details but can't self-approve; only an admin can move
+    // approvalStatus out of 'pending'. New vendors always start pending
+    // (enforced at signup by AuthService.signUp, and at write-time here).
     match /vendors/{vendorId} {
       allow read: if true;
-      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
-      allow update, delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() &&
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.approvalStatus == 'pending';
+      allow update: if isSignedIn() && (
+        (resource.data.ownerId == request.auth.uid &&
+          request.resource.data.ownerId == resource.data.ownerId &&
+          request.resource.data.approvalStatus == resource.data.approvalStatus) ||
+        (hasRole('admin') &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvalStatus']))
+      );
+      allow delete: if false;
 
       match /menuItems/{itemId} {
         allow read: if true;
