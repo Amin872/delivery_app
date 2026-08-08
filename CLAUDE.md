@@ -9,7 +9,7 @@ sharing a single Flutter codebase, backed by Firebase (Auth, Firestore, Cloud Fu
 
 ## Repository layout
 
-- `mobile/` — Flutter client (all three roles; routed by the signed-in user's `role` field, see below)
+- `mobile/` — Flutter client (all four roles; routed by the signed-in user's `role` field, see below)
 - `functions/` — Firebase Cloud Functions, TypeScript, compiled with `tsc` to `functions/lib/`
 - `firebase.json`, `.firebaserc` — Firebase project wiring (emulator ports, functions predeploy hooks)
 - `firestore.rules`, `firestore.indexes.json`, `storage.rules` — Firebase security rules, at repo root
@@ -91,8 +91,11 @@ live — don't put raw `FirebaseFirestore.instance.collection(...)` calls in scr
 
 ### Firestore schema (see also README.md "Data model")
 
-- `users/{uid}` — profile + `role` (`customer` | `driver` | `vendor`); doc ID **is** the Firebase Auth UID
-- `vendors/{vendorId}` — storefront, `ownerId` links back to a `users` doc; `menuItems` subcollection
+- `users/{uid}` — profile + `role` (`customer` | `driver` | `vendor` | `admin`); doc ID **is** the
+  Firebase Auth UID
+- `vendors/{vendorId}` — storefront, `ownerId` links back to a `users` doc; `approvalStatus`
+  (`pending` | `approved` | `rejected`, see `VendorApprovalStatus` in `lib/models/vendor.dart`);
+  `menuItems` subcollection
 - `drivers/{uid}` — availability + `lastKnownLocation`; doc ID is also the Auth UID
 - `orders/{orderId}` — `items[]`, `status` (see `OrderStatus` enum in `lib/models/order.dart`), and
   `customerId` / `vendorId` / `driverId` foreign keys
@@ -101,6 +104,15 @@ All four collections' rules in `firestore.rules` key off these same relationship
 readable by whoever's uid matches `customerId`, `driverId`, or the owner of `vendorId`) — when adding
 a field that changes who should read/write a doc, update the rule in the matching `match` block, not
 just the Dart model.
+
+### Vendor approval is a client write gated by rules, not a callable
+
+New vendors are created with `approvalStatus: 'pending'` (`AuthService.signUp`); `firestore.rules`'
+`vendors/{vendorId}` `allow update` only lets an owner touch their own doc while leaving `ownerId` and
+`approvalStatus` unchanged, and only lets a caller with `hasRole('admin')` change `approvalStatus`
+alone (`request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvalStatus'])`). Unlike
+driver assignment below, this is a plain client write straight from `FirestoreService` — there's no
+race to arbitrate, so no callable is needed.
 
 ### Driver assignment is a transaction in Cloud Functions, not a client write
 
