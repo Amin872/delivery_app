@@ -156,13 +156,6 @@ class FirestoreService {
     );
   }
 
-  Future<void> assignDriver(String orderId, String driverId) {
-    return guardFuture(() => _orders.doc(orderId).update({
-          'driverId': driverId,
-          'status': OrderStatus.pickedUp.name,
-        }));
-  }
-
   Future<int> countVendorOrders(String vendorId) {
     return guardFuture(() async {
       final snapshot = await _orders.where('vendorId', isEqualTo: vendorId).count().get();
