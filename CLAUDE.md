@@ -4,9 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A delivery marketplace app with three user roles — **customer**, **driver**, **vendor** — sharing a
-single Flutter codebase, backed by Firebase (Auth, Firestore, Cloud Functions, Storage, FCM). This is
-a freshly scaffolded project: the data model and screens are minimal skeletons, not a finished product.
+A delivery marketplace app with four user roles — **customer**, **driver**, **vendor**, **admin** —
+sharing a single Flutter codebase, backed by Firebase (Auth, Firestore, Cloud Functions, Storage, FCM).
 
 ## Repository layout
 
@@ -73,18 +72,20 @@ To repoint this app at a different Firebase project: update `.firebaserc`, then 
 There's no separate app per role. `lib/routing/app_router.dart` (go_router) redirects unauthenticated
 users to `/login`, and once signed in, `_RoleGate` reads the user's Firestore `users/{uid}` document
 (via `currentAppUserProvider` in `lib/features/auth/providers/auth_provider.dart`) and dispatches to
-`CustomerHomeScreen`, `DriverHomeScreen`, or `VendorDashboardScreen` based on `AppUser.role`. Firebase
-Auth tells you *who* is signed in; the Firestore user doc tells you *what role* they have — these are
-two separate async steps (`authStateChangesProvider` → `currentAppUserProvider`), both must resolve
-before routing a signed-in user anywhere.
+`CustomerHomeScreen`, `DriverHomeScreen`, `VendorDashboardScreen`, or `AdminDashboardScreen` based on
+`AppUser.role` (`UserRole` enum in `lib/models/app_user.dart`). Firebase Auth tells you *who* is
+signed in; the Firestore user doc tells you *what role* they have — these are two separate async steps
+(`authStateChangesProvider` → `currentAppUserProvider`), both must resolve before routing a signed-in
+user anywhere.
 
 ### State management: Riverpod providers wrap services, not the reverse
 
 `lib/services/*.dart` (`AuthService`, `FirestoreService`, `LocationService`) are plain Dart classes with
 no Riverpod dependency — they take an optional injected instance (e.g. `AuthService({FirebaseAuth? auth})`)
-for testability. Riverpod providers (`authServiceProvider`, `firestoreServiceProvider` in
-`lib/features/customer/screens/customer_home_screen.dart`) just construct and expose these services;
-screens depend on providers, never instantiate services directly. `FirestoreService` streams
+for testability. Riverpod providers just construct and expose these services — `authServiceProvider` in
+`lib/features/auth/providers/auth_provider.dart`, `firestoreServiceProvider` in
+`lib/features/customer/screens/customer_home_screen.dart` — screens depend on providers, never
+instantiate services directly. `FirestoreService` streams
 (`watchOpenVendors`, `watchVendorOrders`, etc.) are the single place collection names and query shapes
 live — don't put raw `FirebaseFirestore.instance.collection(...)` calls in screen/widget code.
 
