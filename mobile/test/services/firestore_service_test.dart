@@ -154,4 +154,23 @@ void main() {
     final updated = await orderRef.get();
     expect(updated.data()!['status'], 'cancelled');
   });
+
+  test('updateVendorImage sets the vendor doc imageUrl', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    final vendorRef = await firestore.collection('vendors').add({
+      'ownerId': 'owner-1',
+      'name': 'Falafel House',
+      'description': '',
+      'imageUrl': null,
+      'isOpen': true,
+      'approvalStatus': 'approved',
+    });
+
+    await service.updateVendorImage(vendorRef.id, 'https://example.com/photo.jpg');
+
+    final updated = await vendorRef.get();
+    expect(updated.data()!['imageUrl'], 'https://example.com/photo.jpg');
+  });
 }

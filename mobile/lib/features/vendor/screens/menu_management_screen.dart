@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -5,13 +7,17 @@ import 'package:intl/intl.dart';
 import '../../../core/errors/error_messages.dart';
 import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/gradient_button.dart';
+import '../../../core/widgets/image_picker_avatar.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
+import '../../../services/storage_service.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
 import '../../customer/screens/vendor_menu_screen.dart' show vendorMenuProvider;
+
+final storageServiceProvider = Provider<StorageService>((ref) => StorageService());
 
 class MenuManagementScreen extends ConsumerWidget {
   const MenuManagementScreen({required this.vendorId, super.key});
@@ -83,6 +89,11 @@ class MenuManagementScreen extends ConsumerWidget {
               final item = items[index];
               return Card(
                 child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundImage:
+                        item.imageUrl != null ? NetworkImage(item.imageUrl!) : null,
+                    child: item.imageUrl == null ? const Icon(Icons.fastfood_outlined) : null,
+                  ),
                   title: Text(
                     item.name,
                     style: item.available
@@ -90,23 +101,23 @@ class MenuManagementScreen extends ConsumerWidget {
                         : TextStyle(color: Theme.of(context).disabledColor),
                   ),
                   subtitle: Text(currencyFormat.format(item.price)),
-                  leading: Switch(
-                    value: item.available,
-                    onChanged: (value) => ref.read(firestoreServiceProvider).updateMenuItem(
-                          vendorId,
-                          MenuItem(
-                            id: item.id,
-                            vendorId: vendorId,
-                            name: item.name,
-                            price: item.price,
-                            imageUrl: item.imageUrl,
-                            available: value,
-                          ),
-                        ),
-                  ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      Switch(
+                        value: item.available,
+                        onChanged: (value) => ref.read(firestoreServiceProvider).updateMenuItem(
+                              vendorId,
+                              MenuItem(
+                                id: item.id,
+                                vendorId: vendorId,
+                                name: item.name,
+                                price: item.price,
+                                imageUrl: item.imageUrl,
+                                available: value,
+                              ),
+                            ),
+                      ),
                       IconButton(
                         icon: const Icon(Icons.edit_outlined),
                         tooltip: l10n.editTooltip,
@@ -147,6 +158,7 @@ class _MenuItemFormState extends ConsumerState<_MenuItemForm> {
   late final TextEditingController _nameController;
   late final TextEditingController _priceController;
   late bool _available;
+  File? _pickedImage;
   bool _isSubmitting = false;
   String? _errorMessage;
 
@@ -168,6 +180,11 @@ class _MenuItemFormState extends ConsumerState<_MenuItemForm> {
     super.dispose();
   }
 
+  // A newly picked image can't be uploaded to vendorImages/{vendorId}/menu_{itemId}.jpg
+  // until the item has an id — for a brand-new item that means creating the
+  // Firestore doc first (unimaged), then uploading and writing the imageUrl
+  // in a second update. An existing item already has its id, so a picked
+  // image there is uploaded before the single update that saves everything.
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
@@ -175,19 +192,40 @@ class _MenuItemFormState extends ConsumerState<_MenuItemForm> {
       _errorMessage = null;
     });
     try {
-      final item = MenuItem(
-        id: widget.existing?.id ?? '',
-        vendorId: widget.vendorId,
-        name: _nameController.text.trim(),
-        price: double.parse(_priceController.text.trim()),
-        imageUrl: widget.existing?.imageUrl,
-        available: _available,
-      );
-      final service = ref.read(firestoreServiceProvider);
-      if (widget.existing == null) {
-        await service.addMenuItem(widget.vendorId, item);
-      } else {
-        await service.updateMenuItem(widget.vendorId, item);
+      final firestore = ref.read(firestoreServiceProvider);
+      final name = _nameController.text.trim();
+      final price = double.parse(_priceController.text.trim());
+      final isNew = widget.existing == null;
+
+      final itemId = isNew
+          ? await firestore.addMenuItem(
+              widget.vendorId,
+              MenuItem(id: '', vendorId: widget.vendorId, name: name, price: price, available: _available),
+            )
+          : widget.existing!.id;
+
+      var imageUrl = widget.existing?.imageUrl;
+      if (_pickedImage != null) {
+        imageUrl = await ref
+            .read(storageServiceProvider)
+            .uploadVendorImage(widget.vendorId, _pickedImage!, 'menu_$itemId.jpg');
+      }
+
+      // A brand-new item with no picked image is already fully saved by
+      // addMenuItem above; an edit, or a new item that just got an image,
+      // still needs this write.
+      if (!isNew || _pickedImage != null) {
+        await firestore.updateMenuItem(
+          widget.vendorId,
+          MenuItem(
+            id: itemId,
+            vendorId: widget.vendorId,
+            name: name,
+            price: price,
+            imageUrl: imageUrl,
+            available: _available,
+          ),
+        );
       }
       if (mounted) Navigator.of(context).pop();
     } catch (error) {
@@ -212,6 +250,15 @@ class _MenuItemFormState extends ConsumerState<_MenuItemForm> {
             Text(
               widget.existing == null ? l10n.addMenuItemTitle : l10n.editMenuItemTitle,
               style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: ImagePickerAvatar(
+                radius: 40,
+                networkUrl: widget.existing?.imageUrl,
+                localFile: _pickedImage,
+                onPicked: (file) => setState(() => _pickedImage = file),
+              ),
             ),
             const SizedBox(height: 16),
             TextFormField(

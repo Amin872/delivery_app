@@ -53,6 +53,9 @@ dependencies:
   google_maps_flutter: ^2.9.0
   geolocator: ^13.0.1
 
+  # Vendor/menu-item photo picking, uploaded via firebase_storage
+  image_picker: ^1.1.2
+
   # Localization (Arabic-first, RTL) & local persistence (locale/theme choice)
   intl: any
   shared_preferences: ^2.3.2

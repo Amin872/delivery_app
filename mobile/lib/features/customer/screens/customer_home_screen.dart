@@ -61,6 +61,11 @@ class CustomerHomeScreen extends ConsumerWidget {
               final vendor = vendors[index];
               return Card(
                 child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundImage:
+                        vendor.imageUrl != null ? NetworkImage(vendor.imageUrl!) : null,
+                    child: vendor.imageUrl == null ? const Icon(Icons.storefront_outlined) : null,
+                  ),
                   title: Text(vendor.name),
                   subtitle: Text(vendor.description),
                   trailing: const Icon(Icons.chevron_right),

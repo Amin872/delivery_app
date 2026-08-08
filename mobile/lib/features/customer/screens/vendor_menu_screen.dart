@@ -61,6 +61,12 @@ class VendorMenuScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: vendor.imageUrl == null
+            ? null
+            : Padding(
+                padding: const EdgeInsets.all(8),
+                child: CircleAvatar(backgroundImage: NetworkImage(vendor.imageUrl!)),
+              ),
         title: Text(vendor.name),
         actions: const [LanguageToggleButton()],
       ),
@@ -77,6 +83,11 @@ class VendorMenuScreen extends ConsumerWidget {
               final item = available[index];
               return Card(
                 child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundImage:
+                        item.imageUrl != null ? NetworkImage(item.imageUrl!) : null,
+                    child: item.imageUrl == null ? const Icon(Icons.fastfood_outlined) : null,
+                  ),
                   title: Text(item.name),
                   subtitle: Text(currencyFormat.format(item.price)),
                   trailing: IconButton(

@@ -47,6 +47,10 @@ class FirestoreService {
         ));
   }
 
+  Future<void> updateVendorImage(String vendorId, String imageUrl) {
+    return guardFuture(() => _vendors.doc(vendorId).update({'imageUrl': imageUrl}));
+  }
+
   Future<void> setVendorApprovalStatus(
     String vendorId,
     VendorApprovalStatus status,

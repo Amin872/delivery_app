@@ -1,10 +1,14 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/widgets/app_snackbar.dart';
+import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
@@ -12,7 +16,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
-import 'menu_management_screen.dart';
+import 'menu_management_screen.dart' show MenuManagementScreen, storageServiceProvider;
 import 'vendor_stats_screen.dart';
 
 final vendorOrdersProvider =
@@ -56,6 +60,33 @@ class VendorDashboardScreen extends ConsumerStatefulWidget {
 
 class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
   final _cancellingOrderIds = <String>{};
+  bool _uploadingStorefrontImage = false;
+
+  Future<void> _changeStorefrontImage() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked == null) return;
+    if (!mounted) return;
+
+    setState(() => _uploadingStorefrontImage = true);
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    try {
+      final imageUrl = await ref
+          .read(storageServiceProvider)
+          .uploadVendorImage(widget.vendorId, File(picked.path), 'storefront.jpg');
+      await ref.read(firestoreServiceProvider).updateVendorImage(widget.vendorId, imageUrl);
+      messenger.showSnackBar(buildAppSnackBar(colorScheme, l10n.storefrontImageUpdatedMessage));
+    } catch (error) {
+      if (mounted) {
+        messenger.showSnackBar(
+          buildAppSnackBar(colorScheme, localizedErrorMessage(context, error), isError: true),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingStorefrontImage = false);
+    }
+  }
 
   Future<void> _confirmCancel(DeliveryOrder order) async {
     final l10n = AppLocalizations.of(context)!;
@@ -109,6 +140,13 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
       appBar: AppBar(
         title: Text(l10n.incomingOrdersTitle),
         actions: [
+          IconButton(
+            icon: _uploadingStorefrontImage
+                ? buttonSpinner(Theme.of(context).colorScheme.onSurface, size: 16)
+                : const Icon(Icons.photo_camera_outlined),
+            tooltip: l10n.changeStorefrontPhotoTooltip,
+            onPressed: _uploadingStorefrontImage ? null : _changeStorefrontImage,
+          ),
           IconButton(
             icon: const Icon(Icons.bar_chart),
             tooltip: l10n.vendorStatsTitle,

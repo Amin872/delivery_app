@@ -42,6 +42,8 @@
 
   "incomingOrdersTitle": "الطلبات الواردة",
   "noOrdersMessage": "لا توجد طلبات بعد.",
+  "changeStorefrontPhotoTooltip": "تغيير صورة المتجر",
+  "storefrontImageUpdatedMessage": "تم تحديث صورة المتجر.",
 
   "orderStatusPending": "قيد الانتظار",
   "orderStatusAccepted": "تم القبول",

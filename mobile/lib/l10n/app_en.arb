@@ -50,6 +50,8 @@
 
   "incomingOrdersTitle": "Incoming orders",
   "noOrdersMessage": "No orders yet.",
+  "changeStorefrontPhotoTooltip": "Change storefront photo",
+  "storefrontImageUpdatedMessage": "Storefront photo updated.",
 
   "orderStatusPending": "Pending",
   "orderStatusAccepted": "Accepted",
