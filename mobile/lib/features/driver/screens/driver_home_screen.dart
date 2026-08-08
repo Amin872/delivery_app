@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/widgets/app_snackbar.dart';
+import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
@@ -32,13 +35,14 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
     setState(() => _acceptingOrderIds.add(order.id));
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
     try {
       await ref.read(functionsServiceProvider).acceptDelivery(order.id);
-      messenger.showSnackBar(SnackBar(content: Text(l10n.orderAcceptedMessage)));
+      messenger.showSnackBar(buildAppSnackBar(colorScheme, l10n.orderAcceptedMessage));
     } catch (error) {
       if (mounted) {
         messenger.showSnackBar(
-          SnackBar(content: Text(localizedErrorMessage(context, error))),
+          buildAppSnackBar(colorScheme, localizedErrorMessage(context, error), isError: true),
         );
       }
     } finally {
@@ -91,11 +95,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                   trailing: FilledButton(
                     onPressed: isAccepting ? null : () => _accept(order),
                     child: isAccepting
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                        ? buttonSpinner(Theme.of(context).colorScheme.onPrimary, size: 16)
                         : Text(l10n.acceptButton),
                   ),
                 ),
@@ -103,7 +103,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
             },
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const ListSkeletonLoader(),
         error: (error, _) =>
             Center(child: Text(localizedErrorMessage(context, error))),
       ),

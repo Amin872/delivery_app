@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/errors/error_messages.dart';
+import '../core/widgets/app_spinner.dart';
 import '../features/admin/screens/admin_dashboard_screen.dart';
 import '../features/auth/providers/auth_provider.dart';
 import '../features/auth/screens/login_screen.dart';
@@ -115,8 +116,7 @@ class _RoleGate extends ConsumerWidget {
             return const AdminDashboardScreen();
         }
       },
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      loading: () => Scaffold(body: Center(child: screenSpinner(context))),
       error: (error, _) => Scaffold(
         body: Center(child: Text(localizedErrorMessage(context, error))),
       ),

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/error_messages.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../l10n/app_localizations.dart';
@@ -109,14 +110,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   GradientButton(
                     onPressed: _isSubmitting ? null : _submit,
                     child: _isSubmitting
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: colorScheme.onPrimary,
-                            ),
-                          )
+                        ? buttonSpinner(colorScheme.onPrimary)
                         : Text(l10n.signInTitle),
                   ),
                   TextButton(

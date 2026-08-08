@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
@@ -122,7 +124,7 @@ class MenuManagementScreen extends ConsumerWidget {
             },
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const ListSkeletonLoader(),
         error: (error, _) =>
             Center(child: Text(localizedErrorMessage(context, error))),
       ),
@@ -244,14 +246,7 @@ class _MenuItemFormState extends ConsumerState<_MenuItemForm> {
             GradientButton(
               onPressed: _isSubmitting ? null : _save,
               child: _isSubmitting
-                  ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Theme.of(context).colorScheme.onPrimary,
-                      ),
-                    )
+                  ? buttonSpinner(Theme.of(context).colorScheme.onPrimary)
                   : Text(l10n.saveButton),
             ),
           ],

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/providers/preferences_provider.dart';
 import 'core/theme/app_theme.dart';
+import 'core/widgets/app_snackbar.dart';
 import 'features/notifications/providers/push_notification_provider.dart';
 import 'l10n/app_localizations.dart';
 import 'routing/app_router.dart';
@@ -27,8 +28,15 @@ class DeliveryApp extends ConsumerWidget {
         final title = message.notification?.title;
         final body = message.notification?.body;
         if (title == null && body == null) return;
+        // MaterialApp (and its Theme) doesn't exist yet at this point in the
+        // widget tree — this widget builds it — so resolve the colors
+        // directly from AppTheme/platform brightness instead of Theme.of.
+        final isDark = themeMode == ThemeMode.dark ||
+            (themeMode == ThemeMode.system &&
+                MediaQuery.platformBrightnessOf(context) == Brightness.dark);
+        final colorScheme = (isDark ? AppTheme.dark : AppTheme.light).colorScheme;
         _scaffoldMessengerKey.currentState?.showSnackBar(
-          SnackBar(content: Text([title, body].nonNulls.join(' — '))),
+          buildAppSnackBar(colorScheme, [title, body].nonNulls.join(' — ')),
         );
       });
     });

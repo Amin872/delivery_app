@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/widgets/app_snackbar.dart';
+import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/staggered_list_item.dart';
@@ -64,8 +66,9 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       ref.read(cartProvider.notifier).clear();
       if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(l10n.orderPlacedMessage)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        buildAppSnackBar(Theme.of(context).colorScheme, l10n.orderPlacedMessage),
+      );
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => OrderTrackingScreen(orderId: orderId)),
       );
@@ -158,14 +161,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                   GradientButton(
                     onPressed: _isSubmitting ? null : _placeOrder,
                     child: _isSubmitting
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Theme.of(context).colorScheme.onPrimary,
-                            ),
-                          )
+                        ? buttonSpinner(Theme.of(context).colorScheme.onPrimary)
                         : Text(l10n.placeOrderButton),
                   ),
                 ],

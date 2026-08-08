@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/business_constants.dart';
 import '../../../core/errors/error_messages.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/stat_card.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
@@ -68,7 +69,10 @@ class DriverStatsScreen extends ConsumerWidget {
             ],
           ),
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Padding(
+          padding: EdgeInsets.all(16),
+          child: StatCardRowSkeleton(),
+        ),
         error: (error, _) =>
             Center(child: Text(localizedErrorMessage(context, error))),
       ),

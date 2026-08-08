@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/errors/error_messages.dart';
 import '../../../core/stats/menu_item_tally.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/stat_card.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
@@ -100,7 +101,16 @@ class VendorStatsScreen extends ConsumerWidget {
             ],
           ),
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              const StatCardRowSkeleton(),
+              const SizedBox(height: 20),
+              Expanded(child: const ListSkeletonLoader(itemCount: 5)),
+            ],
+          ),
+        ),
         error: (error, _) =>
             Center(child: Text(localizedErrorMessage(context, error))),
       ),
