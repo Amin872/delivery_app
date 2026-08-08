@@ -4,7 +4,9 @@ import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
 import 'customer_home_screen.dart' show firestoreServiceProvider;
@@ -51,6 +53,7 @@ class OrderTrackingScreen extends ConsumerWidget {
               : _trackedStatuses.indexOf(order.status);
           final colorScheme = Theme.of(context).colorScheme;
           return ListView(
+            padding: const EdgeInsets.symmetric(vertical: 8),
             children: [
               if (order.status == OrderStatus.cancelled)
                 ListTile(
@@ -60,23 +63,34 @@ class OrderTrackingScreen extends ConsumerWidget {
               else
                 for (var i = 0; i < _trackedStatuses.length; i++)
                   ListTile(
-                    leading: Icon(
-                      i <= currentIndex ? Icons.check_circle : Icons.radio_button_unchecked,
-                      color: i <= currentIndex ? colorScheme.primary : colorScheme.outline,
-                    ),
+                    leading: i <= currentIndex
+                        ? Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              gradient: AppGradients.primary(colorScheme),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.check, color: colorScheme.onPrimary, size: 18),
+                          )
+                        : Icon(Icons.radio_button_unchecked, color: colorScheme.outline),
                     title: Text(
                       orderStatusLabel(context, _trackedStatuses[i]),
                       style: i == currentIndex ? const TextStyle(fontWeight: FontWeight.bold) : null,
                     ),
-                  ),
+                  ).staggeredEntrance(i),
               const Divider(),
-              ListTile(
-                title: Text(l10n.totalLabel),
-                trailing: Text(currencyFormat.format(order.total)),
+              Card(
+                child: ListTile(
+                  title: Text(l10n.totalLabel),
+                  trailing: Text(currencyFormat.format(order.total)),
+                ),
               ),
-              ListTile(
-                title: Text(l10n.deliveryAddressLabel),
-                subtitle: Text(order.deliveryAddress),
+              Card(
+                child: ListTile(
+                  title: Text(l10n.deliveryAddressLabel),
+                  subtitle: Text(order.deliveryAddress),
+                ),
               ),
             ],
           );

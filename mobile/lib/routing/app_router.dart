@@ -14,6 +14,27 @@ import '../features/vendor/screens/vendor_dashboard_screen.dart';
 import '../l10n/app_localizations.dart';
 import '../models/app_user.dart';
 
+/// Shared fade+slide transition applied to every route so navigation feels
+/// consistent app-wide rather than only on individually-styled screens.
+CustomTransitionPage<void> _fadeSlidePage(GoRouterState state, Widget child) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 250),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(parent: animation, curve: Curves.easeOut);
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(begin: const Offset(0, 0.03), end: Offset.zero)
+              .animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateChangesProvider);
 
@@ -32,19 +53,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: '/login',
-        builder: (context, state) => const LoginScreen(),
+        pageBuilder: (context, state) => _fadeSlidePage(state, const LoginScreen()),
       ),
       GoRoute(
         path: '/signup',
-        builder: (context, state) => const SignupScreen(),
+        pageBuilder: (context, state) => _fadeSlidePage(state, const SignupScreen()),
       ),
       GoRoute(
         path: '/forgot-password',
-        builder: (context, state) => const ForgotPasswordScreen(),
+        pageBuilder: (context, state) => _fadeSlidePage(state, const ForgotPasswordScreen()),
       ),
       GoRoute(
         path: '/',
-        builder: (context, state) => const _RoleGate(),
+        pageBuilder: (context, state) => _fadeSlidePage(state, const _RoleGate()),
       ),
     ],
   );

@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -97,39 +99,47 @@ class _CartScreenState extends ConsumerState<CartScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  for (final line in cart.lines.values)
-                    ListTile(
-                      title: Text(line.item.name),
-                      subtitle: Text(currencyFormat.format(line.item.price)),
-                      leading: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.remove_circle_outline),
-                            onPressed: () => ref
-                                .read(cartProvider.notifier)
-                                .setQuantity(line.item.id, line.quantity - 1),
-                          ),
-                          Text('${line.quantity}'),
-                          IconButton(
-                            icon: const Icon(Icons.add_circle_outline),
-                            onPressed: () => ref
-                                .read(cartProvider.notifier)
-                                .setQuantity(line.item.id, line.quantity + 1),
-                          ),
-                        ],
+                  for (final (index, line) in cart.lines.values.indexed)
+                    Card(
+                      child: ListTile(
+                        title: Text(line.item.name),
+                        subtitle: Text(currencyFormat.format(line.item.price)),
+                        leading: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline),
+                              onPressed: () => ref
+                                  .read(cartProvider.notifier)
+                                  .setQuantity(line.item.id, line.quantity - 1),
+                            ),
+                            Text('${line.quantity}'),
+                            IconButton(
+                              icon: const Icon(Icons.add_circle_outline),
+                              onPressed: () => ref
+                                  .read(cartProvider.notifier)
+                                  .setQuantity(line.item.id, line.quantity + 1),
+                            ),
+                          ],
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          tooltip: l10n.removeItemTooltip,
+                          onPressed: () =>
+                              ref.read(cartProvider.notifier).removeItem(line.item.id),
+                        ),
                       ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        tooltip: l10n.removeItemTooltip,
-                        onPressed: () =>
-                            ref.read(cartProvider.notifier).removeItem(line.item.id),
-                      ),
-                    ),
+                    ).staggeredEntrance(index),
                   const Divider(),
                   ListTile(
-                    title: Text(l10n.totalLabel),
-                    trailing: Text(currencyFormat.format(cart.total)),
+                    title: Text(
+                      l10n.totalLabel,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    trailing: Text(
+                      currencyFormat.format(cart.total),
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -145,13 +155,16 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                       _errorMessage!,
                       style: TextStyle(color: Theme.of(context).colorScheme.error),
                     ),
-                  FilledButton(
+                  GradientButton(
                     onPressed: _isSubmitting ? null : _placeOrder,
                     child: _isSubmitting
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                            ),
                           )
                         : Text(l10n.placeOrderButton),
                   ),

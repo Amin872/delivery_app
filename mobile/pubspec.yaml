@@ -57,6 +57,11 @@ dependencies:
   intl: any
   shared_preferences: ^2.3.2
 
+  # UI motion & animated graphics
+  flutter_animate: ^4.5.2
+  # Not wired to any screen yet — needs real .json asset files before use.
+  lottie: ^3.3.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

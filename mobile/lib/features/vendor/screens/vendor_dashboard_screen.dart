@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -79,29 +80,33 @@ class VendorDashboardScreen extends ConsumerWidget {
             return Center(child: Text(l10n.noOrdersMessage));
           }
           return ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: orders.length,
             itemBuilder: (context, index) {
               final order = orders[index];
               final next = _nextVendorStatus(order.status);
-              return ListTile(
-                title: Text(l10n.orderLabel(order.id)),
-                subtitle: Text(orderStatusLabel(context, order.status)),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(currencyFormat.format(order.total)),
-                    if (next != null) ...[
-                      const SizedBox(width: 8),
-                      TextButton(
-                        onPressed: () => ref
-                            .read(firestoreServiceProvider)
-                            .updateOrderStatus(order.id, next),
-                        child: Text(l10n.advanceStatusButtonLabel(orderStatusLabel(context, next))),
-                      ),
+              return Card(
+                child: ListTile(
+                  title: Text(l10n.orderLabel(order.id)),
+                  subtitle: Text(orderStatusLabel(context, order.status)),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(currencyFormat.format(order.total)),
+                      if (next != null) ...[
+                        const SizedBox(width: 8),
+                        TextButton(
+                          onPressed: () => ref
+                              .read(firestoreServiceProvider)
+                              .updateOrderStatus(order.id, next),
+                          child:
+                              Text(l10n.advanceStatusButtonLabel(orderStatusLabel(context, next))),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              );
+              ).staggeredEntrance(index);
             },
           );
         },

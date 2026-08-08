@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
@@ -73,19 +74,22 @@ class _AdminOrdersScreenState extends ConsumerState<AdminOrdersScreen> {
                   return Center(child: Text(l10n.noOrdersMessage));
                 }
                 return ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: orders.length,
                   itemBuilder: (context, index) {
                     final order = orders[index];
-                    return ListTile(
-                      title: Text(l10n.orderLabel(order.id)),
-                      subtitle: Text(
-                        '${orderStatusLabel(context, order.status)} · ${dateFormat.format(order.createdAt)}',
+                    return Card(
+                      child: ListTile(
+                        title: Text(l10n.orderLabel(order.id)),
+                        subtitle: Text(
+                          '${orderStatusLabel(context, order.status)} · ${dateFormat.format(order.createdAt)}',
+                        ),
+                        trailing: Text(currencyFormat.format(order.total)),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => OrderTrackingScreen(orderId: order.id)),
+                        ),
                       ),
-                      trailing: Text(currencyFormat.format(order.total)),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => OrderTrackingScreen(orderId: order.id)),
-                      ),
-                    );
+                    ).staggeredEntrance(index);
                   },
                 );
               },

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_messages.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -46,40 +47,43 @@ class AdminDashboardScreen extends ConsumerWidget {
             return Center(child: Text(l10n.noVendorsAwaitingApprovalMessage));
           }
           return ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: vendors.length,
             itemBuilder: (context, index) {
               final vendor = vendors[index];
-              return ListTile(
-                title: Text(vendor.name),
-                subtitle: Text(vendor.description.isEmpty
-                    ? l10n.noDescriptionPlaceholder
-                    : vendor.description),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.check_circle_outline),
-                      tooltip: l10n.approveTooltip,
-                      onPressed: () => ref
-                          .read(firestoreServiceProvider)
-                          .setVendorApprovalStatus(
-                            vendor.id,
-                            VendorApprovalStatus.approved,
-                          ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.cancel_outlined),
-                      tooltip: l10n.rejectTooltip,
-                      onPressed: () => ref
-                          .read(firestoreServiceProvider)
-                          .setVendorApprovalStatus(
-                            vendor.id,
-                            VendorApprovalStatus.rejected,
-                          ),
-                    ),
-                  ],
+              return Card(
+                child: ListTile(
+                  title: Text(vendor.name),
+                  subtitle: Text(vendor.description.isEmpty
+                      ? l10n.noDescriptionPlaceholder
+                      : vendor.description),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.check_circle_outline),
+                        tooltip: l10n.approveTooltip,
+                        onPressed: () => ref
+                            .read(firestoreServiceProvider)
+                            .setVendorApprovalStatus(
+                              vendor.id,
+                              VendorApprovalStatus.approved,
+                            ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.cancel_outlined),
+                        tooltip: l10n.rejectTooltip,
+                        onPressed: () => ref
+                            .read(firestoreServiceProvider)
+                            .setVendorApprovalStatus(
+                              vendor.id,
+                              VendorApprovalStatus.rejected,
+                            ),
+                      ),
+                    ],
+                  ),
                 ),
-              );
+              ).staggeredEntrance(index);
             },
           );
         },

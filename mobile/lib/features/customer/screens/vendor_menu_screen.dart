@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
 import '../providers/cart_provider.dart';
@@ -68,18 +70,21 @@ class VendorMenuScreen extends ConsumerWidget {
             return Center(child: Text(l10n.vendorMenuEmptyMessage));
           }
           return ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: available.length,
             itemBuilder: (context, index) {
               final item = available[index];
-              return ListTile(
-                title: Text(item.name),
-                subtitle: Text(currencyFormat.format(item.price)),
-                trailing: IconButton(
-                  icon: const Icon(Icons.add_circle_outline),
-                  tooltip: l10n.addToCartTooltip,
-                  onPressed: () => _addToCart(context, ref, item),
+              return Card(
+                child: ListTile(
+                  title: Text(item.name),
+                  subtitle: Text(currencyFormat.format(item.price)),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.add_circle_outline),
+                    tooltip: l10n.addToCartTooltip,
+                    onPressed: () => _addToCart(context, ref, item),
+                  ),
                 ),
-              );
+              ).staggeredEntrance(index);
             },
           );
         },
@@ -92,7 +97,7 @@ class VendorMenuScreen extends ConsumerWidget {
           : SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(12),
-                child: FilledButton(
+                child: GradientButton(
                   onPressed: () => Navigator.of(context)
                       .push(MaterialPageRoute(builder: (_) => const CartScreen())),
                   child: Text(

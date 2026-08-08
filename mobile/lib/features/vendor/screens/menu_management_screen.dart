@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
@@ -73,47 +75,50 @@ class MenuManagementScreen extends ConsumerWidget {
             return Center(child: Text(l10n.noMenuItemsMessage));
           }
           return ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: items.length,
             itemBuilder: (context, index) {
               final item = items[index];
-              return ListTile(
-                title: Text(
-                  item.name,
-                  style: item.available
-                      ? null
-                      : TextStyle(color: Theme.of(context).disabledColor),
-                ),
-                subtitle: Text(currencyFormat.format(item.price)),
-                leading: Switch(
-                  value: item.available,
-                  onChanged: (value) => ref.read(firestoreServiceProvider).updateMenuItem(
-                        vendorId,
-                        MenuItem(
-                          id: item.id,
-                          vendorId: vendorId,
-                          name: item.name,
-                          price: item.price,
-                          imageUrl: item.imageUrl,
-                          available: value,
+              return Card(
+                child: ListTile(
+                  title: Text(
+                    item.name,
+                    style: item.available
+                        ? null
+                        : TextStyle(color: Theme.of(context).disabledColor),
+                  ),
+                  subtitle: Text(currencyFormat.format(item.price)),
+                  leading: Switch(
+                    value: item.available,
+                    onChanged: (value) => ref.read(firestoreServiceProvider).updateMenuItem(
+                          vendorId,
+                          MenuItem(
+                            id: item.id,
+                            vendorId: vendorId,
+                            name: item.name,
+                            price: item.price,
+                            imageUrl: item.imageUrl,
+                            available: value,
+                          ),
                         ),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined),
+                        tooltip: l10n.editTooltip,
+                        onPressed: () => _openForm(context, existing: item),
                       ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        tooltip: l10n.deleteTooltip,
+                        onPressed: () => _confirmDelete(context, ref, item),
+                      ),
+                    ],
+                  ),
                 ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined),
-                      tooltip: l10n.editTooltip,
-                      onPressed: () => _openForm(context, existing: item),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      tooltip: l10n.deleteTooltip,
-                      onPressed: () => _confirmDelete(context, ref, item),
-                    ),
-                  ],
-                ),
-              );
+              ).staggeredEntrance(index);
             },
           );
         },
@@ -236,13 +241,16 @@ class _MenuItemFormState extends ConsumerState<_MenuItemForm> {
                 _errorMessage!,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
-            FilledButton(
+            GradientButton(
               onPressed: _isSubmitting ? null : _save,
               child: _isSubmitting
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Theme.of(context).colorScheme.onPrimary,
+                      ),
                     )
                   : Text(l10n.saveButton),
             ),

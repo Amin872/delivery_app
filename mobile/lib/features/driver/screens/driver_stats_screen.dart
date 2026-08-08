@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/business_constants.dart';
 import '../../../core/errors/error_messages.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/stat_card.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
 
@@ -47,14 +48,22 @@ class DriverStatsScreen extends ConsumerWidget {
             return ref.read(driverStatsProvider(driverId).future);
           },
           child: ListView(
+            padding: const EdgeInsets.all(16),
             children: [
-              ListTile(
-                title: Text(l10n.deliveredOrdersLabel),
-                trailing: Text('${stats.deliveredCount}'),
-              ),
-              ListTile(
-                title: Text(l10n.totalEarningsLabel),
-                trailing: Text(currencyFormat.format(stats.earnings)),
+              Row(
+                children: [
+                  StatCard(
+                    label: l10n.deliveredOrdersLabel,
+                    value: '${stats.deliveredCount}',
+                    icon: Icons.local_shipping,
+                  ),
+                  const SizedBox(width: 12),
+                  StatCard(
+                    label: l10n.totalEarningsLabel,
+                    value: currencyFormat.format(stats.earnings),
+                    icon: Icons.payments,
+                  ),
+                ],
               ),
             ],
           ),

@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../../../core/errors/error_messages.dart';
 import '../../../core/stats/menu_item_tally.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/stat_card.dart';
+import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
 
@@ -62,31 +64,39 @@ class VendorStatsScreen extends ConsumerWidget {
             return ref.read(vendorStatsProvider(vendorId).future);
           },
           child: ListView(
+            padding: const EdgeInsets.all(16),
             children: [
-              ListTile(
-                title: Text(l10n.totalOrdersLabel),
-                trailing: Text('${stats.orderCount}'),
+              Row(
+                children: [
+                  StatCard(
+                    label: l10n.totalOrdersLabel,
+                    value: '${stats.orderCount}',
+                    icon: Icons.receipt_long,
+                  ),
+                  const SizedBox(width: 12),
+                  StatCard(
+                    label: l10n.totalSalesLabel,
+                    value: currencyFormat.format(stats.salesTotal),
+                    icon: Icons.payments,
+                  ),
+                ],
               ),
-              ListTile(
-                title: Text(l10n.totalSalesLabel),
-                trailing: Text(currencyFormat.format(stats.salesTotal)),
-              ),
-              const Divider(),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text(l10n.topItemsTitle, style: Theme.of(context).textTheme.titleMedium),
-              ),
+              const SizedBox(height: 20),
+              Text(l10n.topItemsTitle, style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 4),
               if (stats.topItems.isEmpty)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(l10n.noCompletedOrdersMessage),
                 )
               else
-                for (final entry in stats.topItems)
-                  ListTile(
-                    title: Text(entry.key),
-                    trailing: Text('${entry.value}'),
-                  ),
+                for (final (index, entry) in stats.topItems.indexed)
+                  Card(
+                    child: ListTile(
+                      title: Text(entry.key),
+                      trailing: Text('${entry.value}'),
+                    ),
+                  ).staggeredEntrance(index),
             ],
           ),
         ),

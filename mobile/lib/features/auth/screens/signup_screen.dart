@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/app_user.dart';
@@ -68,18 +71,24 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
         title: Text(l10n.createAccountTitle),
         actions: const [LanguageToggleButton()],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+      body: Container(
+        decoration: BoxDecoration(gradient: AppGradients.surface(colorScheme)),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
               TextFormField(
                 controller: _nameController,
                 decoration: InputDecoration(labelText: l10n.displayNameLabel),
@@ -137,15 +146,18 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               if (_errorMessage != null)
                 Text(
                   _errorMessage!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  style: TextStyle(color: colorScheme.error),
                 ),
-              FilledButton(
+              GradientButton(
                 onPressed: _isSubmitting ? null : _submit,
                 child: _isSubmitting
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colorScheme.onPrimary,
+                        ),
                       )
                     : Text(l10n.createAccountTitle),
               ),
@@ -153,7 +165,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 onPressed: () => context.go('/login'),
                 child: Text(l10n.alreadyHaveAccountButton),
               ),
-            ],
+                ],
+              ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.05, end: 0),
+            ),
           ),
         ),
       ),

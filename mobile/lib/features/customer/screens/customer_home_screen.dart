@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_messages.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
 import '../../../services/firestore_service.dart';
@@ -53,16 +54,20 @@ class CustomerHomeScreen extends ConsumerWidget {
             return Center(child: Text(l10n.noOpenVendorsMessage));
           }
           return ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: vendors.length,
             itemBuilder: (context, index) {
               final vendor = vendors[index];
-              return ListTile(
-                title: Text(vendor.name),
-                subtitle: Text(vendor.description),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => VendorMenuScreen(vendor: vendor)),
+              return Card(
+                child: ListTile(
+                  title: Text(vendor.name),
+                  subtitle: Text(vendor.description),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => VendorMenuScreen(vendor: vendor)),
+                  ),
                 ),
-              );
+              ).staggeredEntrance(index);
             },
           );
         },

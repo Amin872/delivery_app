@@ -1,10 +1,13 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_messages.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
@@ -67,57 +70,66 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
         title: Text(l10n.resetPasswordTitle),
         actions: const [LanguageToggleButton()],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(l10n.resetPasswordInstructions),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _emailController,
-                decoration: InputDecoration(labelText: l10n.emailLabel),
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) {
-                  final trimmed = value?.trim() ?? '';
-                  if (trimmed.isEmpty) return l10n.requiredFieldError;
-                  if (!_emailPattern.hasMatch(trimmed)) return l10n.invalidEmailFormatError;
-                  return null;
-                },
-              ),
-              const SizedBox(height: 24),
-              if (_resultMessage != null)
-                Text(
-                  _resultMessage!,
-                  style: TextStyle(
-                    color: _resultIsError
-                        ? Theme.of(context).colorScheme.error
-                        : Theme.of(context).colorScheme.primary,
+      body: Container(
+        decoration: BoxDecoration(gradient: AppGradients.surface(colorScheme)),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(l10n.resetPasswordInstructions),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _emailController,
+                    decoration: InputDecoration(labelText: l10n.emailLabel),
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (value) {
+                      final trimmed = value?.trim() ?? '';
+                      if (trimmed.isEmpty) return l10n.requiredFieldError;
+                      if (!_emailPattern.hasMatch(trimmed)) return l10n.invalidEmailFormatError;
+                      return null;
+                    },
                   ),
-                ),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: _isSubmitting ? null : _submit,
-                child: _isSubmitting
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(l10n.sendResetLinkButton),
-              ),
-              TextButton(
-                onPressed: () => context.go('/login'),
-                child: Text(l10n.backToSignInButton),
-              ),
-            ],
+                  const SizedBox(height: 24),
+                  if (_resultMessage != null)
+                    Text(
+                      _resultMessage!,
+                      style: TextStyle(
+                        color: _resultIsError ? colorScheme.error : colorScheme.primary,
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  GradientButton(
+                    onPressed: _isSubmitting ? null : _submit,
+                    child: _isSubmitting
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: colorScheme.onPrimary,
+                            ),
+                          )
+                        : Text(l10n.sendResetLinkButton),
+                  ),
+                  TextButton(
+                    onPressed: () => context.go('/login'),
+                    child: Text(l10n.backToSignInButton),
+                  ),
+                ],
+              ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.05, end: 0),
+            ),
           ),
         ),
       ),

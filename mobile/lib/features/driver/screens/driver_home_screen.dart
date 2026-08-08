@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_messages.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
 import '../../../services/functions_service.dart';
@@ -78,24 +79,27 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
             return Center(child: Text(l10n.noDeliveriesMessage));
           }
           return ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: orders.length,
             itemBuilder: (context, index) {
               final order = orders[index];
               final isAccepting = _acceptingOrderIds.contains(order.id);
-              return ListTile(
-                title: Text(l10n.orderLabel(order.id)),
-                subtitle: Text(order.deliveryAddress),
-                trailing: FilledButton(
-                  onPressed: isAccepting ? null : () => _accept(order),
-                  child: isAccepting
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(l10n.acceptButton),
+              return Card(
+                child: ListTile(
+                  title: Text(l10n.orderLabel(order.id)),
+                  subtitle: Text(order.deliveryAddress),
+                  trailing: FilledButton(
+                    onPressed: isAccepting ? null : () => _accept(order),
+                    child: isAccepting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(l10n.acceptButton),
+                  ),
                 ),
-              );
+              ).staggeredEntrance(index);
             },
           );
         },
