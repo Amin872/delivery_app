@@ -7,14 +7,6 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    // User avatars: /userAvatars/{userId}/{fileName}
-    match /userAvatars/{userId}/{fileName} {
-      allow read: if true;
-      allow write: if isSignedIn() && request.auth.uid == userId
-        && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
-    }
-
     // Vendor storefront & menu item images: /vendorImages/{vendorId}/{fileName}
     match /vendorImages/{vendorId}/{fileName} {
       allow read: if true;
