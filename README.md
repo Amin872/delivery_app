@@ -1,11 +1,11 @@
 # Delivery App
 
-A delivery marketplace app with three roles — customers, drivers, and vendors —
+A delivery marketplace app with four roles — customers, drivers, vendors, and admins —
 built with Flutter and Firebase.
 
 ## Structure
 
-- `mobile/` — Flutter client app (all three roles share one codebase, routed by role)
+- `mobile/` — Flutter client app (all four roles share one codebase, routed by role)
 - `functions/` — Firebase Cloud Functions (TypeScript) — order-lifecycle triggers and callables
 - `firebase.json`, `.firebaserc`, `firestore.rules`, `firestore.indexes.json`, `storage.rules` — Firebase project config
 
@@ -43,7 +43,7 @@ flutter run
 
 ## Data model
 
-- `users/{uid}` — profile + `role` (`customer` | `driver` | `vendor`)
+- `users/{uid}` — profile + `role` (`customer` | `driver` | `vendor` | `admin`)
 - `vendors/{vendorId}` — storefront, owned by a `vendor` user; `menuItems` subcollection
 - `drivers/{uid}` — availability + last known location
 - `orders/{orderId}` — items, status, links to `customerId` / `vendorId` / `driverId`
