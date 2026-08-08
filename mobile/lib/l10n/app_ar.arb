@@ -87,6 +87,9 @@
   "orderTrackingTitle": "تتبع الطلب",
   "myOrdersTitle": "طلباتي",
   "waitingForDriverLocationMessage": "بانتظار موقع السائق…",
+  "cancelOrderButton": "إلغاء الطلب",
+  "cancelOrderConfirmMessage": "هل تريد إلغاء هذا الطلب؟ لا يمكن التراجع عن هذا الإجراء.",
+  "orderCancelledMessage": "تم إلغاء الطلب.",
 
   "menuManagementTitle": "إدارة القائمة",
   "noMenuItemsMessage": "لا توجد عناصر في القائمة بعد.",

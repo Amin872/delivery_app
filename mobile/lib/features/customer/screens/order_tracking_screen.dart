@@ -5,11 +5,14 @@ import 'package:intl/intl.dart';
 import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_snackbar.dart';
+import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../widgets/driver_tracking_map.dart';
 import 'customer_home_screen.dart' show firestoreServiceProvider;
 
@@ -29,14 +32,59 @@ const _trackedStatuses = [
   OrderStatus.delivered,
 ];
 
-class OrderTrackingScreen extends ConsumerWidget {
+class OrderTrackingScreen extends ConsumerStatefulWidget {
   const OrderTrackingScreen({required this.orderId, super.key});
 
   final String orderId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final orderAsync = ref.watch(orderTrackingProvider(orderId));
+  ConsumerState<OrderTrackingScreen> createState() => _OrderTrackingScreenState();
+}
+
+class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
+  bool _cancelling = false;
+
+  Future<void> _confirmCancel(DeliveryOrder order) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        content: Text(l10n.cancelOrderConfirmMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancelButton),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.confirmButton),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    setState(() => _cancelling = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    try {
+      await ref.read(firestoreServiceProvider).cancelOrder(order.id);
+      messenger.showSnackBar(buildAppSnackBar(colorScheme, l10n.orderCancelledMessage));
+    } catch (error) {
+      if (mounted) {
+        messenger.showSnackBar(
+          buildAppSnackBar(colorScheme, localizedErrorMessage(context, error), isError: true),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _cancelling = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final orderAsync = ref.watch(orderTrackingProvider(widget.orderId));
     final l10n = AppLocalizations.of(context)!;
     final currencyFormat = NumberFormat.currency(
       locale: Localizations.localeOf(context).toString(),
@@ -57,6 +105,8 @@ class OrderTrackingScreen extends ConsumerWidget {
           final showDriverMap = order.driverId != null &&
               (order.status == OrderStatus.pickedUp ||
                   order.status == OrderStatus.delivering);
+          final canCancel = order.status == OrderStatus.pending &&
+              order.customerId == ref.watch(currentAppUserProvider).valueOrNull?.id;
           return ListView(
             padding: const EdgeInsets.symmetric(vertical: 8),
             children: [
@@ -102,6 +152,17 @@ class OrderTrackingScreen extends ConsumerWidget {
                   subtitle: Text(order.deliveryAddress),
                 ),
               ),
+              if (canCancel)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(foregroundColor: colorScheme.error),
+                    onPressed: _cancelling ? null : () => _confirmCancel(order),
+                    child: _cancelling
+                        ? buttonSpinner(colorScheme.error, size: 16)
+                        : Text(l10n.cancelOrderButton),
+                  ),
+                ),
             ],
           );
         },

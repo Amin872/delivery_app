@@ -95,6 +95,9 @@
   "orderTrackingTitle": "Track order",
   "myOrdersTitle": "My orders",
   "waitingForDriverLocationMessage": "Waiting for the driver's location…",
+  "cancelOrderButton": "Cancel order",
+  "cancelOrderConfirmMessage": "Cancel this order? This can't be undone.",
+  "orderCancelledMessage": "Order cancelled.",
 
   "menuManagementTitle": "Manage menu",
   "noMenuItemsMessage": "No menu items yet.",

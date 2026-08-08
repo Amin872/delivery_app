@@ -142,6 +142,16 @@ class FirestoreService {
     );
   }
 
+  // Same underlying write as updateOrderStatus — kept as its own method
+  // because who's allowed to call it is narrower: firestore.rules only lets
+  // the owning vendor set an arbitrary status, or the order's own customer
+  // move it from 'pending' to 'cancelled' specifically.
+  Future<void> cancelOrder(String orderId) {
+    return guardFuture(
+      () => _orders.doc(orderId).update({'status': OrderStatus.cancelled.name}),
+    );
+  }
+
   Future<void> assignDriver(String orderId, String driverId) {
     return guardFuture(() => _orders.doc(orderId).update({
           'driverId': driverId,

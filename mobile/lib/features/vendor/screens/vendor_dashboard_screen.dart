@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
@@ -35,13 +36,68 @@ OrderStatus? _nextVendorStatus(OrderStatus current) {
   }
 }
 
-class VendorDashboardScreen extends ConsumerWidget {
+// A vendor can only cancel while the order is still theirs to fulfill —
+// once it's readyForPickup a driver may already be browsing it, and once
+// picked up it's out of the vendor's hands entirely.
+bool _vendorCanCancel(OrderStatus status) {
+  return status == OrderStatus.pending ||
+      status == OrderStatus.accepted ||
+      status == OrderStatus.preparing;
+}
+
+class VendorDashboardScreen extends ConsumerStatefulWidget {
   const VendorDashboardScreen({required this.vendorId, super.key});
 
   final String vendorId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<VendorDashboardScreen> createState() => _VendorDashboardScreenState();
+}
+
+class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
+  final _cancellingOrderIds = <String>{};
+
+  Future<void> _confirmCancel(DeliveryOrder order) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        content: Text(l10n.cancelOrderConfirmMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancelButton),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.confirmButton),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    setState(() => _cancellingOrderIds.add(order.id));
+    final messenger = ScaffoldMessenger.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    try {
+      await ref.read(firestoreServiceProvider).cancelOrder(order.id);
+      messenger.showSnackBar(buildAppSnackBar(colorScheme, l10n.orderCancelledMessage));
+    } catch (error) {
+      if (mounted) {
+        messenger.showSnackBar(
+          buildAppSnackBar(colorScheme, localizedErrorMessage(context, error), isError: true),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _cancellingOrderIds.remove(order.id));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vendorId = widget.vendorId;
     final ordersAsync = ref.watch(vendorOrdersProvider(vendorId));
     final l10n = AppLocalizations.of(context)!;
     final currencyFormat = NumberFormat.currency(
@@ -86,6 +142,7 @@ class VendorDashboardScreen extends ConsumerWidget {
             itemBuilder: (context, index) {
               final order = orders[index];
               final next = _nextVendorStatus(order.status);
+              final isCancelling = _cancellingOrderIds.contains(order.id);
               return Card(
                 child: ListTile(
                   title: Text(l10n.orderLabel(order.id)),
@@ -94,6 +151,13 @@ class VendorDashboardScreen extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(currencyFormat.format(order.total)),
+                      if (_vendorCanCancel(order.status))
+                        IconButton(
+                          icon: const Icon(Icons.cancel_outlined),
+                          tooltip: l10n.cancelOrderButton,
+                          color: Theme.of(context).colorScheme.error,
+                          onPressed: isCancelling ? null : () => _confirmCancel(order),
+                        ),
                       if (next != null) ...[
                         const SizedBox(width: 8),
                         TextButton(

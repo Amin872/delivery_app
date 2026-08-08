@@ -140,4 +140,18 @@ void main() {
     expect(active?.id, activeRef.id);
     expect(active?.status, OrderStatus.pickedUp);
   });
+
+  test('cancelOrder sets the order status to cancelled', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    final orderRef = await firestore
+        .collection('orders')
+        .add(_orderMap(vendorId: 'vendor-1', status: 'pending', total: 10));
+
+    await service.cancelOrder(orderRef.id);
+
+    final updated = await orderRef.get();
+    expect(updated.data()!['status'], 'cancelled');
+  });
 }

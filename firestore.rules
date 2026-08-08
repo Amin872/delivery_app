@@ -77,8 +77,20 @@ service cloud.firestore {
       // vendor; driver assignment itself goes through the `acceptDelivery`
       // callable Cloud Function (admin SDK, runs a transaction), not a
       // direct client write, so no client-side driver-assignment rule exists here.
-      allow update: if isSignedIn() &&
-        get(/databases/$(database)/documents/vendors/$(resource.data.vendorId)).data.ownerId == request.auth.uid;
+      //
+      // A customer may additionally cancel their own order, but only while
+      // it's still 'pending' (the vendor hasn't acted on it yet) and only
+      // the status field — this is race-safe without a callable because
+      // Firestore evaluates each write's rules against the document state
+      // at the moment that write is applied, so a customer's cancel loses
+      // cleanly to a vendor's concurrent accept once status != 'pending'.
+      allow update: if isSignedIn() && (
+        get(/databases/$(database)/documents/vendors/$(resource.data.vendorId)).data.ownerId == request.auth.uid ||
+        (resource.data.customerId == request.auth.uid &&
+          resource.data.status == 'pending' &&
+          request.resource.data.status == 'cancelled' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
+      );
 
       allow delete: if false;
     }
