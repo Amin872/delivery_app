@@ -54,11 +54,17 @@ class AuthService {
         role: role,
         phoneNumber: phoneNumber,
       );
-      await _firestore.collection('users').doc(uid).set(appUser.toMap());
 
-      // A vendor's storefront doc shares the user's uid as its id (matches
-      // VendorDashboardScreen, which is routed with vendorId: appUser.id) and
-      // starts pending — only an admin can flip it to approved/rejected.
+      // The role-specific doc is written and server-confirmed (awaited)
+      // BEFORE users/{uid} — deliberately, and in this order. Writing
+      // users/{uid} is what currentAppUserProvider's local-cache listener
+      // picks up to route into e.g. VendorDashboardScreen — optimistically,
+      // as soon as this write is issued, well before it's server-confirmed.
+      // If vendors/{uid} were written second, the dashboard's first orders
+      // query could reach the server before that doc exists, and its
+      // ownership check (`get(vendors/{vendorId}).data.ownerId == ...`)
+      // would fail with permission-denied. Writing it first and awaiting
+      // server confirmation closes that race.
       if (role == UserRole.vendor) {
         final vendor = Vendor(
           id: uid,
@@ -74,11 +80,14 @@ class AuthService {
       // A driver's availability doc shares the user's uid as its id (matches
       // firestore.rules' isSelf(driverId) check) — without it, the first
       // location update (LocationService.publishDriverLocation) would fail
-      // since there'd be nothing to update.
+      // since there'd be nothing to update. Same ordering reasoning as the
+      // vendor doc above.
       if (role == UserRole.driver) {
         final driver = Driver(id: uid, userId: uid, isAvailable: true);
         await _firestore.collection('drivers').doc(uid).set(driver.toMap());
       }
+
+      await _firestore.collection('users').doc(uid).set(appUser.toMap());
 
       return appUser;
     });
