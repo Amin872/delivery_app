@@ -193,6 +193,17 @@ class FirestoreService {
     });
   }
 
+  Stream<List<DeliveryOrder>> watchAllOrders({OrderStatus? status}) {
+    Query<Map<String, dynamic>> query = _orders.orderBy('createdAt', descending: true);
+    if (status != null) {
+      query = _orders
+          .where('status', isEqualTo: status.name)
+          .orderBy('createdAt', descending: true);
+    }
+    return guardStream(query.snapshots().map((snap) =>
+        snap.docs.map((doc) => DeliveryOrder.fromMap(doc.id, doc.data())).toList()));
+  }
+
   Future<int> countDriverDeliveries(String driverId) {
     return guardFuture(() async {
       final snapshot = await _orders

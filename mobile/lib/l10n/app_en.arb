@@ -60,6 +60,9 @@
   "orderStatusDelivered": "Delivered",
   "orderStatusCancelled": "Cancelled",
 
+  "adminOrdersTitle": "All orders",
+  "allStatusesLabel": "All",
+
   "vendorApprovalsTitle": "Vendor approvals",
   "noVendorsAwaitingApprovalMessage": "No vendors awaiting approval.",
   "noDescriptionPlaceholder": "(no description)",

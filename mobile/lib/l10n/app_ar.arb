@@ -52,6 +52,9 @@
   "orderStatusDelivered": "تم التوصيل",
   "orderStatusCancelled": "ملغى",
 
+  "adminOrdersTitle": "كل الطلبات",
+  "allStatusesLabel": "الكل",
+
   "vendorApprovalsTitle": "الموافقة على المتاجر",
   "noVendorsAwaitingApprovalMessage": "لا توجد متاجر بانتظار الموافقة.",
   "noDescriptionPlaceholder": "(بدون وصف)",

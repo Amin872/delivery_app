@@ -67,7 +67,8 @@ service cloud.firestore {
         resource.data.customerId == request.auth.uid ||
         resource.data.driverId == request.auth.uid ||
         get(/databases/$(database)/documents/vendors/$(resource.data.vendorId)).data.ownerId == request.auth.uid ||
-        (resource.data.status == 'readyForPickup' && resource.data.driverId == null && hasRole('driver'))
+        (resource.data.status == 'readyForPickup' && resource.data.driverId == null && hasRole('driver')) ||
+        hasRole('admin')
       );
 
       allow create: if isSignedIn() && request.resource.data.customerId == request.auth.uid;

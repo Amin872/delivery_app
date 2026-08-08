@@ -1,8 +1,27 @@
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:delivery_app/models/order.dart';
 import 'package:delivery_app/models/vendor.dart';
 import 'package:delivery_app/services/firestore_service.dart';
+
+Map<String, dynamic> _orderMap({
+  required String vendorId,
+  String? driverId,
+  required String status,
+  required double total,
+}) {
+  return {
+    'customerId': 'customer-1',
+    'vendorId': vendorId,
+    'driverId': driverId,
+    'items': <Map<String, dynamic>>[],
+    'status': status,
+    'total': total,
+    'deliveryAddress': 'addr',
+    'createdAt': DateTime.now().millisecondsSinceEpoch,
+  };
+}
 
 void main() {
   test('addMenuItem then deleteMenuItem round-trips through Firestore', () async {
@@ -44,28 +63,10 @@ void main() {
     final firestore = FakeFirebaseFirestore();
     final service = FirestoreService(firestore: firestore);
 
-    Map<String, dynamic> orderMap({
-      required String vendorId,
-      String? driverId,
-      required String status,
-      required double total,
-    }) {
-      return {
-        'customerId': 'customer-1',
-        'vendorId': vendorId,
-        'driverId': driverId,
-        'items': <Map<String, dynamic>>[],
-        'status': status,
-        'total': total,
-        'deliveryAddress': 'addr',
-        'createdAt': DateTime.now().millisecondsSinceEpoch,
-      };
-    }
-
     await firestore
         .collection('orders')
-        .add(orderMap(vendorId: 'vendor-1', status: 'delivered', total: 100));
-    await firestore.collection('orders').add(orderMap(
+        .add(_orderMap(vendorId: 'vendor-1', status: 'delivered', total: 100));
+    await firestore.collection('orders').add(_orderMap(
           vendorId: 'vendor-1',
           status: 'delivered',
           total: 50,
@@ -73,14 +74,37 @@ void main() {
         ));
     await firestore
         .collection('orders')
-        .add(orderMap(vendorId: 'vendor-1', status: 'pending', total: 30));
+        .add(_orderMap(vendorId: 'vendor-1', status: 'pending', total: 30));
     await firestore
         .collection('orders')
-        .add(orderMap(vendorId: 'vendor-2', status: 'delivered', total: 999));
+        .add(_orderMap(vendorId: 'vendor-2', status: 'delivered', total: 999));
 
     expect(await service.countVendorOrders('vendor-1'), 3);
     expect(await service.sumVendorDeliveredSales('vendor-1'), 150);
     expect(await service.countVendorDeliveredOrders('vendor-1'), 2);
     expect(await service.countDriverDeliveries('driver-1'), 1);
+  });
+
+  test('watchAllOrders returns every order unfiltered, and only matching ones when filtered',
+      () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    await firestore
+        .collection('orders')
+        .add(_orderMap(vendorId: 'vendor-1', status: 'pending', total: 10));
+    await firestore
+        .collection('orders')
+        .add(_orderMap(vendorId: 'vendor-2', status: 'delivered', total: 20));
+    await firestore
+        .collection('orders')
+        .add(_orderMap(vendorId: 'vendor-3', status: 'delivered', total: 30));
+
+    final all = await service.watchAllOrders().first;
+    expect(all.length, 3);
+
+    final delivered = await service.watchAllOrders(status: OrderStatus.delivered).first;
+    expect(delivered.length, 2);
+    expect(delivered.every((order) => order.status == OrderStatus.delivered), isTrue);
   });
 }

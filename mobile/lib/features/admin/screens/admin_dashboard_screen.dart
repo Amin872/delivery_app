@@ -7,6 +7,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
+import 'admin_orders_screen.dart';
 
 final pendingVendorsProvider = StreamProvider<List<Vendor>>((ref) {
   return ref.watch(firestoreServiceProvider).watchPendingVendors();
@@ -24,6 +25,13 @@ class AdminDashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(l10n.vendorApprovalsTitle),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.receipt_long),
+            tooltip: l10n.adminOrdersTitle,
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AdminOrdersScreen()),
+            ),
+          ),
           const LanguageToggleButton(),
           IconButton(
             icon: const Icon(Icons.logout),
