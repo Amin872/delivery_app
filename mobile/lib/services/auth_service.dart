@@ -18,20 +18,46 @@ class AuthService {
 
   User? get currentUser => _auth.currentUser;
 
-  Future<AppUser?> fetchAppUser(String uid) => guardFuture(() async {
-        final doc = await _firestore.collection('users').doc(uid).get();
-        if (!doc.exists) return null;
-        return AppUser.fromMap(doc.id, doc.data()!);
-      });
+  // A live listener, not a one-shot get() — right after signUp(), Auth's
+  // authStateChanges fires as soon as the account is created, which is
+  // *before* users/{uid} is written (see signUp's ordering note below). A
+  // one-shot fetch issued at that instant would race the write and could
+  // permanently resolve to "no profile found"; watching the doc lets the
+  // UI pick up the write as soon as it lands instead of needing a retry.
+  Stream<AppUser?> watchAppUser(String uid) => guardStream(
+        _firestore.collection('users').doc(uid).snapshots().map(
+              (doc) => doc.exists ? AppUser.fromMap(doc.id, doc.data()!) : null,
+            ),
+      );
 
   Future<UserCredential> signIn({
     required String email,
     required String password,
   }) {
-    return guardFuture(() => _auth.signInWithEmailAndPassword(
-          email: email,
-          password: password,
-        ));
+    return guardFuture(() async {
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      await _ensureUserProfile(uid: credential.user!.uid, email: email);
+      return credential;
+    });
+  }
+
+  // A signed-in Firebase Auth account can end up without a users/{uid}
+  // doc — signUp() writes it last (see the ordering note there), so an
+  // interruption between account creation and that write strands the
+  // account; the shared Firebase project (see CLAUDE.md) also has
+  // pre-existing accounts from its other app that never went through this
+  // app's signUp() at all. Either way, _RoleGate has nothing to route on
+  // and dead-ends on "No profile found" — so backfill a default customer
+  // profile here instead, since customer is the only role safe to assume
+  // for an account this app didn't itself provision as vendor/driver/admin.
+  Future<void> _ensureUserProfile({required String uid, required String email}) async {
+    final doc = _firestore.collection('users').doc(uid);
+    if ((await doc.get()).exists) return;
+    final appUser = AppUser(id: uid, email: email, displayName: email, role: UserRole.customer);
+    await doc.set(appUser.toMap());
   }
 
   Future<AppUser> signUp({

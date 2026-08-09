@@ -68,6 +68,54 @@ void main() {
     expect(vendorDoc.exists, isFalse);
   });
 
+  test('signIn creates a default customer profile when users/{uid} is missing', () async {
+    final auth = MockFirebaseAuth();
+    final firestore = FakeFirebaseFirestore();
+    final credential = MockUserCredential();
+    final user = MockUser();
+
+    when(() => auth.signInWithEmailAndPassword(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        )).thenAnswer((_) async => credential);
+    when(() => credential.user).thenReturn(user);
+    when(() => user.uid).thenReturn('legacy-uid');
+
+    final service = AuthService(auth: auth, firestore: firestore);
+    await service.signIn(email: 'legacy@example.com', password: 'password123');
+
+    final userDoc = await firestore.collection('users').doc('legacy-uid').get();
+    expect(userDoc.exists, isTrue);
+    expect(userDoc.data()!['role'], 'customer');
+    expect(userDoc.data()!['email'], 'legacy@example.com');
+  });
+
+  test('signIn leaves an existing users/{uid} profile untouched', () async {
+    final auth = MockFirebaseAuth();
+    final firestore = FakeFirebaseFirestore();
+    final credential = MockUserCredential();
+    final user = MockUser();
+
+    when(() => auth.signInWithEmailAndPassword(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        )).thenAnswer((_) async => credential);
+    when(() => credential.user).thenReturn(user);
+    when(() => user.uid).thenReturn('vendor-uid');
+    await firestore.collection('users').doc('vendor-uid').set({
+      'email': 'vendor@example.com',
+      'displayName': 'Vendor One',
+      'role': 'vendor',
+    });
+
+    final service = AuthService(auth: auth, firestore: firestore);
+    await service.signIn(email: 'vendor@example.com', password: 'password123');
+
+    final userDoc = await firestore.collection('users').doc('vendor-uid').get();
+    expect(userDoc.data()!['role'], 'vendor');
+    expect(userDoc.data()!['displayName'], 'Vendor One');
+  });
+
   test('signOut clears fcmToken before calling through to FirebaseAuth.signOut', () async {
     final auth = MockFirebaseAuth();
     final firestore = FakeFirebaseFirestore();
