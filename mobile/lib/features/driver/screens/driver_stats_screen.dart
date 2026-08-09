@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/constants/business_constants.dart';
 import '../../../core/errors/error_messages.dart';
+import '../../../core/providers/formatters_provider.dart';
+import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/stat_card.dart';
 import '../../../l10n/app_localizations.dart';
@@ -19,12 +21,13 @@ class DriverStats {
   double get earnings => deliveredCount * driverFeePerDelivery;
 }
 
-final driverStatsProvider = FutureProvider.family<DriverStats, String>((ref, driverId) async {
+final driverStatsProvider =
+    FutureProvider.autoDispose.family<DriverStats, String>((ref, driverId) async {
   final count = await ref.watch(firestoreServiceProvider).countDriverDeliveries(driverId);
   return DriverStats(deliveredCount: count);
 });
 
-final driverRatingProvider = StreamProvider.family<Driver, String>((ref, driverId) {
+final driverRatingProvider = StreamProvider.autoDispose.family<Driver, String>((ref, driverId) {
   return ref.watch(firestoreServiceProvider).watchDriver(driverId);
 });
 
@@ -38,18 +41,16 @@ class DriverStatsScreen extends ConsumerWidget {
     final statsAsync = ref.watch(driverStatsProvider(driverId));
     final driver = ref.watch(driverRatingProvider(driverId)).valueOrNull;
     final l10n = AppLocalizations.of(context)!;
-    final currencyFormat = NumberFormat.currency(
-      locale: Localizations.localeOf(context).toString(),
-      name: 'SYP',
-    );
+    final currencyFormat = ref.watch(currencyFormatProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.driverStatsTitle),
         actions: const [LanguageToggleButton()],
       ),
-      body: statsAsync.when(
-        data: (stats) => RefreshIndicator(
+      body: ResponsiveCenter(
+        child: statsAsync.animatedWhen(
+          data: (stats) => RefreshIndicator(
           onRefresh: () {
             ref.invalidate(driverStatsProvider(driverId));
             return ref.read(driverStatsProvider(driverId).future);
@@ -89,6 +90,7 @@ class DriverStatsScreen extends ConsumerWidget {
         ),
         error: (error, _) =>
             Center(child: Text(localizedErrorMessage(context, error))),
+        ),
       ),
     );
   }

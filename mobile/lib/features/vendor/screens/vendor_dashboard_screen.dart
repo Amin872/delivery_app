@@ -1,26 +1,31 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
+import '../../../core/providers/formatters_provider.dart';
+import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_spinner.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
+import '../../../routing/page_transitions.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
 import 'menu_management_screen.dart' show MenuManagementScreen, storageServiceProvider;
 import 'vendor_stats_screen.dart';
 
 final vendorOrdersProvider =
-    StreamProvider.family<List<DeliveryOrder>, String>((ref, vendorId) {
+    StreamProvider.autoDispose.family<List<DeliveryOrder>, String>((ref, vendorId) {
   return ref.watch(firestoreServiceProvider).watchVendorOrders(vendorId);
 });
 
@@ -90,25 +95,11 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
 
   Future<void> _confirmCancel(DeliveryOrder order) async {
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        content: Text(l10n.cancelOrderConfirmMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.cancelButton),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.confirmButton),
-          ),
-        ],
-      ),
-    );
+    final confirmed = await showConfirmDialog(context, message: l10n.cancelOrderConfirmMessage);
     if (confirmed != true) return;
     if (!mounted) return;
 
+    HapticFeedback.lightImpact();
     setState(() => _cancellingOrderIds.add(order.id));
     final messenger = ScaffoldMessenger.of(context);
     final colorScheme = Theme.of(context).colorScheme;
@@ -131,10 +122,7 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
     final vendorId = widget.vendorId;
     final ordersAsync = ref.watch(vendorOrdersProvider(vendorId));
     final l10n = AppLocalizations.of(context)!;
-    final currencyFormat = NumberFormat.currency(
-      locale: Localizations.localeOf(context).toString(),
-      name: 'SYP',
-    );
+    final currencyFormat = ref.watch(currencyFormatProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -150,16 +138,14 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
           IconButton(
             icon: const Icon(Icons.bar_chart),
             tooltip: l10n.vendorStatsTitle,
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => VendorStatsScreen(vendorId: vendorId)),
-            ),
+            onPressed: () =>
+                Navigator.of(context).push(fadeSlideRoute(VendorStatsScreen(vendorId: vendorId))),
           ),
           IconButton(
             icon: const Icon(Icons.restaurant_menu),
             tooltip: l10n.menuManagementTitle,
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => MenuManagementScreen(vendorId: vendorId)),
-            ),
+            onPressed: () => Navigator.of(context)
+                .push(fadeSlideRoute(MenuManagementScreen(vendorId: vendorId))),
           ),
           const LanguageToggleButton(),
           IconButton(
@@ -169,8 +155,9 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
           ),
         ],
       ),
-      body: ordersAsync.when(
-        data: (orders) {
+      body: ResponsiveCenter(
+        child: ordersAsync.animatedWhen(
+          data: (orders) {
           if (orders.isEmpty) {
             return Center(child: Text(l10n.noOrdersMessage));
           }
@@ -199,9 +186,12 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
                       if (next != null) ...[
                         const SizedBox(width: 8),
                         TextButton(
-                          onPressed: () => ref
-                              .read(firestoreServiceProvider)
-                              .updateOrderStatus(order.id, next),
+                          onPressed: () {
+                            HapticFeedback.lightImpact();
+                            ref
+                                .read(firestoreServiceProvider)
+                                .updateOrderStatus(order.id, next);
+                          },
                           child:
                               Text(l10n.advanceStatusButtonLabel(orderStatusLabel(context, next))),
                         ),
@@ -216,6 +206,7 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
         loading: () => const ListSkeletonLoader(),
         error: (error, _) =>
             Center(child: Text(localizedErrorMessage(context, error))),
+        ),
       ),
     );
   }

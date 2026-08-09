@@ -1,19 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
+import '../../../core/providers/formatters_provider.dart';
+import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
+import '../../../routing/page_transitions.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
 import '../../customer/screens/order_tracking_screen.dart';
 
 final adminOrdersProvider =
-    StreamProvider.family<List<DeliveryOrder>, OrderStatus?>((ref, status) {
+    StreamProvider.autoDispose.family<List<DeliveryOrder>, OrderStatus?>((ref, status) {
   return ref.watch(firestoreServiceProvider).watchAllOrders(status: status);
 });
 
@@ -31,17 +34,17 @@ class _AdminOrdersScreenState extends ConsumerState<AdminOrdersScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final ordersAsync = ref.watch(adminOrdersProvider(_statusFilter));
-    final locale = Localizations.localeOf(context).toString();
-    final currencyFormat = NumberFormat.currency(locale: locale, name: 'SYP');
-    final dateFormat = DateFormat.yMd(locale).add_Hm();
+    final currencyFormat = ref.watch(currencyFormatProvider);
+    final dateFormat = ref.watch(dateTimeFormatProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.adminOrdersTitle),
         actions: const [LanguageToggleButton()],
       ),
-      body: Column(
-        children: [
+      body: ResponsiveCenter(
+        child: Column(
+          children: [
           SizedBox(
             height: 56,
             child: ListView(
@@ -69,7 +72,7 @@ class _AdminOrdersScreenState extends ConsumerState<AdminOrdersScreen> {
             ),
           ),
           Expanded(
-            child: ordersAsync.when(
+            child: ordersAsync.animatedWhen(
               data: (orders) {
                 if (orders.isEmpty) {
                   return Center(child: Text(l10n.noOrdersMessage));
@@ -86,9 +89,8 @@ class _AdminOrdersScreenState extends ConsumerState<AdminOrdersScreen> {
                           '${orderStatusLabel(context, order.status)} · ${dateFormat.format(order.createdAt)}',
                         ),
                         trailing: Text(currencyFormat.format(order.total)),
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => OrderTrackingScreen(orderId: order.id)),
-                        ),
+                        onTap: () => Navigator.of(context)
+                            .push(fadeSlideRoute(OrderTrackingScreen(orderId: order.id))),
                       ),
                     ).staggeredEntrance(index);
                   },
@@ -100,6 +102,7 @@ class _AdminOrdersScreenState extends ConsumerState<AdminOrdersScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }

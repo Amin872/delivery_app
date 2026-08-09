@@ -1,25 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/providers/formatters_provider.dart';
+import '../../../core/widgets/animated_async.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../core/widgets/star_rating.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/review.dart';
 import '../../../models/vendor.dart';
+import '../../../routing/page_transitions.dart';
 import '../providers/cart_provider.dart';
 import 'cart_screen.dart';
 import 'customer_home_screen.dart' show firestoreServiceProvider;
 
-final vendorMenuProvider = StreamProvider.family<List<MenuItem>, String>((ref, vendorId) {
+final vendorMenuProvider =
+    StreamProvider.autoDispose.family<List<MenuItem>, String>((ref, vendorId) {
   return ref.watch(firestoreServiceProvider).watchMenu(vendorId);
 });
 
-final vendorReviewsProvider = StreamProvider.family<List<Review>, String>((ref, vendorId) {
+final vendorReviewsProvider =
+    StreamProvider.autoDispose.family<List<Review>, String>((ref, vendorId) {
   return ref.watch(firestoreServiceProvider).watchVendorReviews(vendorId);
 });
 
@@ -33,22 +39,10 @@ class VendorMenuScreen extends ConsumerWidget {
     final added = ref.read(cartProvider.notifier).addItem(vendor.id, vendor.name, item);
     if (added) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.switchVendorConfirmTitle),
-        content: Text(l10n.switchVendorConfirmMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.cancelButton),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.confirmButton),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.switchVendorConfirmTitle,
+      message: l10n.switchVendorConfirmMessage,
     );
     if (confirmed == true) {
       ref.read(cartProvider.notifier).replaceWithItem(vendor.id, vendor.name, item);
@@ -60,10 +54,7 @@ class VendorMenuScreen extends ConsumerWidget {
     final menuAsync = ref.watch(vendorMenuProvider(vendor.id));
     final cart = ref.watch(cartProvider);
     final l10n = AppLocalizations.of(context)!;
-    final currencyFormat = NumberFormat.currency(
-      locale: Localizations.localeOf(context).toString(),
-      name: 'SYP',
-    );
+    final currencyFormat = ref.watch(currencyFormatProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -76,8 +67,9 @@ class VendorMenuScreen extends ConsumerWidget {
         title: Text(vendor.name),
         actions: const [LanguageToggleButton()],
       ),
-      body: menuAsync.when(
-        data: (items) {
+      body: ResponsiveCenter(
+        child: menuAsync.animatedWhen(
+          data: (items) {
           final available = items.where((item) => item.available).toList();
           final reviewsAsync = ref.watch(vendorReviewsProvider(vendor.id));
           return ListView(
@@ -120,7 +112,7 @@ class VendorMenuScreen extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: Text(l10n.reviewsTitle, style: Theme.of(context).textTheme.titleMedium),
               ),
-              reviewsAsync.when(
+              reviewsAsync.animatedWhen(
                 data: (reviews) => reviews.isEmpty
                     ? Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -144,6 +136,7 @@ class VendorMenuScreen extends ConsumerWidget {
         loading: () => const ListSkeletonLoader(),
         error: (error, _) =>
             Center(child: Text(localizedErrorMessage(context, error))),
+        ),
       ),
       bottomNavigationBar: cart.isEmpty
           ? null
@@ -151,8 +144,8 @@ class VendorMenuScreen extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: GradientButton(
-                  onPressed: () => Navigator.of(context)
-                      .push(MaterialPageRoute(builder: (_) => const CartScreen())),
+                  onPressed: () =>
+                      Navigator.of(context).push(fadeSlideRoute(const CartScreen())),
                   child: Text(
                     '${l10n.viewCartButton} · ${cart.itemCount} · ${currencyFormat.format(cart.total)}',
                   ),

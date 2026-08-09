@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/errors/error_messages.dart';
+import '../core/widgets/animated_async.dart';
 import '../core/widgets/app_spinner.dart';
 import '../features/admin/screens/admin_dashboard_screen.dart';
 import '../features/auth/providers/auth_provider.dart';
@@ -14,6 +15,7 @@ import '../features/driver/screens/driver_home_screen.dart';
 import '../features/vendor/screens/vendor_dashboard_screen.dart';
 import '../l10n/app_localizations.dart';
 import '../models/app_user.dart';
+import 'page_transitions.dart';
 
 /// Shared fade+slide transition applied to every route so navigation feels
 /// consistent app-wide rather than only on individually-styled screens.
@@ -21,18 +23,8 @@ CustomTransitionPage<void> _fadeSlidePage(GoRouterState state, Widget child) {
   return CustomTransitionPage<void>(
     key: state.pageKey,
     child: child,
-    transitionDuration: const Duration(milliseconds: 250),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(parent: animation, curve: Curves.easeOut);
-      return FadeTransition(
-        opacity: curved,
-        child: SlideTransition(
-          position: Tween<Offset>(begin: const Offset(0, 0.03), end: Offset.zero)
-              .animate(curved),
-          child: child,
-        ),
-      );
-    },
+    transitionDuration: fadeSlideTransitionDuration,
+    transitionsBuilder: buildFadeSlideTransition,
   );
 }
 
@@ -81,7 +73,7 @@ class _RoleGate extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final appUserAsync = ref.watch(currentAppUserProvider);
 
-    return appUserAsync.when(
+    return appUserAsync.animatedWhen(
       data: (appUser) {
         if (appUser == null) {
           final l10n = AppLocalizations.of(context)!;

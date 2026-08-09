@@ -9,6 +9,7 @@ import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/centered_scroll_body.dart';
 import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/responsive_center.dart';
 import '../../../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 
@@ -69,56 +70,58 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       body: Container(
         decoration: BoxDecoration(gradient: AppGradients.surface(colorScheme)),
         child: SafeArea(
-          child: CenteredScrollBody(
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  TextFormField(
-                    controller: _emailController,
-                    decoration: InputDecoration(labelText: l10n.emailLabel),
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (value) {
-                      final trimmed = value?.trim() ?? '';
-                      if (trimmed.isEmpty) return l10n.requiredFieldError;
-                      if (!_emailPattern.hasMatch(trimmed)) return l10n.invalidEmailFormatError;
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _passwordController,
-                    decoration: InputDecoration(labelText: l10n.passwordLabel),
-                    obscureText: true,
-                    validator: (value) =>
-                        (value == null || value.isEmpty) ? l10n.requiredFieldError : null,
-                  ),
-                  Align(
-                    alignment: AlignmentDirectional.centerEnd,
-                    child: TextButton(
-                      onPressed: () => context.go('/forgot-password'),
-                      child: Text(l10n.forgotPasswordButton),
+          child: ResponsiveCenter(
+            child: CenteredScrollBody(
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextFormField(
+                      controller: _emailController,
+                      decoration: InputDecoration(labelText: l10n.emailLabel),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (value) {
+                        final trimmed = value?.trim() ?? '';
+                        if (trimmed.isEmpty) return l10n.requiredFieldError;
+                        if (!_emailPattern.hasMatch(trimmed)) return l10n.invalidEmailFormatError;
+                        return null;
+                      },
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (_errorMessage != null)
-                    Text(
-                      _errorMessage!,
-                      style: TextStyle(color: colorScheme.error),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _passwordController,
+                      decoration: InputDecoration(labelText: l10n.passwordLabel),
+                      obscureText: true,
+                      validator: (value) =>
+                          (value == null || value.isEmpty) ? l10n.requiredFieldError : null,
                     ),
-                  GradientButton(
-                    onPressed: _isSubmitting ? null : _submit,
-                    child: _isSubmitting
-                        ? buttonSpinner(colorScheme.onPrimary)
-                        : Text(l10n.signInTitle),
-                  ),
-                  TextButton(
-                    onPressed: () => context.go('/signup'),
-                    child: Text(l10n.createAccountNavButton),
-                  ),
-                ],
-              ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.05, end: 0),
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: TextButton(
+                        onPressed: () => context.go('/forgot-password'),
+                        child: Text(l10n.forgotPasswordButton),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_errorMessage != null)
+                      Text(
+                        _errorMessage!,
+                        style: TextStyle(color: colorScheme.error),
+                      ),
+                    GradientButton(
+                      onPressed: _isSubmitting ? null : _submit,
+                      child: _isSubmitting
+                          ? buttonSpinner(colorScheme.onPrimary)
+                          : Text(l10n.signInTitle),
+                    ),
+                    TextButton(
+                      onPressed: () => context.go('/signup'),
+                      child: Text(l10n.createAccountNavButton),
+                    ),
+                  ],
+                ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.05, end: 0),
+              ),
             ),
           ),
         ),

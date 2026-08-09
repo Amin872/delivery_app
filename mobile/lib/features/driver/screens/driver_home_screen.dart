@@ -1,18 +1,22 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
+import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/image_picker_avatar.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
+import '../../../routing/page_transitions.dart';
 import '../../../services/functions_service.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
@@ -27,7 +31,8 @@ final availableOrdersProvider = StreamProvider<List<DeliveryOrder>>((ref) {
 // Null when the signed-in driver has no delivery currently in flight — see
 // FirestoreService.watchActiveDriverOrder. Also what keeps
 // driverLocationSyncProvider fed with "is this driver mid-delivery?".
-final activeDriverOrderProvider = StreamProvider.family<DeliveryOrder?, String>((ref, driverId) {
+final activeDriverOrderProvider =
+    StreamProvider.autoDispose.family<DeliveryOrder?, String>((ref, driverId) {
   return ref.watch(firestoreServiceProvider).watchActiveDriverOrder(driverId);
 });
 
@@ -63,6 +68,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
   File? _proofImage;
 
   Future<void> _accept(DeliveryOrder order) async {
+    HapticFeedback.lightImpact();
     setState(() => _acceptingOrderIds.add(order.id));
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
@@ -82,6 +88,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
   }
 
   Future<void> _advance(DeliveryOrder order, {required bool needsProof}) async {
+    HapticFeedback.lightImpact();
     setState(() => _advancing = true);
     final messenger = ScaffoldMessenger.of(context);
     final colorScheme = Theme.of(context).colorScheme;
@@ -180,9 +187,8 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
             tooltip: l10n.driverStatsTitle,
             onPressed: driverId == null
                 ? null
-                : () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => DriverStatsScreen(driverId: driverId)),
-                    ),
+                : () => Navigator.of(context)
+                    .push(fadeSlideRoute(DriverStatsScreen(driverId: driverId))),
           ),
           const LanguageToggleButton(),
           IconButton(
@@ -192,15 +198,16 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
+      body: ResponsiveCenter(
+        child: Column(
+          children: [
           if (activeOrder != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
               child: _buildActiveDeliveryCard(context, activeOrder),
             ),
           Expanded(
-            child: ordersAsync.when(
+            child: ordersAsync.animatedWhen(
               data: (orders) {
                 if (orders.isEmpty) {
                   return Center(child: Text(l10n.noDeliveriesMessage));
@@ -232,6 +239,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }

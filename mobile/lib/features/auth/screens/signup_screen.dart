@@ -10,6 +10,7 @@ import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/centered_scroll_body.dart';
 import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/responsive_center.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/app_user.dart';
 import '../providers/auth_provider.dart';
@@ -84,8 +85,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       body: Container(
         decoration: BoxDecoration(gradient: AppGradients.surface(colorScheme)),
         child: SafeArea(
-          child: CenteredScrollBody(
-            child: Form(
+          child: ResponsiveCenter(
+            child: CenteredScrollBody(
+              child: Form(
               key: _formKey,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -161,6 +163,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               ),
                 ],
               ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.05, end: 0),
+            ),
             ),
           ),
         ),

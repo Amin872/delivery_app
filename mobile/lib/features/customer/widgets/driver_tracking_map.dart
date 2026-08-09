@@ -7,7 +7,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/driver.dart';
 import '../screens/customer_home_screen.dart' show firestoreServiceProvider;
 
-final driverLocationProvider = StreamProvider.family<Driver, String>((ref, driverId) {
+final driverLocationProvider = StreamProvider.autoDispose.family<Driver, String>((ref, driverId) {
   return ref.watch(firestoreServiceProvider).watchDriver(driverId);
 });
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_messages.dart';
@@ -42,6 +43,7 @@ class _RateOrderDialogState extends ConsumerState<RateOrderDialog> {
     final customerId = ref.read(currentAppUserProvider).valueOrNull?.id;
     if (customerId == null || order.driverId == null) return;
 
+    HapticFeedback.lightImpact();
     setState(() {
       _submitting = true;
       _error = null;

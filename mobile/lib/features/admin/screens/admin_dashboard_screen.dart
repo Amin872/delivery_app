@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
+import '../../../routing/page_transitions.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
 import 'admin_orders_screen.dart';
@@ -30,9 +33,8 @@ class AdminDashboardScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.receipt_long),
             tooltip: l10n.adminOrdersTitle,
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const AdminOrdersScreen()),
-            ),
+            onPressed: () =>
+                Navigator.of(context).push(fadeSlideRoute(const AdminOrdersScreen())),
           ),
           const LanguageToggleButton(),
           IconButton(
@@ -42,8 +44,9 @@ class AdminDashboardScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: vendorsAsync.when(
-        data: (vendors) {
+      body: ResponsiveCenter(
+        child: vendorsAsync.animatedWhen(
+          data: (vendors) {
           if (vendors.isEmpty) {
             return Center(child: Text(l10n.noVendorsAwaitingApprovalMessage));
           }
@@ -91,6 +94,7 @@ class AdminDashboardScreen extends ConsumerWidget {
         loading: () => const ListSkeletonLoader(),
         error: (error, _) =>
             Center(child: Text(localizedErrorMessage(context, error))),
+        ),
       ),
     );
   }

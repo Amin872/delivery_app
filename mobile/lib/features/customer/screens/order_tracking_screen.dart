@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
+import '../../../core/providers/formatters_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_spinner.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
@@ -18,11 +22,12 @@ import '../widgets/driver_tracking_map.dart';
 import '../widgets/rate_order_dialog.dart';
 import 'customer_home_screen.dart' show firestoreServiceProvider;
 
-final orderTrackingProvider = StreamProvider.family<DeliveryOrder, String>((ref, orderId) {
+final orderTrackingProvider =
+    StreamProvider.autoDispose.family<DeliveryOrder, String>((ref, orderId) {
   return ref.watch(firestoreServiceProvider).watchOrder(orderId);
 });
 
-final reviewForOrderProvider = StreamProvider.family<Review?, String>((ref, orderId) {
+final reviewForOrderProvider = StreamProvider.autoDispose.family<Review?, String>((ref, orderId) {
   return ref.watch(firestoreServiceProvider).watchReviewForOrder(orderId);
 });
 
@@ -65,25 +70,11 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
 
   Future<void> _confirmCancel(DeliveryOrder order) async {
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        content: Text(l10n.cancelOrderConfirmMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.cancelButton),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.confirmButton),
-          ),
-        ],
-      ),
-    );
+    final confirmed = await showConfirmDialog(context, message: l10n.cancelOrderConfirmMessage);
     if (confirmed != true) return;
     if (!mounted) return;
 
+    HapticFeedback.lightImpact();
     setState(() => _cancelling = true);
     final messenger = ScaffoldMessenger.of(context);
     final colorScheme = Theme.of(context).colorScheme;
@@ -105,18 +96,16 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
   Widget build(BuildContext context) {
     final orderAsync = ref.watch(orderTrackingProvider(widget.orderId));
     final l10n = AppLocalizations.of(context)!;
-    final currencyFormat = NumberFormat.currency(
-      locale: Localizations.localeOf(context).toString(),
-      name: 'SYP',
-    );
+    final currencyFormat = ref.watch(currencyFormatProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.orderTrackingTitle),
         actions: const [LanguageToggleButton()],
       ),
-      body: orderAsync.when(
-        data: (order) {
+      body: ResponsiveCenter(
+        child: orderAsync.animatedWhen(
+          data: (order) {
           final currentIndex = order.status == OrderStatus.cancelled
               ? -1
               : _trackedStatuses.indexOf(order.status);
@@ -189,7 +178,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
               if (order.status == OrderStatus.delivered)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: ref.watch(reviewForOrderProvider(order.id)).when(
+                  child: ref.watch(reviewForOrderProvider(order.id)).animatedWhen(
                         data: (review) => review == null
                             ? OutlinedButton(
                                 onPressed: () => _rateOrder(order),
@@ -223,6 +212,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
         loading: () => const ListSkeletonLoader(),
         error: (error, _) =>
             Center(child: Text(localizedErrorMessage(context, error))),
+        ),
       ),
     );
   }

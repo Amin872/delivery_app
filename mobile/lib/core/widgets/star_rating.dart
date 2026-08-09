@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// Read-only star row for showing a `Vendor`/`Driver`'s `averageRating`.
 /// Rounds to the nearest whole star rather than rendering half-stars, which
@@ -63,12 +64,20 @@ class StarRatingInput extends StatelessWidget {
       children: [
         for (var i = 1; i <= 5; i++)
           IconButton(
-            icon: Icon(
-              i <= value ? Icons.star : Icons.star_border,
-              color: colorScheme.primary,
-              size: size,
+            icon: AnimatedScale(
+              scale: i <= value ? 1.15 : 1.0,
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              child: Icon(
+                i <= value ? Icons.star : Icons.star_border,
+                color: colorScheme.primary,
+                size: size,
+              ),
             ),
-            onPressed: () => onChanged(i),
+            onPressed: () {
+              HapticFeedback.selectionClick();
+              onChanged(i);
+            },
           ),
       ],
     );

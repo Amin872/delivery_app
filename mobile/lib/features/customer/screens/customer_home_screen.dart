@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../core/widgets/star_rating.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
+import '../../../routing/page_transitions.dart';
 import '../../../services/firestore_service.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'my_orders_screen.dart';
@@ -39,9 +42,8 @@ class CustomerHomeScreen extends ConsumerWidget {
             tooltip: l10n.myOrdersTitle,
             onPressed: customerId == null
                 ? null
-                : () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => MyOrdersScreen(customerId: customerId)),
-                    ),
+                : () => Navigator.of(context)
+                    .push(fadeSlideRoute(MyOrdersScreen(customerId: customerId))),
           ),
           IconButton(
             icon: const Icon(Icons.logout),
@@ -50,8 +52,9 @@ class CustomerHomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: vendorsAsync.when(
-        data: (vendors) {
+      body: ResponsiveCenter(
+        child: vendorsAsync.animatedWhen(
+          data: (vendors) {
           if (vendors.isEmpty) {
             return Center(child: Text(l10n.noOpenVendorsMessage));
           }
@@ -80,9 +83,8 @@ class CustomerHomeScreen extends ConsumerWidget {
                     ],
                   ),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => VendorMenuScreen(vendor: vendor)),
-                  ),
+                  onTap: () =>
+                      Navigator.of(context).push(fadeSlideRoute(VendorMenuScreen(vendor: vendor))),
                 ),
               ).staggeredEntrance(index);
             },
@@ -91,6 +93,7 @@ class CustomerHomeScreen extends ConsumerWidget {
         loading: () => const ListSkeletonLoader(),
         error: (error, _) =>
             Center(child: Text(localizedErrorMessage(context, error))),
+        ),
       ),
     );
   }

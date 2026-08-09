@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/providers/formatters_provider.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
+import '../../../routing/page_transitions.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import 'customer_home_screen.dart' show firestoreServiceProvider;
@@ -40,6 +43,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     final appUser = ref.read(currentAppUserProvider).valueOrNull;
     if (cart.isEmpty || cart.vendorId == null || appUser == null) return;
 
+    HapticFeedback.lightImpact();
     setState(() {
       _isSubmitting = true;
       _errorMessage = null;
@@ -69,9 +73,8 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         buildAppSnackBar(Theme.of(context).colorScheme, l10n.orderPlacedMessage),
       );
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => OrderTrackingScreen(orderId: orderId)),
-      );
+      Navigator.of(context)
+          .pushReplacement(fadeSlideRoute(OrderTrackingScreen(orderId: orderId)));
     } catch (error) {
       if (mounted) {
         setState(() => _errorMessage = localizedErrorMessage(context, error));
@@ -85,19 +88,17 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
     final l10n = AppLocalizations.of(context)!;
-    final currencyFormat = NumberFormat.currency(
-      locale: Localizations.localeOf(context).toString(),
-      name: 'SYP',
-    );
+    final currencyFormat = ref.watch(currencyFormatProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.cartTitle),
         actions: const [LanguageToggleButton()],
       ),
-      body: cart.isEmpty
-          ? Center(child: Text(l10n.emptyCartMessage))
-          : Form(
+      body: ResponsiveCenter(
+        child: cart.isEmpty
+            ? Center(child: Text(l10n.emptyCartMessage))
+            : Form(
               key: _formKey,
               child: ListView(
                 padding: const EdgeInsets.all(16),
@@ -112,24 +113,32 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.remove_circle_outline),
-                              onPressed: () => ref
-                                  .read(cartProvider.notifier)
-                                  .setQuantity(line.item.id, line.quantity - 1),
+                              onPressed: () {
+                                HapticFeedback.selectionClick();
+                                ref
+                                    .read(cartProvider.notifier)
+                                    .setQuantity(line.item.id, line.quantity - 1);
+                              },
                             ),
                             Text('${line.quantity}'),
                             IconButton(
                               icon: const Icon(Icons.add_circle_outline),
-                              onPressed: () => ref
-                                  .read(cartProvider.notifier)
-                                  .setQuantity(line.item.id, line.quantity + 1),
+                              onPressed: () {
+                                HapticFeedback.selectionClick();
+                                ref
+                                    .read(cartProvider.notifier)
+                                    .setQuantity(line.item.id, line.quantity + 1);
+                              },
                             ),
                           ],
                         ),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete_outline),
                           tooltip: l10n.removeItemTooltip,
-                          onPressed: () =>
-                              ref.read(cartProvider.notifier).removeItem(line.item.id),
+                          onPressed: () {
+                            HapticFeedback.lightImpact();
+                            ref.read(cartProvider.notifier).removeItem(line.item.id);
+                          },
                         ),
                       ),
                     ).staggeredEntrance(index),
@@ -167,6 +176,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                 ],
               ),
             ),
+      ),
     );
   }
 }

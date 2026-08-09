@@ -1,14 +1,18 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/providers/formatters_provider.dart';
+import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/app_spinner.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/image_picker_avatar.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
@@ -37,23 +41,10 @@ class MenuManagementScreen extends ConsumerWidget {
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref, MenuItem item) async {
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        content: Text(l10n.deleteMenuItemConfirmMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.cancelButton),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.confirmButton),
-          ),
-        ],
-      ),
-    );
+    final confirmed =
+        await showConfirmDialog(context, message: l10n.deleteMenuItemConfirmMessage);
     if (confirmed == true) {
+      HapticFeedback.lightImpact();
       await ref.read(firestoreServiceProvider).deleteMenuItem(vendorId, item.id);
     }
   }
@@ -62,10 +53,7 @@ class MenuManagementScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final menuAsync = ref.watch(vendorMenuProvider(vendorId));
     final l10n = AppLocalizations.of(context)!;
-    final currencyFormat = NumberFormat.currency(
-      locale: Localizations.localeOf(context).toString(),
-      name: 'SYP',
-    );
+    final currencyFormat = ref.watch(currencyFormatProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -77,8 +65,9 @@ class MenuManagementScreen extends ConsumerWidget {
         onPressed: () => _openForm(context),
         child: const Icon(Icons.add),
       ),
-      body: menuAsync.when(
-        data: (items) {
+      body: ResponsiveCenter(
+        child: menuAsync.animatedWhen(
+          data: (items) {
           if (items.isEmpty) {
             return Center(child: Text(l10n.noMenuItemsMessage));
           }
@@ -106,17 +95,20 @@ class MenuManagementScreen extends ConsumerWidget {
                     children: [
                       Switch(
                         value: item.available,
-                        onChanged: (value) => ref.read(firestoreServiceProvider).updateMenuItem(
-                              vendorId,
-                              MenuItem(
-                                id: item.id,
-                                vendorId: vendorId,
-                                name: item.name,
-                                price: item.price,
-                                imageUrl: item.imageUrl,
-                                available: value,
-                              ),
-                            ),
+                        onChanged: (value) {
+                          HapticFeedback.selectionClick();
+                          ref.read(firestoreServiceProvider).updateMenuItem(
+                                vendorId,
+                                MenuItem(
+                                  id: item.id,
+                                  vendorId: vendorId,
+                                  name: item.name,
+                                  price: item.price,
+                                  imageUrl: item.imageUrl,
+                                  available: value,
+                                ),
+                              );
+                        },
                       ),
                       IconButton(
                         icon: const Icon(Icons.edit_outlined),
@@ -138,6 +130,7 @@ class MenuManagementScreen extends ConsumerWidget {
         loading: () => const ListSkeletonLoader(),
         error: (error, _) =>
             Center(child: Text(localizedErrorMessage(context, error))),
+        ),
       ),
     );
   }

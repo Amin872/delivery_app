@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/providers/formatters_provider.dart';
 import '../../../core/stats/menu_item_tally.dart';
+import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/stat_card.dart';
 import '../../../core/widgets/staggered_list_item.dart';
@@ -23,7 +25,8 @@ class VendorStats {
   final List<MapEntry<String, int>> topItems;
 }
 
-final vendorStatsProvider = FutureProvider.family<VendorStats, String>((ref, vendorId) async {
+final vendorStatsProvider =
+    FutureProvider.autoDispose.family<VendorStats, String>((ref, vendorId) async {
   final service = ref.watch(firestoreServiceProvider);
   final orderCount = await service.countVendorOrders(vendorId);
   final salesTotal = await service.sumVendorDeliveredSales(vendorId);
@@ -48,18 +51,16 @@ class VendorStatsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final statsAsync = ref.watch(vendorStatsProvider(vendorId));
     final l10n = AppLocalizations.of(context)!;
-    final currencyFormat = NumberFormat.currency(
-      locale: Localizations.localeOf(context).toString(),
-      name: 'SYP',
-    );
+    final currencyFormat = ref.watch(currencyFormatProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.vendorStatsTitle),
         actions: const [LanguageToggleButton()],
       ),
-      body: statsAsync.when(
-        data: (stats) => RefreshIndicator(
+      body: ResponsiveCenter(
+        child: statsAsync.animatedWhen(
+          data: (stats) => RefreshIndicator(
           onRefresh: () {
             ref.invalidate(vendorStatsProvider(vendorId));
             return ref.read(vendorStatsProvider(vendorId).future);
@@ -113,6 +114,7 @@ class VendorStatsScreen extends ConsumerWidget {
         ),
         error: (error, _) =>
             Center(child: Text(localizedErrorMessage(context, error))),
+        ),
       ),
     );
   }
