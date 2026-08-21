@@ -24,7 +24,10 @@ class AppUser {
     return AppUser(
       id: id,
       email: map['email'] as String,
-      displayName: map['displayName'] as String,
+      // Some pre-existing `users` docs (from the unrelated `orient_food` app
+      // sharing this Firebase project) use `fullName` instead of
+      // `displayName` — fall back to it rather than crashing on the cast.
+      displayName: (map['displayName'] ?? map['fullName']) as String,
       role: enumByName(UserRole.values, map['role'] as String?),
       phoneNumber: map['phoneNumber'] as String?,
     );
