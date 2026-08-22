@@ -18,11 +18,27 @@ service cloud.firestore {
 
     // users/{userId} doc id == auth uid, created at sign-up.
     match /users/{userId} {
-      allow read: if isSelf(userId);
+      // Admin read-only carve-out for AdminUsersScreen's directory — write/
+      // update/delete stay isSelf(userId)-only below, unchanged. Same
+      // hasRole('admin') helper already used for vendors/orders/promotions.
+      allow read: if isSelf(userId) || hasRole('admin');
       allow create: if isSelf(userId) && request.resource.data.role in ['customer', 'driver', 'vendor'];
       // Role is fixed at sign-up; only profile fields may change afterwards.
       allow update: if isSelf(userId) && request.resource.data.role == resource.data.role;
-      allow delete: if false;
+      // Only the account owner may delete their own doc — used by the
+      // Personal Information screen's "Delete account" flow
+      // (AuthService.deleteAccount). Deleting a Firestore doc does not
+      // cascade to subcollections, so deleteAccount() clears addresses/
+      // below itself before deleting this doc.
+      allow delete: if isSelf(userId);
+
+      // A customer's saved delivery addresses — free-form text, no
+      // structured street/building/postal fields (see models/address.dart).
+      // Owner-only in every direction; nobody else has any reason to read
+      // another user's saved addresses.
+      match /addresses/{addressId} {
+        allow read, write: if isSelf(userId);
+      }
     }
 
     // vendors/{vendorId} — public storefront. Owners manage their own
@@ -44,16 +60,48 @@ service cloud.firestore {
           request.resource.data.approvalStatus == resource.data.approvalStatus &&
           request.resource.data.get('ratingSum', 0) == resource.data.get('ratingSum', 0) &&
           request.resource.data.get('ratingCount', 0) == resource.data.get('ratingCount', 0)) ||
+        // Widened for Restaurant Management (admin edit-details + enable/
+        // disable) beyond the original approval-only branch — still a
+        // narrow, field-scoped allowlist per CLAUDE.md's ratings-note
+        // reasoning: ownerId/ratingSum/ratingCount stay Admin-SDK-only,
+        // and name/description/imageUrl/logoUrl stay owner-only (out of
+        // this feature's scope).
         (hasRole('admin') &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvalStatus']))
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'approvalStatus', 'category', 'city', 'deliveryFee', 'etaMinMinutes',
+            'etaMaxMinutes', 'minimumOrderAmount', 'openTime', 'closeTime', 'isOpen'
+          ]))
       );
       allow delete: if false;
 
+      // orderCount is aggregated by the onOrderStatusChanged Cloud Function
+      // (Admin SDK, bypasses these rules) when an order reaches 'delivered'
+      // — same self-inflation guard as vendors/{vendorId}'s ratingSum/
+      // ratingCount above, one level deeper.
       match /menuItems/{itemId} {
         allow read: if true;
-        allow write: if isSignedIn() &&
+        allow create: if isSignedIn() &&
+          get(/databases/$(database)/documents/vendors/$(vendorId)).data.ownerId == request.auth.uid &&
+          request.resource.data.get('orderCount', 0) == 0;
+        allow update: if isSignedIn() &&
+          get(/databases/$(database)/documents/vendors/$(vendorId)).data.ownerId == request.auth.uid &&
+          request.resource.data.get('orderCount', 0) == resource.data.get('orderCount', 0);
+        allow delete: if isSignedIn() &&
           get(/databases/$(database)/documents/vendors/$(vendorId)).data.ownerId == request.auth.uid;
       }
+    }
+
+    // Collection-group counterpart of vendors/{vendorId}/menuItems/{itemId}
+    // above — Firestore does NOT apply a rule nested under a specific parent
+    // path to a `collectionGroup('menuItems')` query; that requires its own
+    // top-level `{path=**}` match. Grants the exact same public read (no new
+    // data exposure, menuItems were already publicly readable per-document);
+    // powers FirestoreService.watchAllMenuItems() for CustomerHomeScreen's
+    // cross-vendor product feed. Writes still only go through the
+    // vendor-scoped rule above — a collection-group write isn't possible in
+    // Firestore anyway (writes are always addressed by full document path).
+    match /{path=**}/menuItems/{itemId} {
+      allow read: if true;
     }
 
     // drivers/{driverId} doc id == auth uid. Availability/location visible
@@ -128,6 +176,16 @@ service cloud.firestore {
         request.resource.data.driverRating is int &&
         request.resource.data.driverRating >= 1 && request.resource.data.driverRating <= 5;
       allow update, delete: if false;
+    }
+
+    // promotions/{promotionId} — admin-managed carousel shown atop the
+    // customer Home screen (PromoBannerCarousel). Public read (same as
+    // vendors/reviews, non-sensitive marketing content); only an admin may
+    // write. Media itself lives in Storage — see storage.rules' matching
+    // `promotions/{promotionId}/{fileName}` block.
+    match /promotions/{promotionId} {
+      allow read: if true;
+      allow write: if hasRole('admin');
     }
   }
 }

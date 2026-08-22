@@ -1,8 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../core/errors/guard.dart';
+import '../models/address.dart';
+import '../models/app_user.dart';
+import '../models/city.dart';
 import '../models/driver.dart';
 import '../models/order.dart';
+import '../models/promotion.dart';
 import '../models/review.dart';
 import '../models/vendor.dart';
 
@@ -28,6 +32,99 @@ class FirestoreService {
   CollectionReference<Map<String, dynamic>> get _reviews =>
       _db.collection('reviews');
 
+  CollectionReference<Map<String, dynamic>> get _users =>
+      _db.collection('users');
+
+  CollectionReference<Map<String, dynamic>> get _promotions =>
+      _db.collection('promotions');
+
+  // AdminUsersScreen's list. NOTE: firestore.rules' users/{userId} read rule
+  // is currently `isSelf(userId)` only — there is no admin read branch yet
+  // (see ADMIN_AUDIT_REPORT.md §2/§15) — so this stream will surface a
+  // permission-denied AppException for every caller, admin included, until
+  // that rule is updated. Left as a plain, correct query rather than a
+  // workaround: the fix belongs in firestore.rules, not here.
+  Stream<List<AppUser>> watchAllUsers() {
+    return guardStream(_users.snapshots().map(
+        (snap) => snap.docs.map((doc) => AppUser.fromMap(doc.id, doc.data())).toList()));
+  }
+
+  // A customer's own favorites — firestore.rules' users/{userId} update rule
+  // already permits a signed-in user to change any of their own profile
+  // fields (only `role` is pinned), so no rules change was needed for this.
+  Future<void> toggleFavoriteVendor(String customerId, String vendorId, bool isFavorite) {
+    return guardFuture(() => _users.doc(customerId).update({
+          'favoriteVendorIds':
+              isFavorite ? FieldValue.arrayUnion([vendorId]) : FieldValue.arrayRemove([vendorId]),
+        }));
+  }
+
+  // Same rule as toggleFavoriteVendor above — role is pinned, every other
+  // profile field is a plain client write. Used by EditProfileScreen.
+  Future<void> updateUserProfile(
+    String userId, {
+    required String displayName,
+    String? phoneNumber,
+  }) {
+    return guardFuture(() => _users.doc(userId).update({
+          'displayName': displayName,
+          'phoneNumber': phoneNumber,
+        }));
+  }
+
+  CollectionReference<Map<String, dynamic>> _addresses(String userId) =>
+      _users.doc(userId).collection('addresses');
+
+  Stream<List<DeliveryAddress>> watchAddresses(String userId) {
+    return guardStream(_addresses(userId).snapshots().map((snap) => snap.docs
+        .map((doc) => DeliveryAddress.fromMap(doc.id, doc.data()))
+        .toList()));
+  }
+
+  // Powers CartScreen's automatic prefill — a single default address (or
+  // none) rather than the full list, so the cart doesn't need to watch and
+  // filter every saved address itself.
+  Stream<DeliveryAddress?> watchDefaultAddress(String userId) {
+    return guardStream(_addresses(userId)
+        .where('isDefault', isEqualTo: true)
+        .limit(1)
+        .snapshots()
+        .map((snap) => snap.docs.isEmpty
+            ? null
+            : DeliveryAddress.fromMap(snap.docs.first.id, snap.docs.first.data())));
+  }
+
+  Future<String> addAddress(String userId, DeliveryAddress address) {
+    return guardFuture(() async {
+      final doc = await _addresses(userId).add(address.toMap());
+      if (address.isDefault) await setDefaultAddress(userId, doc.id);
+      return doc.id;
+    });
+  }
+
+  Future<void> updateAddress(String userId, DeliveryAddress address) {
+    return guardFuture(() => _addresses(userId).doc(address.id).update(address.toMap()));
+  }
+
+  Future<void> deleteAddress(String userId, String addressId) {
+    return guardFuture(() => _addresses(userId).doc(addressId).delete());
+  }
+
+  // Only one address may be default at a time — a batch clears the flag on
+  // every other saved address while setting it on [addressId], so the
+  // "exactly one default" invariant holds without a transaction (a batch is
+  // enough here since nothing else concurrently writes isDefault).
+  Future<void> setDefaultAddress(String userId, String addressId) {
+    return guardFuture(() async {
+      final snap = await _addresses(userId).get();
+      final batch = _db.batch();
+      for (final doc in snap.docs) {
+        batch.update(doc.reference, {'isDefault': doc.id == addressId});
+      }
+      await batch.commit();
+    });
+  }
+
   Stream<List<Vendor>> watchOpenVendors() {
     return guardStream(_vendors
         .where('isOpen', isEqualTo: true)
@@ -38,6 +135,13 @@ class FirestoreService {
               .map((doc) => Vendor.fromMap(doc.id, doc.data()))
               .toList(),
         ));
+  }
+
+  Stream<Vendor> watchVendor(String vendorId) {
+    return guardStream(_vendors
+        .doc(vendorId)
+        .snapshots()
+        .map((doc) => Vendor.fromMap(doc.id, doc.data()!)));
   }
 
   Stream<List<Vendor>> watchPendingVendors() {
@@ -51,8 +155,44 @@ class FirestoreService {
         ));
   }
 
+  // AdminVendorsScreen's full restaurant directory — every vendor
+  // regardless of approvalStatus/isOpen, unlike watchOpenVendors (customer
+  // Home, approved+open only) and watchPendingVendors (approval queue
+  // only). No new rule needed: vendors/{vendorId}.read is already `if true`.
+  Stream<List<Vendor>> watchAllVendors() {
+    return guardStream(_vendors.snapshots().map(
+        (snap) => snap.docs.map((doc) => Vendor.fromMap(doc.id, doc.data())).toList()));
+  }
+
   Future<void> updateVendorImage(String vendorId, String imageUrl) {
     return guardFuture(() => _vendors.doc(vendorId).update({'imageUrl': imageUrl}));
+  }
+
+  Future<void> setVendorOpen(String vendorId, bool isOpen) {
+    return guardFuture(() => _vendors.doc(vendorId).update({'isOpen': isOpen}));
+  }
+
+  Future<void> updateVendorDetails(
+    String vendorId, {
+    required VendorCategory category,
+    required City city,
+    double? deliveryFee,
+    int? etaMinMinutes,
+    int? etaMaxMinutes,
+    double? minimumOrderAmount,
+    String? openTime,
+    String? closeTime,
+  }) {
+    return guardFuture(() => _vendors.doc(vendorId).update({
+          'category': category.name,
+          'city': city.name,
+          'deliveryFee': deliveryFee,
+          'etaMinMinutes': etaMinMinutes,
+          'etaMaxMinutes': etaMaxMinutes,
+          'minimumOrderAmount': minimumOrderAmount,
+          'openTime': openTime,
+          'closeTime': closeTime,
+        }));
   }
 
   Future<void> setVendorApprovalStatus(
@@ -68,6 +208,24 @@ class FirestoreService {
     return guardStream(_vendors
         .doc(vendorId)
         .collection('menuItems')
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((doc) => MenuItem.fromMap(doc.id, doc.data()))
+            .toList()));
+  }
+
+  // Powers CustomerHomeScreen's product feed — a collection-group query
+  // across every vendor's menuItems subcollection (firestore.rules'
+  // menuItems read rule is unconditionally `true`, so this is allowed).
+  // Deliberately no server-side `.where()`: a filtered collection-group
+  // query needs a deployed composite index, and at this app's scale
+  // (dozens of vendors, not thousands) fetching everything and filtering
+  // client-side — by availability, and by the same open/category/city
+  // vendor set CustomerHomeScreen already computes — is simpler and avoids
+  // an index-deployment step for no real benefit.
+  Stream<List<MenuItem>> watchAllMenuItems() {
+    return guardStream(_db
+        .collectionGroup('menuItems')
         .snapshots()
         .map((snap) => snap.docs
             .map((doc) => MenuItem.fromMap(doc.id, doc.data()))
@@ -226,6 +384,10 @@ class FirestoreService {
         .map((doc) => Driver.fromMap(doc.id, doc.data()!)));
   }
 
+  Future<void> setDriverAvailability(String driverId, bool isAvailable) {
+    return guardFuture(() => _drivers.doc(driverId).update({'isAvailable': isAvailable}));
+  }
+
   // Null when the driver has no delivery currently in flight — `pickedUp`
   // and `delivering` are the only statuses between accepting an order
   // (acceptDelivery) and it being marked delivered.
@@ -272,5 +434,49 @@ class FirestoreService {
         .snapshots()
         .map((snap) =>
             snap.docs.map((doc) => Review.fromMap(doc.id, doc.data())).toList()));
+  }
+
+  // PromoBannerCarousel's read query — equality filter (enabled) plus
+  // orderBy on a different field (order) needs a composite index, same as
+  // watchCustomerOrders/watchVendorOrders above (see firestore.indexes.json).
+  Stream<List<Promotion>> watchActivePromotions() {
+    return guardStream(_promotions
+        .where('enabled', isEqualTo: true)
+        .orderBy('order')
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((doc) => Promotion.fromMap(doc.id, doc.data())).toList()));
+  }
+
+  // AdminPromotionsScreen's list — unfiltered, so unlike
+  // watchActivePromotions() a single-field index (automatic) is enough.
+  Stream<List<Promotion>> watchAllPromotions() {
+    return guardStream(_promotions
+        .orderBy('order')
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((doc) => Promotion.fromMap(doc.id, doc.data())).toList()));
+  }
+
+  Future<String> addPromotion(Promotion promotion) {
+    return guardFuture(() async {
+      final doc = await _promotions.add(promotion.toMap());
+      return doc.id;
+    });
+  }
+
+  Future<void> updatePromotion(Promotion promotion) {
+    return guardFuture(() => _promotions.doc(promotion.id).set(promotion.toMap()));
+  }
+
+  Future<void> deletePromotion(String promotionId) {
+    return guardFuture(() => _promotions.doc(promotionId).delete());
+  }
+
+  // Single-field partial write for the admin list's enable/disable Switch —
+  // same reasoning as setVendorOpen/setDriverAvailability above, avoids
+  // overwriting the rest of the doc from possibly-stale list-item state.
+  Future<void> setPromotionEnabled(String promotionId, bool enabled) {
+    return guardFuture(() => _promotions.doc(promotionId).update({'enabled': enabled}));
   }
 }
