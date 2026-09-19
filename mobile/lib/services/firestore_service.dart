@@ -356,6 +356,48 @@ class FirestoreService {
     });
   }
 
+  // Marketplace-wide counterparts of the vendor/driver-scoped aggregations
+  // above, for AdminAnalyticsScreen — same `.count()`/`.aggregate(sum(...))`
+  // server-side aggregation, just without a `vendorId`/`driverId` filter, so
+  // these never download a full collection just to size it.
+  Future<int> countAllUsers() {
+    return guardFuture(() async {
+      final snapshot = await _users.count().get();
+      return snapshot.count ?? 0;
+    });
+  }
+
+  Future<int> countAllVendors() {
+    return guardFuture(() async {
+      final snapshot = await _vendors.count().get();
+      return snapshot.count ?? 0;
+    });
+  }
+
+  Future<int> countAllDrivers() {
+    return guardFuture(() async {
+      final snapshot = await _drivers.count().get();
+      return snapshot.count ?? 0;
+    });
+  }
+
+  Future<int> countAllOrders() {
+    return guardFuture(() async {
+      final snapshot = await _orders.count().get();
+      return snapshot.count ?? 0;
+    });
+  }
+
+  Future<double> sumAllDeliveredSales() {
+    return guardFuture(() async {
+      final snapshot = await _orders
+          .where('status', isEqualTo: OrderStatus.delivered.name)
+          .aggregate(sum('total'))
+          .get();
+      return snapshot.getSum('total') ?? 0;
+    });
+  }
+
   // Bounded sample used for the vendor's "most ordered items" tally —
   // Firestore aggregation can't group by values inside an `items[]` array,
   // so this is a deliberate approximation over recent history rather than a

@@ -8,7 +8,10 @@ import '../../../core/widgets/responsive_center.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../routing/page_transitions.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../screens/admin_analytics_screen.dart';
+import '../screens/admin_drivers_screen.dart';
 import '../screens/admin_orders_screen.dart';
+import '../screens/admin_products_screen.dart';
 import '../screens/admin_promotions_screen.dart';
 import '../screens/admin_users_screen.dart';
 import '../screens/admin_vendors_screen.dart';
@@ -92,8 +95,11 @@ void _navigateTo(BuildContext context, AdminDestination current, AdminDestinatio
   final Widget screen = switch (destination) {
     AdminDestination.users => const AdminUsersScreen(),
     AdminDestination.vendors => const AdminVendorsScreen(),
+    AdminDestination.drivers => const AdminDriversScreen(),
     AdminDestination.orders => const AdminOrdersScreen(),
     AdminDestination.promotions => const AdminPromotionsScreen(),
+    AdminDestination.products => const AdminProductsScreen(),
+    AdminDestination.analytics => const AdminAnalyticsScreen(),
     _ => AdminScaffold(
         title: destination.label(l10n),
         selected: destination,

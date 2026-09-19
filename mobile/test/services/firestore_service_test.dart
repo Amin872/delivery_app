@@ -106,6 +106,34 @@ void main() {
     expect(await service.countDriverDeliveries('driver-1'), 1);
   });
 
+  test('marketplace-wide aggregation methods count/sum across every vendor and driver',
+      () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    await firestore.collection('users').doc('u1').set({'email': 'a@b.com', 'displayName': 'A', 'role': 'customer'});
+    await firestore.collection('users').doc('u2').set({'email': 'b@b.com', 'displayName': 'B', 'role': 'driver'});
+    await firestore.collection('vendors').add({'ownerId': 'o1', 'name': 'V1', 'description': '', 'isOpen': true, 'approvalStatus': 'approved'});
+    await firestore.collection('vendors').add({'ownerId': 'o2', 'name': 'V2', 'description': '', 'isOpen': true, 'approvalStatus': 'pending'});
+    await firestore.collection('drivers').doc('d1').set({'userId': 'd1', 'isAvailable': true});
+
+    await firestore
+        .collection('orders')
+        .add(_orderMap(vendorId: 'vendor-1', status: 'delivered', total: 100));
+    await firestore
+        .collection('orders')
+        .add(_orderMap(vendorId: 'vendor-2', status: 'delivered', total: 999));
+    await firestore
+        .collection('orders')
+        .add(_orderMap(vendorId: 'vendor-1', status: 'pending', total: 30));
+
+    expect(await service.countAllUsers(), 2);
+    expect(await service.countAllVendors(), 2);
+    expect(await service.countAllDrivers(), 1);
+    expect(await service.countAllOrders(), 3);
+    expect(await service.sumAllDeliveredSales(), 1099);
+  });
+
   test('watchAllOrders returns every order unfiltered, and only matching ones when filtered',
       () async {
     final firestore = FakeFirebaseFirestore();
