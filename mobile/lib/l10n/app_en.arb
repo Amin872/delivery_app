@@ -234,6 +234,23 @@
   "adminOrdersTitle": "All orders",
   "allStatusesLabel": "All",
 
+  "customerLabel": "Customer",
+  "vendorLabel": "Vendor",
+  "itemsLabel": "Items",
+  "assignedDriverLabel": "Assigned driver",
+  "noDriverAssignedMessage": "No driver assigned yet.",
+  "reassignDriverButton": "Reassign driver",
+  "selectDriverTitle": "Select a driver",
+  "driverAvailableStatusLabel": "Available",
+  "driverUnavailableStatusLabel": "Unavailable",
+  "noDriversFoundMessage": "No drivers found.",
+  "orderReassignedMessage": "Order reassigned.",
+  "confirmReassignMessage": "Reassign this order to {name}?",
+  "@confirmReassignMessage": {
+    "description": "Confirmation dialog message before an admin reassigns an order to a different driver.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+
   "restaurantManagementTitle": "Restaurant Management",
   "vendorApprovalsTitle": "Vendor approvals",
   "noVendorsAwaitingApprovalMessage": "No vendors awaiting approval.",

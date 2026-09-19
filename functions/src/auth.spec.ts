@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { assertIsDriver, UserRoleReader } from "./auth";
+import { assertIsAdmin, assertIsDriver, UserRoleReader } from "./auth";
 
 function fakeReader(role: string | undefined): UserRoleReader {
   return {
@@ -35,6 +35,26 @@ describe("assertIsDriver", () => {
   it("rejects with permission-denied when the user document doesn't exist", async () => {
     await assert.rejects(
       () => assertIsDriver(fakeReader(undefined), "uid-missing"),
+      assertPermissionDenied
+    );
+  });
+});
+
+describe("assertIsAdmin", () => {
+  it("resolves when the user has role 'admin'", async () => {
+    await assert.doesNotReject(() => assertIsAdmin(fakeReader("admin"), "uid-admin"));
+  });
+
+  it("rejects with permission-denied for a non-admin role", async () => {
+    await assert.rejects(
+      () => assertIsAdmin(fakeReader("vendor"), "uid-vendor"),
+      assertPermissionDenied
+    );
+  });
+
+  it("rejects with permission-denied when the user document doesn't exist", async () => {
+    await assert.rejects(
+      () => assertIsAdmin(fakeReader(undefined), "uid-missing"),
       assertPermissionDenied
     );
   });

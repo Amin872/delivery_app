@@ -27,3 +27,19 @@ export async function assertIsDriver(reader: UserRoleReader, uid: string): Promi
     throw new HttpsError("permission-denied", "Only drivers can accept deliveries.");
   }
 }
+
+/**
+ * Throws `permission-denied` unless `users/{uid}` exists and has
+ * `role == 'admin'`. Mirrors `assertIsDriver` above — every admin-only
+ * callable (adminCancelOrder, adminReassignDriver, ...) uses this as its
+ * sole enforcement point, since firestore.rules deliberately grants admins
+ * no client-side write access to orders (see the driver-assignment
+ * architecture note in CLAUDE.md); these callables are the only path in.
+ */
+export async function assertIsAdmin(reader: UserRoleReader, uid: string): Promise<void> {
+  const userDoc = await reader.collection("users").doc(uid).get();
+  const role = userDoc.data()?.role;
+  if (role !== "admin") {
+    throw new HttpsError("permission-denied", "Only admins can perform this action.");
+  }
+}

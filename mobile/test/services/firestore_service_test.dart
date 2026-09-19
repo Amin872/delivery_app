@@ -60,6 +60,26 @@ void main() {
     expect(afterDelete.exists, isFalse);
   });
 
+  test('watchAllMenuItems returns items across every vendor via a collection-group query',
+      () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    await service.addMenuItem(
+      'vendor-1',
+      const MenuItem(id: '', vendorId: 'vendor-1', name: 'Falafel', price: 5000, available: true),
+    );
+    await service.addMenuItem(
+      'vendor-2',
+      const MenuItem(id: '', vendorId: 'vendor-2', name: 'Shawarma', price: 6000, available: true),
+    );
+
+    final items = await service.watchAllMenuItems().first;
+
+    expect(items.length, 2);
+    expect(items.map((item) => item.name), containsAll(['Falafel', 'Shawarma']));
+  });
+
   test('vendor/driver aggregation methods return expected counts and sums', () async {
     final firestore = FakeFirebaseFirestore();
     final service = FirestoreService(firestore: firestore);
@@ -156,6 +176,26 @@ void main() {
     expect(updated.data()!['status'], 'cancelled');
   });
 
+  test('toggleFavoriteVendor adds and removes a vendor id from favoriteVendorIds', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    await firestore.collection('users').doc('customer-1').set({
+      'email': 'a@b.com',
+      'displayName': 'A',
+      'role': 'customer',
+      'favoriteVendorIds': <String>[],
+    });
+
+    await service.toggleFavoriteVendor('customer-1', 'vendor-1', true);
+    final afterAdd = await firestore.collection('users').doc('customer-1').get();
+    expect(afterAdd.data()!['favoriteVendorIds'], ['vendor-1']);
+
+    await service.toggleFavoriteVendor('customer-1', 'vendor-1', false);
+    final afterRemove = await firestore.collection('users').doc('customer-1').get();
+    expect(afterRemove.data()!['favoriteVendorIds'], isEmpty);
+  });
+
   test('updateVendorImage sets the vendor doc imageUrl', () async {
     final firestore = FakeFirebaseFirestore();
     final service = FirestoreService(firestore: firestore);
@@ -173,6 +213,41 @@ void main() {
 
     final updated = await vendorRef.get();
     expect(updated.data()!['imageUrl'], 'https://example.com/photo.jpg');
+  });
+
+  test('setVendorOpen sets the vendor doc isOpen, and watchVendor reflects it', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    final vendorRef = await firestore.collection('vendors').add({
+      'ownerId': 'owner-1',
+      'name': 'Falafel House',
+      'description': '',
+      'imageUrl': null,
+      'isOpen': false,
+      'approvalStatus': 'approved',
+    });
+
+    await service.setVendorOpen(vendorRef.id, true);
+
+    final updated = await service.watchVendor(vendorRef.id).first;
+    expect(updated.isOpen, isTrue);
+  });
+
+  test('setDriverAvailability sets the driver doc isAvailable, and watchDriver reflects it',
+      () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    await firestore.collection('drivers').doc('driver-1').set({
+      'userId': 'driver-1',
+      'isAvailable': true,
+    });
+
+    await service.setDriverAvailability('driver-1', false);
+
+    final updated = await service.watchDriver('driver-1').first;
+    expect(updated.isAvailable, isFalse);
   });
 
   test('submitReview writes to reviews/{orderId}, and watchReviewForOrder resolves it', () async {
@@ -200,6 +275,43 @@ void main() {
     final watched = await service.watchReviewForOrder('order-1').first;
     expect(watched?.driverRating, 4);
     expect(watched?.comment, 'Great food!');
+  });
+
+  test('watchAllDrivers returns every driver doc across the collection', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    await firestore.collection('drivers').doc('driver-1').set({
+      'userId': 'driver-1',
+      'isAvailable': true,
+    });
+    await firestore.collection('drivers').doc('driver-2').set({
+      'userId': 'driver-2',
+      'isAvailable': false,
+    });
+
+    final drivers = await service.watchAllDrivers().first;
+
+    expect(drivers.length, 2);
+    expect(drivers.map((d) => d.id), containsAll(['driver-1', 'driver-2']));
+    expect(drivers.firstWhere((d) => d.id == 'driver-1').isAvailable, isTrue);
+    expect(drivers.firstWhere((d) => d.id == 'driver-2').isAvailable, isFalse);
+  });
+
+  test('watchUser resolves a single user doc by id', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    await firestore.collection('users').doc('driver-1').set({
+      'email': 'driver@example.com',
+      'displayName': 'Sam Driver',
+      'role': 'driver',
+    });
+
+    final user = await service.watchUser('driver-1').first;
+
+    expect(user.id, 'driver-1');
+    expect(user.displayName, 'Sam Driver');
   });
 
   test('watchVendorReviews returns only that vendor\'s reviews, newest first', () async {

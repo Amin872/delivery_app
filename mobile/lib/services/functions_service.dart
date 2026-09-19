@@ -33,4 +33,29 @@ class FunctionsService {
           if (proofImageUrl != null) 'proofImageUrl': proofImageUrl,
         }));
   }
+
+  /// Calls the `adminCancelOrder` callable, which force-cancels [orderId] on
+  /// an admin's behalf (see functions/src/orders.ts). Only succeeds while
+  /// the order is still pending/accepted/preparing/readyForPickup — throws
+  /// an [AppException] `action-no-longer-available` once a driver has
+  /// already picked it up, and `permission-denied` if the caller isn't an
+  /// admin.
+  Future<void> adminCancelOrder(String orderId) {
+    return guardFuture(
+        () => _functions.httpsCallable('adminCancelOrder').call({'orderId': orderId}));
+  }
+
+  /// Calls the `adminReassignDriver` callable, which atomically reassigns
+  /// [orderId] to [driverId] on an admin's behalf (see
+  /// functions/src/orders.ts). Only succeeds while the order is
+  /// readyForPickup or pickedUp — throws an [AppException]
+  /// `action-no-longer-available` once the order is delivering or later,
+  /// and `not-found`/`permission-denied` if [driverId] isn't a real driver
+  /// account.
+  Future<void> adminReassignDriver(String orderId, String driverId) {
+    return guardFuture(() => _functions.httpsCallable('adminReassignDriver').call({
+          'orderId': orderId,
+          'driverId': driverId,
+        }));
+  }
 }

@@ -49,6 +49,15 @@ class FirestoreService {
         (snap) => snap.docs.map((doc) => AppUser.fromMap(doc.id, doc.data())).toList()));
   }
 
+  // Single-user lookup, e.g. resolving a DeliveryOrder.customerId to a name
+  // for AdminOrderDetailScreen — same isSelf(userId) || hasRole('admin')
+  // read rule as watchAllUsers above, just scoped to one doc instead of
+  // streaming the whole collection for a one-name lookup.
+  Stream<AppUser> watchUser(String userId) {
+    return guardStream(
+        _users.doc(userId).snapshots().map((doc) => AppUser.fromMap(doc.id, doc.data()!)));
+  }
+
   // A customer's own favorites — firestore.rules' users/{userId} update rule
   // already permits a signed-in user to change any of their own profile
   // fields (only `role` is pinned), so no rules change was needed for this.
@@ -382,6 +391,17 @@ class FirestoreService {
         .doc(driverId)
         .snapshots()
         .map((doc) => Driver.fromMap(doc.id, doc.data()!)));
+  }
+
+  // Every driver's availability, for AdminOrderDetailScreen's reassignment
+  // picker. `drivers/{driverId}` read is `isSignedIn()` in firestore.rules —
+  // already broad enough for any signed-in admin — so no rules change was
+  // needed. Driver identity (name/email) isn't on this doc; the picker joins
+  // this against watchAllUsers() by id, same as AdminUsersScreen already
+  // does for the user directory.
+  Stream<List<Driver>> watchAllDrivers() {
+    return guardStream(_drivers.snapshots().map(
+        (snap) => snap.docs.map((doc) => Driver.fromMap(doc.id, doc.data())).toList()));
   }
 
   Future<void> setDriverAvailability(String driverId, bool isAvailable) {

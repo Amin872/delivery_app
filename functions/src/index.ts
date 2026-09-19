@@ -1,2 +1,9 @@
-export { onOrderCreated, onOrderStatusChanged, acceptDelivery, advanceDelivery } from "./orders";
+export {
+  onOrderCreated,
+  onOrderStatusChanged,
+  acceptDelivery,
+  advanceDelivery,
+  adminCancelOrder,
+  adminReassignDriver,
+} from "./orders";
 export { onReviewCreated } from "./reviews";

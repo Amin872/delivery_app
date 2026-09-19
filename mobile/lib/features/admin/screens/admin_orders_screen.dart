@@ -13,7 +13,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
 import '../../../routing/page_transitions.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
-import '../../customer/screens/order_tracking_screen.dart';
+import 'admin_order_detail_screen.dart';
 
 final adminOrdersProvider =
     StreamProvider.autoDispose.family<List<DeliveryOrder>, OrderStatus?>((ref, status) {
@@ -90,7 +90,7 @@ class _AdminOrdersScreenState extends ConsumerState<AdminOrdersScreen> {
                         ),
                         trailing: Text(currencyFormat.format(order.total)),
                         onTap: () => Navigator.of(context)
-                            .push(fadeSlideRoute(OrderTrackingScreen(orderId: order.id))),
+                            .push(fadeSlideRoute(AdminOrderDetailScreen(orderId: order.id))),
                       ),
                     ).staggeredEntrance(index);
                   },
