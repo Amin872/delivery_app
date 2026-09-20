@@ -49,12 +49,18 @@ class StarRatingInput extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.size = 32,
+    this.keyPrefix,
     super.key,
   });
 
   final int value;
   final ValueChanged<int> onChanged;
   final double size;
+
+  /// When set, each star gets its own `ValueKey('${keyPrefix}_star_N')` so
+  /// integration tests can tap a specific star of a specific rating row
+  /// (e.g. two `StarRatingInput`s side by side in `RateOrderDialog`).
+  final String? keyPrefix;
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +70,7 @@ class StarRatingInput extends StatelessWidget {
       children: [
         for (var i = 1; i <= 5; i++)
           IconButton(
+            key: keyPrefix == null ? null : ValueKey('${keyPrefix}_star_$i'),
             icon: AnimatedScale(
               scale: i <= value ? 1.15 : 1.0,
               duration: const Duration(milliseconds: 150),

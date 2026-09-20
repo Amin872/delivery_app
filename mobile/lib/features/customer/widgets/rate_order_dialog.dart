@@ -84,15 +84,18 @@ class _RateOrderDialogState extends ConsumerState<RateOrderDialog> {
           StarRatingInput(
             value: _vendorRating,
             onChanged: (value) => setState(() => _vendorRating = value),
+            keyPrefix: 'vendor_rating',
           ),
           const SizedBox(height: 8),
           Text(l10n.driverRatingLabel, style: Theme.of(context).textTheme.titleSmall),
           StarRatingInput(
             value: _driverRating,
             onChanged: (value) => setState(() => _driverRating = value),
+            keyPrefix: 'driver_rating',
           ),
           const SizedBox(height: 12),
           TextField(
+            key: const ValueKey('review_comment_field'),
             controller: _commentController,
             decoration: InputDecoration(labelText: l10n.reviewCommentLabel),
             maxLines: 2,
@@ -112,6 +115,7 @@ class _RateOrderDialogState extends ConsumerState<RateOrderDialog> {
           child: Text(l10n.cancelButton),
         ),
         FilledButton(
+          key: const ValueKey('review_submit_button'),
           onPressed: _submitting ? null : _submit,
           child: _submitting
               ? buttonSpinner(Theme.of(context).colorScheme.onPrimary, size: 16)
