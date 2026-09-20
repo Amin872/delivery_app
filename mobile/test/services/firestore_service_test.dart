@@ -190,6 +190,29 @@ void main() {
     expect(active?.status, OrderStatus.pickedUp);
   });
 
+  test('watchOrderDriverLocation resolves null before any publish, then the published position',
+      () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    expect(await service.watchOrderDriverLocation('order-1').first, isNull);
+
+    await firestore
+        .collection('orders')
+        .doc('order-1')
+        .collection('driverLocation')
+        .doc('current')
+        .set({
+      'latitude': 33.5,
+      'longitude': 36.3,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+
+    final location = await service.watchOrderDriverLocation('order-1').first;
+    expect(location?.latitude, 33.5);
+    expect(location?.longitude, 36.3);
+  });
+
   test('cancelOrder sets the order status to cancelled', () async {
     final firestore = FakeFirebaseFirestore();
     final service = FirestoreService(firestore: firestore);

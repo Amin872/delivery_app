@@ -104,13 +104,17 @@ service cloud.firestore {
       allow read: if true;
     }
 
-    // drivers/{driverId} doc id == auth uid. Availability/location visible
-    // to any signed-in user (needed for live order tracking); editable only
-    // by the driver themself — except ratingSum/ratingCount, which only the
-    // onReviewCreated Cloud Function (Admin SDK) may touch, same reasoning
-    // as vendors/{vendorId} above.
+    // drivers/{driverId} doc id == auth uid. Read is self-or-admin only —
+    // this doc's lastKnownLocation is a coarse, general-purpose field (still
+    // used by AdminDriverDetailScreen's dispatch view), not the
+    // customer-facing live-tracking feed. Customer-facing live location for
+    // an active delivery lives at orders/{orderId}/driverLocation/{locationId}
+    // below, scoped to that specific order's participants — see the Driver
+    // Live Location redesign. Editable only by the driver themself — except
+    // ratingSum/ratingCount, which only the onReviewCreated Cloud Function
+    // (Admin SDK) may touch, same reasoning as vendors/{vendorId} above.
     match /drivers/{driverId} {
-      allow read: if isSignedIn();
+      allow read: if isSelf(driverId) || hasRole('admin');
       allow create: if isSelf(driverId);
       allow update: if isSelf(driverId) &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ratingSum', 'ratingCount']);
@@ -151,6 +155,30 @@ service cloud.firestore {
       );
 
       allow delete: if false;
+
+      // orders/{orderId}/driverLocation/{locationId} — the customer-facing
+      // live position of the driver currently delivering this specific
+      // order (see the Driver Live Location redesign). Deliberately scoped
+      // to this order's own participants, mirroring the read branches of
+      // orders/{orderId} above (minus the unclaimed-queue branch, which
+      // doesn't apply once a driver is assigned) — NOT the broad
+      // isSignedIn() shape that drivers/{driverId} used to have. Only the
+      // driver actually assigned to this order may publish to it, and only
+      // while the order is in an active-delivery status, matching
+      // FirestoreService.watchActiveDriverOrder's pickedUp/delivering
+      // definition.
+      match /driverLocation/{locationId} {
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/orders/$(orderId)).data.customerId == request.auth.uid ||
+          get(/databases/$(database)/documents/orders/$(orderId)).data.driverId == request.auth.uid ||
+          get(/databases/$(database)/documents/vendors/$(get(/databases/$(database)/documents/orders/$(orderId)).data.vendorId)).data.ownerId == request.auth.uid ||
+          hasRole('admin')
+        );
+        allow create, update: if isSignedIn() &&
+          get(/databases/$(database)/documents/orders/$(orderId)).data.driverId == request.auth.uid &&
+          get(/databases/$(database)/documents/orders/$(orderId)).data.status in ['pickedUp', 'delivering'];
+        allow delete: if false;
+      }
     }
 
     // reviews/{orderId} — doc id is the order's id, not auto-generated, so

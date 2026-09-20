@@ -438,6 +438,19 @@ class FirestoreService {
         .map((doc) => Driver.fromMap(doc.id, doc.data()!)));
   }
 
+  // The customer-facing live-tracking feed for one specific order — see the
+  // Driver Live Location redesign and firestore.rules'
+  // orders/{orderId}/driverLocation/{locationId} block. Null before the
+  // assigned driver's first publish (or once tracking is no longer active).
+  Stream<DriverLocation?> watchOrderDriverLocation(String orderId) {
+    return guardStream(_orders
+        .doc(orderId)
+        .collection('driverLocation')
+        .doc('current')
+        .snapshots()
+        .map((doc) => doc.exists ? DriverLocation.fromMap(doc.data()!) : null));
+  }
+
   // Every driver's availability, for AdminOrderDetailScreen's reassignment
   // picker. `drivers/{driverId}` read is `isSignedIn()` in firestore.rules —
   // already broad enough for any signed-in admin — so no rules change was

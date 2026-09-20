@@ -127,7 +127,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
               if (showDriverMap)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: DriverTrackingMap(driverId: order.driverId!),
+                  child: DriverTrackingMap(orderId: order.id),
                 ),
               if (order.status == OrderStatus.cancelled)
                 ListTile(

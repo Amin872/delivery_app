@@ -7,8 +7,9 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/driver.dart';
 import '../screens/customer_home_screen.dart' show firestoreServiceProvider;
 
-final driverLocationProvider = StreamProvider.autoDispose.family<Driver, String>((ref, driverId) {
-  return ref.watch(firestoreServiceProvider).watchDriver(driverId);
+final driverOrderLocationProvider =
+    StreamProvider.autoDispose.family<DriverLocation?, String>((ref, orderId) {
+  return ref.watch(firestoreServiceProvider).watchOrderDriverLocation(orderId);
 });
 
 // GoogleMap tiles aren't `Theme`-aware — without this the map renders as a
@@ -34,15 +35,16 @@ const _darkMapStyle = '''
 ]
 ''';
 
-/// Live map of [driverId]'s current position, fed by the `drivers/{uid}`
-/// doc that `driverLocationSyncProvider` (driver side) keeps updated while
-/// a delivery is in flight. A `ConsumerStatefulWidget` because the map
-/// camera needs to re-center via a `GoogleMapController` as new positions
-/// arrive, which a stateless rebuild can't drive.
+/// Live map of the driver currently delivering [orderId], fed by
+/// `orders/{orderId}/driverLocation/current` — the order-scoped feed that
+/// `driverLocationSyncProvider` (driver side) keeps updated while that
+/// specific delivery is in flight. A `ConsumerStatefulWidget` because the
+/// map camera needs to re-center via a `GoogleMapController` as new
+/// positions arrive, which a stateless rebuild can't drive.
 class DriverTrackingMap extends ConsumerStatefulWidget {
-  const DriverTrackingMap({required this.driverId, super.key});
+  const DriverTrackingMap({required this.orderId, super.key});
 
-  final String driverId;
+  final String orderId;
 
   @override
   ConsumerState<DriverTrackingMap> createState() => _DriverTrackingMapState();
@@ -60,10 +62,10 @@ class _DriverTrackingMapState extends ConsumerState<DriverTrackingMap> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final driverAsync = ref.watch(driverLocationProvider(widget.driverId));
+    final locationAsync = ref.watch(driverOrderLocationProvider(widget.orderId));
 
-    ref.listen(driverLocationProvider(widget.driverId), (previous, next) {
-      final location = next.valueOrNull?.lastKnownLocation;
+    ref.listen(driverOrderLocationProvider(widget.orderId), (previous, next) {
+      final location = next.valueOrNull;
       if (location != null) {
         _controller?.animateCamera(
           CameraUpdate.newLatLng(LatLng(location.latitude, location.longitude)),
@@ -71,12 +73,12 @@ class _DriverTrackingMapState extends ConsumerState<DriverTrackingMap> {
       }
     });
 
-    final location = driverAsync.valueOrNull?.lastKnownLocation;
+    final location = locationAsync.valueOrNull;
     if (location == null) {
       return SizedBox(
         height: 220,
         child: Center(
-          child: driverAsync.isLoading
+          child: locationAsync.isLoading
               ? screenSpinner(context)
               : Text(l10n.waitingForDriverLocationMessage),
         ),
