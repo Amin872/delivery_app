@@ -452,11 +452,12 @@ class FirestoreService {
   }
 
   // Every driver's availability, for AdminOrderDetailScreen's reassignment
-  // picker. `drivers/{driverId}` read is `isSignedIn()` in firestore.rules —
-  // already broad enough for any signed-in admin — so no rules change was
-  // needed. Driver identity (name/email) isn't on this doc; the picker joins
-  // this against watchAllUsers() by id, same as AdminUsersScreen already
-  // does for the user directory.
+  // picker. `drivers/{driverId}` read is `isSelf(driverId) || hasRole('admin')`
+  // in firestore.rules (see the Driver Live Location redesign) — already
+  // covers any signed-in admin — so no rules change was needed. Driver
+  // identity (name/email) isn't on this doc; the picker joins this against
+  // watchAllUsers() by id, same as AdminUsersScreen already does for the
+  // user directory.
   Stream<List<Driver>> watchAllDrivers() {
     return guardStream(_drivers.snapshots().map(
         (snap) => snap.docs.map((doc) => Driver.fromMap(doc.id, doc.data())).toList()));
