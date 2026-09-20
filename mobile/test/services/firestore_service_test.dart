@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:delivery_app/core/errors/app_exception.dart';
 import 'package:delivery_app/models/city.dart';
+import 'package:delivery_app/models/district.dart';
 import 'package:delivery_app/models/governorate.dart';
 import 'package:delivery_app/models/order.dart';
 import 'package:delivery_app/models/review.dart';
@@ -613,5 +614,120 @@ void main() {
 
     final doc = await firestore.collection('cities').doc('damascus').get();
     expect(doc.data()!['enabled'], isFalse);
+  });
+
+  test('watchDistricts returns every district ordered by `order`, regardless of insertion order',
+      () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    await firestore.collection('districts').doc('douma').set({
+      'nameEn': 'Douma',
+      'nameAr': 'دوما',
+      'cityId': 'damascus',
+      'enabled': true,
+      'order': 1,
+    });
+    await firestore.collection('districts').doc('al_mazzeh').set({
+      'nameEn': 'Al-Mazzeh',
+      'nameAr': 'المزة',
+      'cityId': 'damascus',
+      'enabled': false,
+      'order': 0,
+    });
+
+    final districts = await service.watchDistricts().first;
+
+    expect(districts.map((d) => d.id).toList(), ['al_mazzeh', 'douma']);
+    expect(districts.firstWhere((d) => d.id == 'al_mazzeh').enabled, isFalse);
+    expect(districts.firstWhere((d) => d.id == 'douma').cityId, 'damascus');
+  });
+
+  test('addDistrict creates a new district doc', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    await service.addDistrict(const DistrictOption(
+      id: 'al_mazzeh',
+      nameEn: 'Al-Mazzeh',
+      nameAr: 'المزة',
+      cityId: 'damascus',
+      enabled: true,
+      order: 0,
+    ));
+
+    final doc = await firestore.collection('districts').doc('al_mazzeh').get();
+    expect(doc.exists, isTrue);
+    expect(doc.data()!['cityId'], 'damascus');
+  });
+
+  test('addDistrict throws already-exists when the id is already taken', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+    await firestore.collection('districts').doc('al_mazzeh').set({
+      'nameEn': 'Al-Mazzeh',
+      'nameAr': 'المزة',
+      'cityId': 'damascus',
+      'enabled': true,
+      'order': 0,
+    });
+
+    await expectLater(
+      service.addDistrict(const DistrictOption(
+        id: 'al_mazzeh',
+        nameEn: 'Somewhere else',
+        nameAr: 'مكان آخر',
+        cityId: 'aleppo',
+        enabled: true,
+        order: 99,
+      )),
+      throwsA(isA<AppException>().having((e) => e.code, 'code', 'already-exists')),
+    );
+    // The original doc must be untouched by the rejected attempt.
+    final doc = await firestore.collection('districts').doc('al_mazzeh').get();
+    expect(doc.data()!['cityId'], 'damascus');
+  });
+
+  test('updateDistrict overwrites an existing district doc, including cityId', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+    await firestore.collection('districts').doc('al_mazzeh').set({
+      'nameEn': 'Al-Mazzeh',
+      'nameAr': 'المزة',
+      'cityId': 'damascus',
+      'enabled': true,
+      'order': 0,
+    });
+
+    await service.updateDistrict(const DistrictOption(
+      id: 'al_mazzeh',
+      nameEn: 'Al-Mazzeh',
+      nameAr: 'المزة',
+      cityId: 'aleppo',
+      enabled: true,
+      order: 5,
+    ));
+
+    final doc = await firestore.collection('districts').doc('al_mazzeh').get();
+    expect(doc.data()!['cityId'], 'aleppo');
+    expect(doc.data()!['order'], 5);
+  });
+
+  test('setDistrictEnabled updates only the enabled field', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+    await firestore.collection('districts').doc('al_mazzeh').set({
+      'nameEn': 'Al-Mazzeh',
+      'nameAr': 'المزة',
+      'cityId': 'damascus',
+      'enabled': true,
+      'order': 0,
+    });
+
+    await service.setDistrictEnabled('al_mazzeh', false);
+
+    final doc = await firestore.collection('districts').doc('al_mazzeh').get();
+    expect(doc.data()!['enabled'], isFalse);
+    expect(doc.data()!['cityId'], 'damascus');
   });
 }

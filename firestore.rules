@@ -247,5 +247,24 @@ service cloud.firestore {
       allow update: if hasRole('admin');
       allow delete: if false;
     }
+
+    // districts/{districtId} — Locations Phase 1 District data foundation
+    // (Governorate → City → District architecture). Top-level collection,
+    // NOT a subcollection of cities/{cityId} — same flat shape as cities/
+    // governorates above, with `cityId` as the foreign-key-style field
+    // pointing to its parent (mirrors cities/{cityId}'s own optional
+    // governorateId, except cityId here is required — a district with no
+    // city isn't a meaningful state, unlike a not-yet-grouped city).
+    // Unlike cities/governorates, both create AND update additionally
+    // require the referenced city to actually exist — no existing
+    // cities/governorates rule performs this kind of cross-collection
+    // check today, so this is a new, stricter pattern introduced
+    // specifically for districts, not a relaxation of anything existing.
+    match /districts/{districtId} {
+      allow read: if true;
+      allow create: if hasRole('admin') && !exists(/databases/$(database)/documents/districts/$(districtId)) && exists(/databases/$(database)/documents/cities/$(request.resource.data.cityId));
+      allow update: if hasRole('admin') && exists(/databases/$(database)/documents/cities/$(request.resource.data.cityId));
+      allow delete: if false;
+    }
   }
 }

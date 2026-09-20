@@ -5,6 +5,7 @@ import '../core/errors/guard.dart';
 import '../models/address.dart';
 import '../models/app_user.dart';
 import '../models/city.dart';
+import '../models/district.dart';
 import '../models/driver.dart';
 import '../models/governorate.dart';
 import '../models/order.dart';
@@ -45,6 +46,9 @@ class FirestoreService {
 
   CollectionReference<Map<String, dynamic>> get _governorates =>
       _db.collection('governorates');
+
+  CollectionReference<Map<String, dynamic>> get _districts =>
+      _db.collection('districts');
 
   // AdminUsersScreen's list. NOTE: firestore.rules' users/{userId} read rule
   // is currently `isSelf(userId)` only — there is no admin read branch yet
@@ -567,9 +571,9 @@ class FirestoreService {
   // Canonical city list for the Locations migration (see the migration
   // plan) — unfiltered, ordered by `order` only, so — same reasoning as
   // watchAllPromotions() above — a single-field automatic index is enough;
-  // no composite index needed. Not consumed by any screen yet in this
-  // phase: the fixed `City` enum remains the only city type any screen or
-  // model actually uses until a later migration phase.
+  // no composite index needed. Consumed across the app (customer city
+  // picker, vendor dashboard, Admin Locations, ...) via allCitiesProvider —
+  // the retired `City` enum is gone; every city picker is Firestore-backed.
   Stream<List<CityOption>> watchCities() {
     return guardStream(_cities
         .orderBy('order')
@@ -590,6 +594,19 @@ class FirestoreService {
         .snapshots()
         .map((snap) =>
             snap.docs.map((doc) => GovernorateOption.fromMap(doc.id, doc.data())).toList()));
+  }
+
+  // Canonical district list (Locations Phase 1 — District data foundation,
+  // see models/district.dart) — unfiltered, ordered by `order` only, same
+  // reasoning as watchCities()/watchGovernorates() above: a single-field
+  // automatic index is enough, no composite index needed. No UI consumes
+  // this yet in this phase (data foundation only).
+  Stream<List<DistrictOption>> watchDistricts() {
+    return guardStream(_districts
+        .orderBy('order')
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((doc) => DistrictOption.fromMap(doc.id, doc.data())).toList()));
   }
 
   // Admin Locations — governorates. addGovernorate runs in a transaction so
@@ -643,5 +660,29 @@ class FirestoreService {
 
   Future<void> setCityEnabled(String cityId, bool enabled) {
     return guardFuture(() => _cities.doc(cityId).update({'enabled': enabled}));
+  }
+
+  // Districts (Locations Phase 1 — data foundation only, no UI consumes
+  // this yet). Same transactional duplicate-id protection as
+  // addCity/addGovernorate above — district.cityId's existence is enforced
+  // server-side by firestore.rules' districts/{districtId} block (both
+  // create and update), not re-checked here client-side.
+  Future<void> addDistrict(DistrictOption district) {
+    return guardFuture(() => _db.runTransaction((tx) async {
+          final ref = _districts.doc(district.id);
+          final snapshot = await tx.get(ref);
+          if (snapshot.exists) {
+            throw const AppException('already-exists');
+          }
+          tx.set(ref, district.toMap());
+        }));
+  }
+
+  Future<void> updateDistrict(DistrictOption district) {
+    return guardFuture(() => _districts.doc(district.id).update(district.toMap()));
+  }
+
+  Future<void> setDistrictEnabled(String districtId, bool enabled) {
+    return guardFuture(() => _districts.doc(districtId).update({'enabled': enabled}));
   }
 }
