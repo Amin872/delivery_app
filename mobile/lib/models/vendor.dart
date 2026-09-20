@@ -1,13 +1,26 @@
 import '../core/parsing/safe_enum.dart';
+import 'city.dart';
 
 enum VendorApprovalStatus { pending, approved, rejected }
+
+enum VendorCategory { groceries, restaurants, bakery, drinks, pharmacy }
 
 class Vendor {
   final String id;
   final String ownerId;
   final String name;
   final String description;
+  // Wide hero/cover photo shown behind the storefront header — NOT the
+  // vendor's logo. Kept separate from [logoUrl] below: a storefront photo
+  // and a square logo mark are different assets with different aspect
+  // ratios, and conflating them was the root cause of the logo appearing
+  // cropped/wrong inside the (square) logo card.
   final String? imageUrl;
+  // Square-ish logo mark shown in the white logo card overlapping the hero
+  // boundary (see StoreInfoSection's `_VendorLogo`). Null means the vendor
+  // hasn't uploaded one yet — render a neutral placeholder, never fall back
+  // to [imageUrl] (that reintroduces the cropped-cover-photo-as-logo bug).
+  final String? logoUrl;
   final bool isOpen;
   final VendorApprovalStatus approvalStatus;
   // Written only by the `onReviewCreated` Cloud Function trigger (Admin SDK,
@@ -15,6 +28,20 @@ class Vendor {
   // architecture note in CLAUDE.md. Owners cannot self-inflate these.
   final num ratingSum;
   final int ratingCount;
+  final VendorCategory category;
+  final City city;
+  // Null means "not set by the vendor yet" — always render as an omitted
+  // badge, never a fabricated 0/placeholder value.
+  final double? deliveryFee;
+  final int? etaMinMinutes;
+  final int? etaMaxMinutes;
+  final double? minimumOrderAmount;
+  // "HH:mm" 24h, both null or both set — a single daily pair, not
+  // per-day-of-week hours (not asked for). Null means the vendor hasn't set
+  // hours yet: render real open/closed status from `isOpen` instead of a
+  // fabricated time (see VendorMenuScreen's status line).
+  final String? openTime;
+  final String? closeTime;
 
   const Vendor({
     required this.id,
@@ -22,10 +49,19 @@ class Vendor {
     required this.name,
     required this.description,
     this.imageUrl,
+    this.logoUrl,
     required this.isOpen,
     required this.approvalStatus,
     this.ratingSum = 0,
     this.ratingCount = 0,
+    this.category = VendorCategory.groceries,
+    this.city = City.damascus,
+    this.deliveryFee,
+    this.etaMinMinutes,
+    this.etaMaxMinutes,
+    this.minimumOrderAmount,
+    this.openTime,
+    this.closeTime,
   });
 
   double? get averageRating => ratingCount == 0 ? null : ratingSum / ratingCount;
@@ -37,6 +73,7 @@ class Vendor {
       name: map['name'] as String,
       description: map['description'] as String,
       imageUrl: map['imageUrl'] as String?,
+      logoUrl: map['logoUrl'] as String?,
       isOpen: map['isOpen'] as bool? ?? false,
       approvalStatus: enumByName(
         VendorApprovalStatus.values,
@@ -44,6 +81,25 @@ class Vendor {
       ),
       ratingSum: map['ratingSum'] as num? ?? 0,
       ratingCount: map['ratingCount'] as int? ?? 0,
+      // Not enumByName: this field postdates every vendor doc written
+      // before this release, so a missing/unrecognized value must fall
+      // back quietly instead of throwing AppException(malformed-data) and
+      // breaking watchOpenVendors() for every pre-existing vendor.
+      category: VendorCategory.values.firstWhere(
+        (c) => c.name == map['category'],
+        orElse: () => VendorCategory.groceries,
+      ),
+      // Same reasoning as category above — postdates every pre-existing doc.
+      city: City.values.firstWhere(
+        (c) => c.name == map['city'],
+        orElse: () => City.damascus,
+      ),
+      deliveryFee: (map['deliveryFee'] as num?)?.toDouble(),
+      etaMinMinutes: map['etaMinMinutes'] as int?,
+      etaMaxMinutes: map['etaMaxMinutes'] as int?,
+      minimumOrderAmount: (map['minimumOrderAmount'] as num?)?.toDouble(),
+      openTime: map['openTime'] as String?,
+      closeTime: map['closeTime'] as String?,
     );
   }
 
@@ -53,10 +109,19 @@ class Vendor {
       'name': name,
       'description': description,
       'imageUrl': imageUrl,
+      'logoUrl': logoUrl,
       'isOpen': isOpen,
       'approvalStatus': approvalStatus.name,
       'ratingSum': ratingSum,
       'ratingCount': ratingCount,
+      'category': category.name,
+      'city': city.name,
+      'deliveryFee': deliveryFee,
+      'etaMinMinutes': etaMinMinutes,
+      'etaMaxMinutes': etaMaxMinutes,
+      'minimumOrderAmount': minimumOrderAmount,
+      'openTime': openTime,
+      'closeTime': closeTime,
     };
   }
 }
@@ -68,6 +133,18 @@ class MenuItem {
   final double price;
   final String? imageUrl;
   final bool available;
+  final String? description;
+  // Free-text, vendor-authored menu grouping (e.g. "Burgers", "Sides") —
+  // deliberately not the fixed marketplace-wide VendorCategory enum, since
+  // one store's own menu sections are its own business, not a taxonomy the
+  // whole marketplace shares. Null groups the item into a generic fallback
+  // section (see core/discovery/menu_sections.dart).
+  final String? section;
+  // Real, Admin-SDK-aggregated popularity — incremented by the
+  // onOrderStatusChanged Cloud Function trigger when an order reaches
+  // 'delivered' (see functions/src/orders.ts), same
+  // client-cannot-self-inflate reasoning as Vendor.ratingSum/ratingCount.
+  final int orderCount;
 
   const MenuItem({
     required this.id,
@@ -76,6 +153,9 @@ class MenuItem {
     required this.price,
     this.imageUrl,
     required this.available,
+    this.description,
+    this.section,
+    this.orderCount = 0,
   });
 
   factory MenuItem.fromMap(String id, Map<String, dynamic> map) {
@@ -86,6 +166,9 @@ class MenuItem {
       price: (map['price'] as num).toDouble(),
       imageUrl: map['imageUrl'] as String?,
       available: map['available'] as bool? ?? true,
+      description: map['description'] as String?,
+      section: map['section'] as String?,
+      orderCount: map['orderCount'] as int? ?? 0,
     );
   }
 
@@ -96,6 +179,9 @@ class MenuItem {
       'price': price,
       'imageUrl': imageUrl,
       'available': available,
+      'description': description,
+      'section': section,
+      'orderCount': orderCount,
     };
   }
 }
