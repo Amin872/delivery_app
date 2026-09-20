@@ -46,6 +46,8 @@ class AppException implements Exception {
         return 'too-many-requests';
       case 'network-request-failed':
         return 'network-error';
+      case 'requires-recent-login':
+        return 'requires-recent-login';
       default:
         return 'unknown';
     }

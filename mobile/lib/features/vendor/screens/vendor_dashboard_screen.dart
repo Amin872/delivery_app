@@ -12,12 +12,15 @@ import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/confirm_dialog.dart';
+import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../models/city.dart';
 import '../../../models/order.dart';
+import '../../../models/vendor.dart';
 import '../../../routing/page_transitions.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
@@ -27,6 +30,10 @@ import 'vendor_stats_screen.dart';
 final vendorOrdersProvider =
     StreamProvider.autoDispose.family<List<DeliveryOrder>, String>((ref, vendorId) {
   return ref.watch(firestoreServiceProvider).watchVendorOrders(vendorId);
+});
+
+final vendorSelfProvider = StreamProvider.autoDispose.family<Vendor, String>((ref, vendorId) {
+  return ref.watch(firestoreServiceProvider).watchVendor(vendorId);
 });
 
 // Beyond `readyForPickup`, only the `acceptDelivery` callable (driver side)
@@ -93,6 +100,17 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
     }
   }
 
+  Future<void> _openStoreDetailsForm(Vendor vendor) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: _StoreDetailsForm(vendor: vendor),
+      ),
+    );
+  }
+
   Future<void> _confirmCancel(DeliveryOrder order) async {
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showConfirmDialog(context, message: l10n.cancelOrderConfirmMessage);
@@ -121,6 +139,7 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
   Widget build(BuildContext context) {
     final vendorId = widget.vendorId;
     final ordersAsync = ref.watch(vendorOrdersProvider(vendorId));
+    final vendorSelf = ref.watch(vendorSelfProvider(vendorId)).valueOrNull;
     final l10n = AppLocalizations.of(context)!;
     final currencyFormat = ref.watch(currencyFormatProvider);
 
@@ -128,6 +147,18 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
       appBar: AppBar(
         title: Text(l10n.incomingOrdersTitle),
         actions: [
+          if (vendorSelf != null)
+            Tooltip(
+              message: l10n.vendorOpenTooltip,
+              child: Switch(
+                key: const ValueKey('vendor_open_switch'),
+                value: vendorSelf.isOpen,
+                onChanged: (value) {
+                  HapticFeedback.selectionClick();
+                  ref.read(firestoreServiceProvider).setVendorOpen(vendorId, value);
+                },
+              ),
+            ),
           IconButton(
             icon: _uploadingStorefrontImage
                 ? buttonSpinner(Theme.of(context).colorScheme.onSurface, size: 16)
@@ -135,6 +166,12 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
             tooltip: l10n.changeStorefrontPhotoTooltip,
             onPressed: _uploadingStorefrontImage ? null : _changeStorefrontImage,
           ),
+          if (vendorSelf != null)
+            IconButton(
+              icon: const Icon(Icons.storefront_outlined),
+              tooltip: l10n.editStoreDetailsTooltip,
+              onPressed: () => _openStoreDetailsForm(vendorSelf),
+            ),
           IconButton(
             icon: const Icon(Icons.bar_chart),
             tooltip: l10n.vendorStatsTitle,
@@ -185,15 +222,28 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
                         ),
                       if (next != null) ...[
                         const SizedBox(width: 8),
-                        TextButton(
-                          onPressed: () {
-                            HapticFeedback.lightImpact();
-                            ref
-                                .read(firestoreServiceProvider)
-                                .updateOrderStatus(order.id, next);
-                          },
-                          child:
-                              Text(l10n.advanceStatusButtonLabel(orderStatusLabel(context, next))),
+                        // ListTile computes trailing's preferred width by
+                        // asking it to lay out with unbounded constraints;
+                        // TextButton's internal InputPadding does a real
+                        // (non-dry) child layout() call during that probe,
+                        // which throws on the resulting infinite width. A
+                        // bounded ConstrainedBox absorbs the unbounded probe
+                        // before it ever reaches TextButton.
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 140),
+                          child: TextButton(
+                            onPressed: () {
+                              HapticFeedback.lightImpact();
+                              ref
+                                  .read(firestoreServiceProvider)
+                                  .updateOrderStatus(order.id, next);
+                            },
+                            child: Text(
+                              l10n.advanceStatusButtonLabel(orderStatusLabel(context, next)),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ),
                       ],
                     ],
@@ -209,5 +259,247 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
         ),
       ),
     );
+  }
+}
+
+class _StoreDetailsForm extends ConsumerStatefulWidget {
+  const _StoreDetailsForm({required this.vendor});
+
+  final Vendor vendor;
+
+  @override
+  ConsumerState<_StoreDetailsForm> createState() => _StoreDetailsFormState();
+}
+
+class _StoreDetailsFormState extends ConsumerState<_StoreDetailsForm> {
+  final _formKey = GlobalKey<FormState>();
+  late VendorCategory _category;
+  late City _city;
+  late final TextEditingController _feeController;
+  late final TextEditingController _etaMinController;
+  late final TextEditingController _etaMaxController;
+  late final TextEditingController _minOrderController;
+  TimeOfDay? _openTime;
+  TimeOfDay? _closeTime;
+  bool _isSubmitting = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _category = widget.vendor.category;
+    _city = widget.vendor.city;
+    _feeController =
+        TextEditingController(text: widget.vendor.deliveryFee?.toStringAsFixed(2) ?? '');
+    _etaMinController = TextEditingController(text: widget.vendor.etaMinMinutes?.toString() ?? '');
+    _etaMaxController = TextEditingController(text: widget.vendor.etaMaxMinutes?.toString() ?? '');
+    _minOrderController =
+        TextEditingController(text: widget.vendor.minimumOrderAmount?.toStringAsFixed(2) ?? '');
+    _openTime = _hhmmToTimeOfDay(widget.vendor.openTime);
+    _closeTime = _hhmmToTimeOfDay(widget.vendor.closeTime);
+  }
+
+  @override
+  void dispose() {
+    _feeController.dispose();
+    _etaMinController.dispose();
+    _etaMaxController.dispose();
+    _minOrderController.dispose();
+    super.dispose();
+  }
+
+  static TimeOfDay? _hhmmToTimeOfDay(String? value) {
+    if (value == null) return null;
+    final parts = value.split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  static String _timeOfDayToHHmm(TimeOfDay time) =>
+      '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _pickTime({required bool isOpenTime}) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: (isOpenTime ? _openTime : _closeTime) ?? TimeOfDay.now(),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isOpenTime) {
+        _openTime = picked;
+      } else {
+        _closeTime = picked;
+      }
+    });
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+    try {
+      await ref.read(firestoreServiceProvider).updateVendorDetails(
+            widget.vendor.id,
+            category: _category,
+            city: _city,
+            deliveryFee: double.tryParse(_feeController.text.trim()),
+            etaMinMinutes: int.tryParse(_etaMinController.text.trim()),
+            etaMaxMinutes: int.tryParse(_etaMaxController.text.trim()),
+            minimumOrderAmount: double.tryParse(_minOrderController.text.trim()),
+            openTime: _openTime == null ? null : _timeOfDayToHHmm(_openTime!),
+            closeTime: _closeTime == null ? null : _timeOfDayToHHmm(_closeTime!),
+          );
+      if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
+        ScaffoldMessenger.of(context).showSnackBar(
+          buildAppSnackBar(Theme.of(context).colorScheme, l10n.storeDetailsUpdatedMessage),
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _errorMessage = localizedErrorMessage(context, error));
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(l10n.editStoreDetailsTitle, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<VendorCategory>(
+              initialValue: _category,
+              decoration: InputDecoration(labelText: l10n.categoryFieldLabel),
+              items: [
+                for (final category in VendorCategory.values)
+                  DropdownMenuItem(value: category, child: Text(vendorCategoryLabel(context, category))),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => _category = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<City>(
+              initialValue: _city,
+              decoration: InputDecoration(labelText: l10n.cityFieldLabel),
+              items: [
+                for (final city in City.values)
+                  DropdownMenuItem(value: city, child: Text(cityLabel(context, city))),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => _city = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _feeController,
+              decoration: InputDecoration(labelText: l10n.deliveryFeeFieldLabel),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) return null;
+                return double.tryParse(value.trim()) == null ? l10n.invalidPriceError : null;
+              },
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _etaMinController,
+                    decoration: InputDecoration(labelText: l10n.etaMinFieldLabel),
+                    keyboardType: TextInputType.number,
+                    validator: (value) => _validateEta(value, l10n),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _etaMaxController,
+                    decoration: InputDecoration(labelText: l10n.etaMaxFieldLabel),
+                    keyboardType: TextInputType.number,
+                    validator: (value) => _validateEta(value, l10n),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _minOrderController,
+              decoration: InputDecoration(labelText: l10n.minimumOrderFieldLabel),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) return null;
+                return double.tryParse(value.trim()) == null ? l10n.invalidPriceError : null;
+              },
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => _pickTime(isOpenTime: true),
+                    child: Text(
+                      _openTime == null
+                          ? l10n.openTimeFieldLabel
+                          : '${l10n.openTimeFieldLabel}: ${_openTime!.format(context)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => _pickTime(isOpenTime: false),
+                    child: Text(
+                      _closeTime == null
+                          ? l10n.closeTimeFieldLabel
+                          : '${l10n.closeTimeFieldLabel}: ${_closeTime!.format(context)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (_errorMessage != null)
+              Text(_errorMessage!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            GradientButton(
+              onPressed: _isSubmitting ? null : _save,
+              child: _isSubmitting
+                  ? buttonSpinner(Theme.of(context).colorScheme.onPrimary)
+                  : Text(l10n.saveButton),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String? _validateEta(String? value, AppLocalizations l10n) {
+    if (value == null || value.trim().isEmpty) return null;
+    final parsed = int.tryParse(value.trim());
+    if (parsed == null || parsed <= 0) return l10n.invalidPriceError;
+    final min = int.tryParse(_etaMinController.text.trim());
+    final max = int.tryParse(_etaMaxController.text.trim());
+    if (min != null && max != null && min > max) return l10n.invalidPriceError;
+    return null;
   }
 }

@@ -11,6 +11,29 @@ final driverLocationProvider = StreamProvider.autoDispose.family<Driver, String>
   return ref.watch(firestoreServiceProvider).watchDriver(driverId);
 });
 
+// GoogleMap tiles aren't `Theme`-aware — without this the map renders as a
+// bright rectangle inside an otherwise dark screen. Standard Google Maps
+// "Night mode" style JSON (widely published in Google's own Maps styling
+// docs), applied only when the app is actually in dark mode.
+const _darkMapStyle = '''
+[
+  {"elementType": "geometry", "stylers": [{"color": "#212121"}]},
+  {"elementType": "labels.icon", "stylers": [{"visibility": "off"}]},
+  {"elementType": "labels.text.fill", "stylers": [{"color": "#757575"}]},
+  {"elementType": "labels.text.stroke", "stylers": [{"color": "#212121"}]},
+  {"featureType": "administrative", "elementType": "geometry", "stylers": [{"color": "#757575"}]},
+  {"featureType": "poi", "elementType": "geometry", "stylers": [{"color": "#2c2c2c"}]},
+  {"featureType": "poi.park", "elementType": "geometry", "stylers": [{"color": "#1b1b1b"}]},
+  {"featureType": "road", "elementType": "geometry.fill", "stylers": [{"color": "#2c2c2c"}]},
+  {"featureType": "road", "elementType": "geometry.stroke", "stylers": [{"color": "#000000"}]},
+  {"featureType": "road.arterial", "elementType": "geometry", "stylers": [{"color": "#373737"}]},
+  {"featureType": "road.highway", "elementType": "geometry", "stylers": [{"color": "#3c3c3c"}]},
+  {"featureType": "transit", "elementType": "geometry", "stylers": [{"color": "#2f2f2f"}]},
+  {"featureType": "water", "elementType": "geometry", "stylers": [{"color": "#000000"}]},
+  {"featureType": "water", "elementType": "labels.text.fill", "stylers": [{"color": "#3d3d3d"}]}
+]
+''';
+
 /// Live map of [driverId]'s current position, fed by the `drivers/{uid}`
 /// doc that `driverLocationSyncProvider` (driver side) keeps updated while
 /// a delivery is in flight. A `ConsumerStatefulWidget` because the map
@@ -71,6 +94,7 @@ class _DriverTrackingMapState extends ConsumerState<DriverTrackingMap> {
           markers: {Marker(markerId: const MarkerId('driver'), position: position)},
           myLocationButtonEnabled: false,
           zoomControlsEnabled: false,
+          style: Theme.of(context).brightness == Brightness.dark ? _darkMapStyle : null,
         ),
       ),
     );

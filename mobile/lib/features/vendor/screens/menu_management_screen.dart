@@ -97,6 +97,12 @@ class MenuManagementScreen extends ConsumerWidget {
                         value: item.available,
                         onChanged: (value) {
                           HapticFeedback.selectionClick();
+                          // updateMenuItem writes via .set() (full overwrite,
+                          // not .update()) — every field not being changed
+                          // here must be carried over explicitly, especially
+                          // orderCount: it's aggregated server-side by a
+                          // Cloud Function (see MenuItem's doc comment) and
+                          // would silently reset to 0 if omitted.
                           ref.read(firestoreServiceProvider).updateMenuItem(
                                 vendorId,
                                 MenuItem(
@@ -106,6 +112,9 @@ class MenuManagementScreen extends ConsumerWidget {
                                   price: item.price,
                                   imageUrl: item.imageUrl,
                                   available: value,
+                                  description: item.description,
+                                  section: item.section,
+                                  orderCount: item.orderCount,
                                 ),
                               );
                         },
@@ -150,6 +159,8 @@ class _MenuItemFormState extends ConsumerState<_MenuItemForm> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _priceController;
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _sectionController;
   late bool _available;
   File? _pickedImage;
   bool _isSubmitting = false;
@@ -163,6 +174,8 @@ class _MenuItemFormState extends ConsumerState<_MenuItemForm> {
     _nameController = TextEditingController(text: widget.existing?.name ?? '');
     _priceController =
         TextEditingController(text: widget.existing?.price.toStringAsFixed(2) ?? '');
+    _descriptionController = TextEditingController(text: widget.existing?.description ?? '');
+    _sectionController = TextEditingController(text: widget.existing?.section ?? '');
     _available = widget.existing?.available ?? true;
   }
 
@@ -170,6 +183,8 @@ class _MenuItemFormState extends ConsumerState<_MenuItemForm> {
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
+    _descriptionController.dispose();
+    _sectionController.dispose();
     super.dispose();
   }
 
@@ -188,12 +203,23 @@ class _MenuItemFormState extends ConsumerState<_MenuItemForm> {
       final firestore = ref.read(firestoreServiceProvider);
       final name = _nameController.text.trim();
       final price = double.parse(_priceController.text.trim());
+      final description =
+          _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim();
+      final section = _sectionController.text.trim().isEmpty ? null : _sectionController.text.trim();
       final isNew = widget.existing == null;
 
       final itemId = isNew
           ? await firestore.addMenuItem(
               widget.vendorId,
-              MenuItem(id: '', vendorId: widget.vendorId, name: name, price: price, available: _available),
+              MenuItem(
+                id: '',
+                vendorId: widget.vendorId,
+                name: name,
+                price: price,
+                available: _available,
+                description: description,
+                section: section,
+              ),
             )
           : widget.existing!.id;
 
@@ -206,7 +232,11 @@ class _MenuItemFormState extends ConsumerState<_MenuItemForm> {
 
       // A brand-new item with no picked image is already fully saved by
       // addMenuItem above; an edit, or a new item that just got an image,
-      // still needs this write.
+      // still needs this write. updateMenuItem writes via .set() (full
+      // overwrite), so orderCount — aggregated server-side, see MenuItem's
+      // doc comment — must be carried over from the existing item rather
+      // than left at its default 0, or every edit would silently erase a
+      // dish's popularity.
       if (!isNew || _pickedImage != null) {
         await firestore.updateMenuItem(
           widget.vendorId,
@@ -217,6 +247,9 @@ class _MenuItemFormState extends ConsumerState<_MenuItemForm> {
             price: price,
             imageUrl: imageUrl,
             available: _available,
+            description: description,
+            section: section,
+            orderCount: widget.existing?.orderCount ?? 0,
           ),
         );
       }
@@ -255,6 +288,7 @@ class _MenuItemFormState extends ConsumerState<_MenuItemForm> {
             ),
             const SizedBox(height: 16),
             TextFormField(
+              key: const ValueKey('menu_item_name_field'),
               controller: _nameController,
               decoration: InputDecoration(labelText: l10n.itemNameLabel),
               validator: (value) =>
@@ -262,6 +296,7 @@ class _MenuItemFormState extends ConsumerState<_MenuItemForm> {
             ),
             const SizedBox(height: 12),
             TextFormField(
+              key: const ValueKey('menu_item_price_field'),
               controller: _priceController,
               decoration: InputDecoration(labelText: l10n.priceLabel),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -270,6 +305,19 @@ class _MenuItemFormState extends ConsumerState<_MenuItemForm> {
                 if (parsed == null || parsed <= 0) return l10n.invalidPriceError;
                 return null;
               },
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              key: const ValueKey('menu_item_description_field'),
+              controller: _descriptionController,
+              decoration: InputDecoration(labelText: l10n.itemDescriptionLabel),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              key: const ValueKey('menu_item_section_field'),
+              controller: _sectionController,
+              decoration: InputDecoration(labelText: l10n.itemSectionFieldLabel),
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -284,6 +332,7 @@ class _MenuItemFormState extends ConsumerState<_MenuItemForm> {
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             GradientButton(
+              key: const ValueKey('menu_item_save_button'),
               onPressed: _isSubmitting ? null : _save,
               child: _isSubmitting
                   ? buttonSpinner(Theme.of(context).colorScheme.onPrimary)

@@ -11,6 +11,7 @@ class AppUser {
   final String displayName;
   final UserRole role;
   final String? phoneNumber;
+  final List<String> favoriteVendorIds;
 
   const AppUser({
     required this.id,
@@ -18,6 +19,7 @@ class AppUser {
     required this.displayName,
     required this.role,
     this.phoneNumber,
+    this.favoriteVendorIds = const [],
   });
 
   factory AppUser.fromMap(String id, Map<String, dynamic> map) {
@@ -30,6 +32,8 @@ class AppUser {
       displayName: (map['displayName'] ?? map['fullName']) as String,
       role: enumByName(UserRole.values, map['role'] as String?),
       phoneNumber: map['phoneNumber'] as String?,
+      favoriteVendorIds:
+          (map['favoriteVendorIds'] as List<dynamic>?)?.cast<String>() ?? const [],
     );
   }
 
@@ -39,6 +43,7 @@ class AppUser {
       'displayName': displayName,
       'role': role.name,
       'phoneNumber': phoneNumber,
+      'favoriteVendorIds': favoriteVendorIds,
     };
   }
 }

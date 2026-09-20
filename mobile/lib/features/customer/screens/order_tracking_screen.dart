@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/providers/formatters_provider.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_spinner.dart';
@@ -97,19 +97,25 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
     final orderAsync = ref.watch(orderTrackingProvider(widget.orderId));
     final l10n = AppLocalizations.of(context)!;
     final currencyFormat = ref.watch(currencyFormatProvider);
+    final vendorTheme = VendorPalette.themeFrom(Theme.of(context));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.orderTrackingTitle),
-        actions: const [LanguageToggleButton()],
-      ),
-      body: ResponsiveCenter(
-        child: orderAsync.animatedWhen(
-          data: (order) {
+    return Theme(
+      data: vendorTheme,
+      child: Scaffold(
+        backgroundColor: VendorPalette.background,
+        appBar: AppBar(
+          backgroundColor: VendorPalette.background,
+          foregroundColor: VendorPalette.textPrimary,
+          title: Text(l10n.orderTrackingTitle),
+          actions: const [LanguageToggleButton()],
+        ),
+        body: ResponsiveCenter(
+          child: orderAsync.animatedWhen(
+            data: (order) {
           final currentIndex = order.status == OrderStatus.cancelled
               ? -1
               : _trackedStatuses.indexOf(order.status);
-          final colorScheme = Theme.of(context).colorScheme;
+          final colorScheme = vendorTheme.colorScheme;
           final showDriverMap = order.driverId != null &&
               (order.status == OrderStatus.pickedUp ||
                   order.status == OrderStatus.delivering);
@@ -130,21 +136,52 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                 )
               else
                 for (var i = 0; i < _trackedStatuses.length; i++)
-                  ListTile(
-                    leading: i <= currentIndex
-                        ? Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              gradient: AppGradients.primary(colorScheme),
-                              shape: BoxShape.circle,
+                  IntrinsicHeight(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Column(
+                            children: [
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: i <= currentIndex
+                                      ? colorScheme.primary
+                                      : colorScheme.surfaceContainerHighest,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: i <= currentIndex
+                                    ? Icon(Icons.check, color: colorScheme.onPrimary, size: 18)
+                                    : Icon(Icons.circle, color: colorScheme.outline, size: 8),
+                              ),
+                              if (i != _trackedStatuses.length - 1)
+                                Expanded(
+                                  child: Container(
+                                    width: 2,
+                                    color: i < currentIndex
+                                        ? colorScheme.primary
+                                        : colorScheme.outlineVariant,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 6, bottom: 20),
+                              child: Text(
+                                orderStatusLabel(context, _trackedStatuses[i]),
+                                style: i == currentIndex
+                                    ? const TextStyle(fontWeight: FontWeight.bold)
+                                    : null,
+                              ),
                             ),
-                            child: Icon(Icons.check, color: colorScheme.onPrimary, size: 18),
-                          )
-                        : Icon(Icons.radio_button_unchecked, color: colorScheme.outline),
-                    title: Text(
-                      orderStatusLabel(context, _trackedStatuses[i]),
-                      style: i == currentIndex ? const TextStyle(fontWeight: FontWeight.bold) : null,
+                          ),
+                        ],
+                      ),
                     ),
                   ).staggeredEntrance(i),
               const Divider(),
@@ -166,7 +203,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(l10n.proofOfDeliveryLabel, style: Theme.of(context).textTheme.titleSmall),
+                      Text(l10n.proofOfDeliveryLabel, style: vendorTheme.textTheme.titleSmall),
                       const SizedBox(height: 8),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
@@ -209,9 +246,14 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
             ],
           );
         },
-        loading: () => const ListSkeletonLoader(),
-        error: (error, _) =>
-            Center(child: Text(localizedErrorMessage(context, error))),
+            loading: () => const ListSkeletonLoader(),
+            error: (error, _) => Center(
+              child: Text(
+                localizedErrorMessage(context, error),
+                style: const TextStyle(color: VendorPalette.textSecondary),
+              ),
+            ),
+          ),
         ),
       ),
     );

@@ -6,41 +6,33 @@ import '../../../core/l10n/enum_labels.dart';
 import '../../../core/providers/formatters_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/animated_async.dart';
-import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
 import '../../../routing/page_transitions.dart';
-import 'customer_home_screen.dart' show firestoreServiceProvider;
+import 'my_orders_screen.dart' show customerOrdersProvider;
 import 'order_tracking_screen.dart';
 
-final customerOrdersProvider =
-    StreamProvider.autoDispose.family<List<DeliveryOrder>, String>((ref, customerId) {
-  return ref.watch(firestoreServiceProvider).watchCustomerOrders(customerId);
-});
+const _historyStatuses = {OrderStatus.delivered, OrderStatus.cancelled};
 
-// `delivered` reuses the app's existing centralized success-color token
-// (AppColors.success — already used wherever a real success state needs a
-// color ColorScheme has no role for) instead of a one-off hardcoded green,
-// so this status color stays in sync with the rest of the app automatically.
+// Same reasoning as MyOrdersScreen's own `_statusColor` — a delivered order
+// uses the app's centralized AppColors.success token rather than a
+// one-off hardcoded green, so this stays in sync with the rest of the app.
 Color _statusColor(ColorScheme colorScheme, OrderStatus status) {
-  switch (status) {
-    case OrderStatus.delivered:
-      return AppColors.success(colorScheme);
-    case OrderStatus.cancelled:
-      return colorScheme.error;
-    default:
-      return colorScheme.primary;
-  }
+  return status == OrderStatus.cancelled ? colorScheme.error : AppColors.success(colorScheme);
 }
 
-/// Same [VendorPalette] theme as CustomerHomeScreen/AccountScreen — this
-/// screen used to run on the separate ambient `AppTheme` (a different,
-/// burgundy-seeded palette), which is the inconsistency this pass fixes.
-class MyOrdersScreen extends ConsumerWidget {
-  const MyOrdersScreen({required this.customerId, super.key});
+/// "الطلبات السابقة" — the finished subset (delivered/cancelled) of the same
+/// real order stream [customerOrdersProvider] already exposes for
+/// MyOrdersScreen, filtered client-side rather than a second Firestore
+/// query, since it's the same small per-customer order list either way.
+///
+/// Same [VendorPalette] theme as MyOrdersScreen/AccountScreen — see that
+/// screen's doc for why this used to be a separate ambient-themed screen.
+class OrderHistoryScreen extends ConsumerWidget {
+  const OrderHistoryScreen({required this.customerId, super.key});
 
   final String customerId;
 
@@ -58,13 +50,13 @@ class MyOrdersScreen extends ConsumerWidget {
         appBar: AppBar(
           backgroundColor: VendorPalette.background,
           foregroundColor: VendorPalette.textPrimary,
-          title: Text(l10n.myOrdersTitle),
-          actions: const [LanguageToggleButton()],
+          title: Text(l10n.orderHistoryTitle),
         ),
         body: ResponsiveCenter(
           child: ordersAsync.animatedWhen(
             data: (orders) {
-              if (orders.isEmpty) {
+              final history = orders.where((o) => _historyStatuses.contains(o.status)).toList();
+              if (history.isEmpty) {
                 return Center(
                   child: Text(
                     l10n.noOrdersMessage,
@@ -74,9 +66,9 @@ class MyOrdersScreen extends ConsumerWidget {
               }
               return ListView.builder(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: orders.length,
+                itemCount: history.length,
                 itemBuilder: (context, index) {
-                  final order = orders[index];
+                  final order = history[index];
                   final colorScheme = Theme.of(context).colorScheme;
                   final statusColor = _statusColor(colorScheme, order.status);
                   return Card(

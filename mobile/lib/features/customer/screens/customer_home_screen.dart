@@ -1,19 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
+import '../../../core/discovery/vendor_carousels.dart';
 import '../../../core/errors/error_messages.dart';
-import '../../../core/widgets/animated_async.dart';
-import '../../../core/widgets/language_toggle_button.dart';
+import '../../../core/l10n/enum_labels.dart';
+import '../../../core/providers/formatters_provider.dart';
+import '../../../core/providers/preferences_provider.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
-import '../../../core/widgets/staggered_list_item.dart';
-import '../../../core/widgets/star_rating.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../models/city.dart';
 import '../../../models/vendor.dart';
 import '../../../routing/page_transitions.dart';
 import '../../../services/firestore_service.dart';
 import '../../auth/providers/auth_provider.dart';
-import 'my_orders_screen.dart';
+import '../../notifications/screens/notifications_screen.dart';
+import '../providers/cart_provider.dart';
+import '../widgets/category_section.dart';
+import '../widgets/customer_home_header.dart';
+import '../widgets/home_floating_controls.dart';
+import '../widgets/promo_banner_carousel.dart';
+import '../widgets/store_carousel.dart';
+import 'account_screen.dart';
+import 'cart_screen.dart';
+import 'search_screen.dart';
+import 'store_list_screen.dart';
 import 'vendor_menu_screen.dart';
 
 final firestoreServiceProvider =
@@ -23,78 +37,315 @@ final openVendorsProvider = StreamProvider<List<Vendor>>((ref) {
   return ref.watch(firestoreServiceProvider).watchOpenVendors();
 });
 
-class CustomerHomeScreen extends ConsumerWidget {
+// Kept here (rather than moved) because `SearchScreen` imports it from this
+// file for its own product-name search — the redesigned home feed below is
+// store-first and no longer watches this stream itself, but the provider
+// declaration is a shared dependency other screens still rely on.
+final allMenuItemsProvider = StreamProvider<List<MenuItem>>((ref) {
+  return ref.watch(firestoreServiceProvider).watchAllMenuItems();
+});
+
+class CustomerHomeScreen extends ConsumerStatefulWidget {
   const CustomerHomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CustomerHomeScreen> createState() => _CustomerHomeScreenState();
+}
+
+class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
+  // Restaurants by default — the home feed is primarily a restaurant feed;
+  // every other vertical is reached by picking a different category. There
+  // is no "All" state anymore (see `category_section.dart`'s `HomeCategoryId`),
+  // so this is never null.
+  HomeCategoryId _selectedCategory = HomeCategoryId.restaurants;
+
+  // Owned here (not by CategoryCollapsingHeaderDelegate, which is a cheap
+  // descriptor recreated on every rebuild) so horizontal scroll position
+  // survives category-selection rebuilds. Kept loosely in sync with each
+  // other below so switching between the large-card and compact-pill
+  // layouts roughly preserves the user's place in the category list.
+  final _categoryBigScrollController = ScrollController();
+  final _categoryPillScrollController = ScrollController();
+  bool _syncingCategoryScroll = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _categoryBigScrollController.addListener(
+      () => _syncCategoryScroll(_categoryBigScrollController, _categoryPillScrollController),
+    );
+    _categoryPillScrollController.addListener(
+      () => _syncCategoryScroll(_categoryPillScrollController, _categoryBigScrollController),
+    );
+  }
+
+  @override
+  void dispose() {
+    _categoryBigScrollController.dispose();
+    _categoryPillScrollController.dispose();
+    super.dispose();
+  }
+
+  void _syncCategoryScroll(ScrollController from, ScrollController to) {
+    if (_syncingCategoryScroll) return;
+    if (!from.hasClients || !to.hasClients) return;
+    final fromMax = from.position.maxScrollExtent;
+    final toMax = to.position.maxScrollExtent;
+    if (fromMax <= 0 || toMax <= 0) return;
+    final fraction = (from.offset / fromMax).clamp(0.0, 1.0);
+    _syncingCategoryScroll = true;
+    to.jumpTo(fraction * toMax);
+    _syncingCategoryScroll = false;
+  }
+
+  Future<void> _openCityPicker(City current) {
+    final l10n = AppLocalizations.of(context)!;
+    return showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(l10n.selectCityTitle, style: Theme.of(sheetContext).textTheme.titleMedium),
+            ),
+            for (final city in City.values)
+              ListTile(
+                title: Text(cityLabel(sheetContext, city)),
+                trailing: city == current
+                    ? Icon(Icons.check, color: Theme.of(sheetContext).colorScheme.primary)
+                    : null,
+                onTap: () {
+                  ref.read(selectedCityProvider.notifier).setCity(city);
+                  Navigator.of(sheetContext).pop();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openStoreVendor(Vendor vendor) {
+    Navigator.of(context).push(fadeSlideRoute(VendorMenuScreen(vendor: vendor)));
+  }
+
+  void _openStoreList(String title, List<Vendor> vendors) {
+    Navigator.of(context).push(fadeSlideRoute(StoreListScreen(title: title, vendors: vendors)));
+  }
+
+  /// Builds the ordered, dynamic list of carousel sections: curated ones
+  /// first, then one plain section per remaining category (pharmacy is
+  /// covered by Selfcare already, so it's skipped here to avoid a
+  /// duplicate row). Each section is a real vendor-level rule from
+  /// `core/discovery/vendor_carousels.dart` — store-first, matching the
+  /// redesigned `StoreCarousel`/`StoreCard`. Empty sections are dropped
+  /// before returning — adding a new section later is a one-line addition
+  /// to this list.
+  List<CarouselSection> _buildSections(BuildContext context, List<Vendor> pool) {
+    final l10n = AppLocalizations.of(context)!;
+
+    final sections = [
+      CarouselSection(
+        title: l10n.fastestDeliveryCarouselTitle,
+        vendors: fastestDeliveryVendors(pool),
+      ),
+      CarouselSection(
+        title: l10n.dealsNearYouCarouselTitle,
+        vendors: dealVendors(pool),
+      ),
+      CarouselSection(
+        title: l10n.selfcareCarouselTitle,
+        vendors: selfcareVendors(pool),
+      ),
+      CarouselSection(
+        title: l10n.popularNowCarouselTitle,
+        vendors: popularVendors(pool),
+      ),
+      for (final category in VendorCategory.values)
+        if (category != VendorCategory.pharmacy)
+          CarouselSection(
+            title: vendorCategoryLabel(context, category),
+            vendors: vendorsInCategory(pool, category),
+          ),
+    ];
+
+    return sections.where((s) => s.vendors.isNotEmpty).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final vendorsAsync = ref.watch(openVendorsProvider);
     final l10n = AppLocalizations.of(context)!;
     final customerId = ref.watch(currentAppUserProvider).valueOrNull?.id;
+    final currencyFormat = ref.watch(currencyFormatProvider);
+    final selectedCity = ref.watch(selectedCityProvider);
+    final cart = ref.watch(cartProvider);
+    // Phase: home-page redesign — this screen now carries the same fixed
+    // dark-navy/cyan palette as VendorMenuScreen/MostOrderedScreen instead
+    // of the app's ambient light/dark theme, per the reference design.
+    final vendorTheme = VendorPalette.themeFrom(Theme.of(context));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.nearbyVendorsTitle),
-        actions: [
-          const LanguageToggleButton(),
-          IconButton(
-            icon: const Icon(Icons.receipt_long),
-            tooltip: l10n.myOrdersTitle,
-            onPressed: customerId == null
-                ? null
-                : () => Navigator.of(context)
-                    .push(fadeSlideRoute(MyOrdersScreen(customerId: customerId))),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: l10n.signOutTooltip,
-            onPressed: () => ref.read(authServiceProvider).signOut(),
-          ),
-        ],
-      ),
-      body: ResponsiveCenter(
-        child: vendorsAsync.animatedWhen(
-          data: (vendors) {
-          if (vendors.isEmpty) {
-            return Center(child: Text(l10n.noOpenVendorsMessage));
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: vendors.length,
-            itemBuilder: (context, index) {
-              final vendor = vendors[index];
-              return Card(
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundImage:
-                        vendor.imageUrl != null ? NetworkImage(vendor.imageUrl!) : null,
-                    child: vendor.imageUrl == null ? const Icon(Icons.storefront_outlined) : null,
-                  ),
-                  title: Text(vendor.name),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(vendor.description),
-                      const SizedBox(height: 2),
-                      vendor.ratingCount == 0
-                          ? Text(l10n.notRatedYetLabel, style: Theme.of(context).textTheme.bodySmall)
-                          : StarRatingDisplay(rating: vendor.averageRating, count: vendor.ratingCount),
-                    ],
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () =>
-                      Navigator.of(context).push(fadeSlideRoute(VendorMenuScreen(vendor: vendor))),
+    return Theme(
+      data: vendorTheme,
+      child: Scaffold(
+        backgroundColor: VendorPalette.background,
+        body: Stack(
+          children: [
+            Column(
+              children: [
+                CustomerHomeHeader(
+                  locationLabel: cityLabel(context, selectedCity),
+                  onLocationTap: () => _openCityPicker(selectedCity),
+                  onNotificationsTap: () =>
+                      Navigator.of(context).push(fadeSlideRoute(const NotificationsScreen())),
+                  onAccountTap: customerId == null
+                      ? null
+                      : () => Navigator.of(context)
+                          .push(fadeSlideRoute(AccountScreen(customerId: customerId))),
                 ),
-              ).staggeredEntrance(index);
-            },
-          );
-        },
-        loading: () => const ListSkeletonLoader(),
-        error: (error, _) =>
-            Center(child: Text(localizedErrorMessage(context, error))),
+                Expanded(
+                  child: ResponsiveCenter(
+                    child: _buildBody(context, vendorsAsync, l10n, currencyFormat, selectedCity),
+                  ),
+                ),
+              ],
+            ),
+            // Stack overlay (not Scaffold.floatingActionButton/
+            // bottomNavigationBar) so both controls float with their own
+            // margin above content, matching the reference and the same
+            // pattern VendorMenuScreen's FloatingOrderButton established.
+            // The bag button uses the Stack's own `Alignment.centerLeft` (a
+            // literal physical position, not RTL start/end — same reasoning
+            // as the header's bell/account buttons) and is otherwise
+            // unpositioned; the search pill is wrapped in its own
+            // `Align(Alignment.center)`, which overrides the Stack-level
+            // alignment for just that child, so it centers horizontally in
+            // the app's width independently of where the bag button sits —
+            // the two are positioned completely independently of each
+            // other. The pill's width (~35% of the screen width) and height
+            // are unchanged from before.
+            Positioned(
+              left: AppSpacing.lg,
+              right: AppSpacing.lg,
+              bottom: MediaQuery.paddingOf(context).bottom + AppSpacing.lg,
+              child: SizedBox(
+                height: HomeFloatingSearchBar.height,
+                child: Stack(
+                  alignment: Alignment.centerLeft,
+                  children: [
+                    HomeFloatingBagButton(
+                      itemCount: cart.itemCount,
+                      onTap: () => Navigator.of(context).push(fadeSlideRoute(const CartScreen())),
+                    ),
+                    Align(
+                      alignment: Alignment.center,
+                      child: SizedBox(
+                        width: MediaQuery.sizeOf(context).width * 0.35,
+                        height: HomeFloatingSearchBar.height,
+                        child: HomeFloatingSearchBar(
+                          onTap: () =>
+                              Navigator.of(context).push(fadeSlideRoute(const SearchScreen())),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBody(
+    BuildContext context,
+    AsyncValue<List<Vendor>> vendorsAsync,
+    AppLocalizations l10n,
+    NumberFormat currencyFormat,
+    City selectedCity,
+  ) {
+    late final Widget child;
+    late final String stateKey;
+    if (vendorsAsync.isLoading) {
+      child = const ListSkeletonLoader();
+      stateKey = 'loading';
+    } else if (vendorsAsync.hasError) {
+      child = Center(child: Text(localizedErrorMessage(context, vendorsAsync.error!)));
+      stateKey = 'error';
+    } else {
+      final vendors = vendorsAsync.value!;
+      // The selected entry's `vendorCategory` is null for verticals that
+      // have no backing `VendorCategory` yet (see `HomeCategoryEntry`'s
+      // doc) — the pool is honestly empty for those rather than falling
+      // back to "show everything", since there's no more "All" state.
+      final selectedVendorCategory =
+          homeCategories.firstWhere((e) => e.id == _selectedCategory).vendorCategory;
+      final pool = selectedVendorCategory == null
+          ? const <Vendor>[]
+          : vendors
+              .where((v) => v.category == selectedVendorCategory && v.city == selectedCity)
+              .toList();
+      final sections = _buildSections(context, pool);
+
+      child = CustomScrollView(
+        slivers: [
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: CategoryCollapsingHeaderDelegate(
+              selected: _selectedCategory,
+              onSelected: (category) => setState(() => _selectedCategory = category),
+              bigController: _categoryBigScrollController,
+              pillController: _categoryPillScrollController,
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
+          const SliverToBoxAdapter(child: PromoBannerCarousel()),
+          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
+          if (sections.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                child: Center(
+                  child: Text(
+                    l10n.noProductsInCategoryMessage,
+                    style: const TextStyle(color: VendorPalette.textSecondary),
+                  ),
+                ),
+              ),
+            )
+          else
+            SliverList.builder(
+              itemCount: sections.length,
+              itemBuilder: (context, index) {
+                final section = sections[index];
+                return StoreCarousel(
+                  section: section,
+                  currencyFormat: currencyFormat,
+                  onTapStore: _openStoreVendor,
+                  onViewAll: () => _openStoreList(section.title, section.vendors),
+                );
+              },
+            ),
+          // Clears the floating search/bag row so the last carousel's cards
+          // are never hidden behind it.
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: HomeFloatingSearchBar.height + AppSpacing.lg * 2 +
+                  MediaQuery.paddingOf(context).bottom,
+            ),
+          ),
+        ],
+      );
+      stateKey = 'data';
+    }
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      child: KeyedSubtree(key: ValueKey(stateKey), child: child),
     );
   }
 }

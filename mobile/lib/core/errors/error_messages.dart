@@ -29,6 +29,8 @@ String localizedErrorMessage(BuildContext context, Object error) {
       return l10n.notFoundMessage;
     case 'action-no-longer-available':
       return l10n.actionNoLongerAvailableMessage;
+    case 'requires-recent-login':
+      return l10n.requiresRecentLoginMessage;
     default:
       return l10n.genericErrorMessage;
   }

@@ -140,4 +140,32 @@ class AuthService {
   Future<void> sendPasswordResetEmail(String email) {
     return guardFuture(() => _auth.sendPasswordResetEmail(email: email));
   }
+
+  // Firestore doc deletion doesn't cascade to subcollections, so the saved
+  // addresses under users/{uid}/addresses are cleared first — otherwise
+  // they'd be orphaned, unreachable data left behind in the project.
+  // `user.delete()` can throw 'requires-recent-login' (mapped in
+  // AppException) if the session is old; the Firestore doc is deleted first
+  // since that's the safer partial-failure state — a stray Auth account
+  // with no profile doc already has a recovery path (AuthService.signIn's
+  // `_ensureUserProfile` backfills a fresh customer profile on next sign-in),
+  // whereas a stray profile doc with no Auth account would be permanently
+  // unreachable (nothing could ever sign in as that uid again).
+  Future<void> deleteAccount() {
+    return guardFuture(() async {
+      final user = _auth.currentUser;
+      if (user == null) return;
+      final uid = user.uid;
+
+      final addresses = await _firestore.collection('users').doc(uid).collection('addresses').get();
+      final batch = _firestore.batch();
+      for (final doc in addresses.docs) {
+        batch.delete(doc.reference);
+      }
+      batch.delete(_firestore.collection('users').doc(uid));
+      await batch.commit();
+
+      await user.delete();
+    });
+  }
 }

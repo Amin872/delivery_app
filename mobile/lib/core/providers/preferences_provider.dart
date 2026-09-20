@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../models/city.dart';
+
 /// Overridden in `main.dart` with the [SharedPreferences] instance awaited
 /// before `runApp`, so the app's persisted language/theme choice is
 /// available synchronously on first frame instead of flashing a default.
@@ -11,6 +13,7 @@ final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
 
 const _localeKey = 'locale';
 const _themeModeKey = 'themeMode';
+const _cityKey = 'selectedCity';
 
 const supportedLocales = [Locale('ar'), Locale('en')];
 
@@ -64,5 +67,29 @@ class ThemeModeController extends StateNotifier<ThemeMode> {
   void setThemeMode(ThemeMode mode) {
     state = mode;
     _prefs.setString(_themeModeKey, mode.name);
+  }
+}
+
+/// The customer's browsing city — a device-local preference (like
+/// [localeProvider]/[themeModeProvider]), not account data, so switching
+/// city here never touches Firestore. Drives a client-side filter over the
+/// already-fetched open-vendor list on [CustomerHomeScreen], same shape as
+/// the existing category filter.
+final selectedCityProvider = StateNotifierProvider<SelectedCityController, City>((ref) {
+  return SelectedCityController(ref.watch(sharedPreferencesProvider));
+});
+
+class SelectedCityController extends StateNotifier<City> {
+  SelectedCityController(this._prefs) : super(_fromString(_prefs.getString(_cityKey)));
+
+  final SharedPreferences _prefs;
+
+  static City _fromString(String? value) {
+    return City.values.firstWhere((c) => c.name == value, orElse: () => City.damascus);
+  }
+
+  void setCity(City city) {
+    state = city;
+    _prefs.setString(_cityKey, city.name);
   }
 }

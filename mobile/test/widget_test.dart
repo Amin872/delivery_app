@@ -27,6 +27,21 @@ void main() {
     expect(restored.displayName, user.displayName);
     expect(restored.role, user.role);
     expect(restored.phoneNumber, user.phoneNumber);
+    expect(restored.favoriteVendorIds, isEmpty);
+  });
+
+  test('AppUser round-trips favoriteVendorIds', () {
+    const user = AppUser(
+      id: 'user-1',
+      email: 'customer@example.com',
+      displayName: 'Alex Customer',
+      role: UserRole.customer,
+      favoriteVendorIds: ['vendor-1', 'vendor-2'],
+    );
+
+    final restored = AppUser.fromMap(user.id, user.toMap());
+
+    expect(restored.favoriteVendorIds, ['vendor-1', 'vendor-2']);
   });
 
   test('DeliveryOrder round-trips through toMap/fromMap, including proofImageUrl', () {
