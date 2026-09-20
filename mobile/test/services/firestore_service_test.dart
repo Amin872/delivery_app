@@ -1,6 +1,9 @@
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:delivery_app/core/errors/app_exception.dart';
+import 'package:delivery_app/models/city.dart';
+import 'package:delivery_app/models/governorate.dart';
 import 'package:delivery_app/models/order.dart';
 import 'package:delivery_app/models/review.dart';
 import 'package:delivery_app/models/vendor.dart';
@@ -450,5 +453,165 @@ void main() {
     expect(governorates.map((g) => g.id).toList(), ['damascus', 'rif_dimashq', 'aleppo']);
     expect(governorates.map((g) => g.order).toList(), [0, 1, 2]);
     expect(governorates.firstWhere((g) => g.id == 'rif_dimashq').enabled, isFalse);
+  });
+
+  test('addGovernorate creates a new governorate doc', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    await service.addGovernorate(const GovernorateOption(
+      id: 'damascus',
+      nameEn: 'Damascus',
+      nameAr: 'دمشق',
+      enabled: true,
+      order: 0,
+    ));
+
+    final doc = await firestore.collection('governorates').doc('damascus').get();
+    expect(doc.exists, isTrue);
+    expect(doc.data()!['nameEn'], 'Damascus');
+  });
+
+  test('addGovernorate throws already-exists when the id is already taken', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+    await firestore.collection('governorates').doc('damascus').set({
+      'nameEn': 'Damascus',
+      'nameAr': 'دمشق',
+      'enabled': true,
+      'order': 0,
+    });
+
+    await expectLater(
+      service.addGovernorate(const GovernorateOption(
+        id: 'damascus',
+        nameEn: 'Somewhere else',
+        nameAr: 'مكان آخر',
+        enabled: true,
+        order: 99,
+      )),
+      throwsA(isA<AppException>().having((e) => e.code, 'code', 'already-exists')),
+    );
+    // The original doc must be untouched by the rejected attempt.
+    final doc = await firestore.collection('governorates').doc('damascus').get();
+    expect(doc.data()!['nameEn'], 'Damascus');
+  });
+
+  test('updateGovernorate overwrites an existing governorate doc', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+    await firestore.collection('governorates').doc('damascus').set({
+      'nameEn': 'Damascus',
+      'nameAr': 'دمشق',
+      'enabled': true,
+      'order': 0,
+    });
+
+    await service.updateGovernorate(const GovernorateOption(
+      id: 'damascus',
+      nameEn: 'Damascus',
+      nameAr: 'دمشق',
+      enabled: true,
+      order: 7,
+    ));
+
+    final doc = await firestore.collection('governorates').doc('damascus').get();
+    expect(doc.data()!['order'], 7);
+  });
+
+  test('setGovernorateEnabled updates only the enabled field', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+    await firestore.collection('governorates').doc('damascus').set({
+      'nameEn': 'Damascus',
+      'nameAr': 'دمشق',
+      'enabled': true,
+      'order': 3,
+    });
+
+    await service.setGovernorateEnabled('damascus', false);
+
+    final doc = await firestore.collection('governorates').doc('damascus').get();
+    expect(doc.data()!['enabled'], isFalse);
+    expect(doc.data()!['order'], 3);
+  });
+
+  test('addCity creates a new city doc', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    await service.addCity(const CityOption(
+      id: 'douma',
+      nameEn: 'Douma',
+      nameAr: 'دوما',
+      enabled: true,
+      order: 0,
+      governorateId: 'rif_dimashq',
+    ));
+
+    final doc = await firestore.collection('cities').doc('douma').get();
+    expect(doc.exists, isTrue);
+    expect(doc.data()!['governorateId'], 'rif_dimashq');
+  });
+
+  test('addCity throws already-exists when the id is already taken', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+    await firestore.collection('cities').doc('damascus').set({
+      'nameEn': 'Damascus',
+      'nameAr': 'دمشق',
+      'enabled': true,
+      'order': 0,
+    });
+
+    await expectLater(
+      service.addCity(const CityOption(
+        id: 'damascus',
+        nameEn: 'Somewhere else',
+        nameAr: 'مكان آخر',
+        enabled: true,
+        order: 99,
+      )),
+      throwsA(isA<AppException>().having((e) => e.code, 'code', 'already-exists')),
+    );
+  });
+
+  test('updateCity overwrites an existing city doc, including governorateId', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+    await firestore.collection('cities').doc('damascus').set({
+      'nameEn': 'Damascus',
+      'nameAr': 'دمشق',
+      'enabled': true,
+      'order': 0,
+    });
+
+    await service.updateCity(const CityOption(
+      id: 'damascus',
+      nameEn: 'Damascus',
+      nameAr: 'دمشق',
+      enabled: true,
+      order: 0,
+      governorateId: 'damascus',
+    ));
+
+    final doc = await firestore.collection('cities').doc('damascus').get();
+    expect(doc.data()!['governorateId'], 'damascus');
+  });
+
+  test('setCityEnabled updates only the enabled field', () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+    await firestore.collection('cities').doc('damascus').set({
+      'nameEn': 'Damascus',
+      'nameAr': 'دمشق',
+      'enabled': true,
+      'order': 0,
+    });
+
+    await service.setCityEnabled('damascus', false);
+
+    final doc = await firestore.collection('cities').doc('damascus').get();
+    expect(doc.data()!['enabled'], isFalse);
   });
 }

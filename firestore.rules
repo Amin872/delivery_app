@@ -217,24 +217,35 @@ service cloud.firestore {
     }
 
     // cities/{cityId} — canonical city list for the Locations migration
-    // (see the Locations/City migration plan). Same public-read/admin-write
-    // shape as promotions above. Purely additive: no existing screen reads
-    // this collection yet — Vendor.city and every city picker still use the
-    // fixed City enum until a later migration phase, so this block has no
-    // effect on any current flow.
+    // (see the Locations/City migration plan). Public read unchanged.
+    // Split create/update (Admin Locations module) instead of a blanket
+    // `allow write` — `!exists(...)` on create is the standard Firestore
+    // Rules idiom for this (and always true whenever `create` even fires,
+    // since Firestore only classifies a write as `create` when no document
+    // exists yet); the real, race-safe duplicate-id guard for the "add new
+    // city" flow is a Firestore transaction in
+    // FirestoreService.addCity/addGovernorate, because Firestore classifies
+    // a .set() purely by document existence at commit time — rules alone
+    // can't distinguish "meant as a fresh add" from "a legitimate edit"
+    // once a doc exists, so `update` must stay unconditionally admin-only
+    // for real edits to keep working. `delete` is explicitly denied — the
+    // Admin Locations module never deletes a governorate/city, only
+    // disables it (see AdminLocationsScreen).
     match /cities/{cityId} {
       allow read: if true;
-      allow write: if hasRole('admin');
+      allow create: if hasRole('admin') && !exists(/databases/$(database)/documents/cities/$(cityId));
+      allow update: if hasRole('admin');
+      allow delete: if false;
     }
 
     // governorates/{governorateId} — Locations Phase 3 (Governorate → City
-    // architecture). Same public-read/admin-write shape as cities/promotions
-    // above. Purely additive: cities/{cityId} keeps its own existing rule
-    // unchanged — governorateId is just another admin-writable field on an
-    // already-admin-write-gated doc, no allowlist to widen there.
+    // architecture). Same public-read/admin-create-or-update/no-delete
+    // shape as cities/{cityId} above, same reasoning.
     match /governorates/{governorateId} {
       allow read: if true;
-      allow write: if hasRole('admin');
+      allow create: if hasRole('admin') && !exists(/databases/$(database)/documents/governorates/$(governorateId));
+      allow update: if hasRole('admin');
+      allow delete: if false;
     }
   }
 }

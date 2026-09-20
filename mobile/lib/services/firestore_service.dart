@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../core/errors/app_exception.dart';
 import '../core/errors/guard.dart';
 import '../models/address.dart';
 import '../models/app_user.dart';
@@ -589,5 +590,58 @@ class FirestoreService {
         .snapshots()
         .map((snap) =>
             snap.docs.map((doc) => GovernorateOption.fromMap(doc.id, doc.data())).toList()));
+  }
+
+  // Admin Locations — governorates. addGovernorate runs in a transaction so
+  // a duplicate id is rejected atomically even under a race (two admins
+  // submitting the same hand-typed id concurrently): whichever transaction
+  // commits second sees the doc the first one just created and throws,
+  // rather than silently overwriting it. This is genuine protection, unlike
+  // firestore.rules' create/update split (see the rules' own comment) —
+  // Firestore classifies a .set() purely by document existence at commit
+  // time, so rules alone can't distinguish "this was meant as a fresh add"
+  // from "this is a legitimate edit" once a doc exists.
+  Future<void> addGovernorate(GovernorateOption governorate) {
+    return guardFuture(() => _db.runTransaction((tx) async {
+          final ref = _governorates.doc(governorate.id);
+          final snapshot = await tx.get(ref);
+          if (snapshot.exists) {
+            throw const AppException('already-exists');
+          }
+          tx.set(ref, governorate.toMap());
+        }));
+  }
+
+  Future<void> updateGovernorate(GovernorateOption governorate) {
+    return guardFuture(
+        () => _governorates.doc(governorate.id).update(governorate.toMap()));
+  }
+
+  // Single-field partial write for the list's enable/disable Switch — same
+  // reasoning as setPromotionEnabled above, avoids overwriting the rest of
+  // the doc from possibly-stale list-item state.
+  Future<void> setGovernorateEnabled(String governorateId, bool enabled) {
+    return guardFuture(() => _governorates.doc(governorateId).update({'enabled': enabled}));
+  }
+
+  // Admin Locations — cities. Same transactional duplicate-id protection as
+  // addGovernorate above.
+  Future<void> addCity(CityOption city) {
+    return guardFuture(() => _db.runTransaction((tx) async {
+          final ref = _cities.doc(city.id);
+          final snapshot = await tx.get(ref);
+          if (snapshot.exists) {
+            throw const AppException('already-exists');
+          }
+          tx.set(ref, city.toMap());
+        }));
+  }
+
+  Future<void> updateCity(CityOption city) {
+    return guardFuture(() => _cities.doc(city.id).update(city.toMap()));
+  }
+
+  Future<void> setCityEnabled(String cityId, bool enabled) {
+    return guardFuture(() => _cities.doc(cityId).update({'enabled': enabled}));
   }
 }

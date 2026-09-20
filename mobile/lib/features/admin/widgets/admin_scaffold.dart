@@ -10,6 +10,7 @@ import '../../../routing/page_transitions.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../screens/admin_analytics_screen.dart';
 import '../screens/admin_drivers_screen.dart';
+import '../screens/admin_locations_screen.dart';
 import '../screens/admin_orders_screen.dart';
 import '../screens/admin_products_screen.dart';
 import '../screens/admin_promotions_screen.dart';
@@ -99,6 +100,7 @@ void _navigateTo(BuildContext context, AdminDestination current, AdminDestinatio
     AdminDestination.orders => const AdminOrdersScreen(),
     AdminDestination.promotions => const AdminPromotionsScreen(),
     AdminDestination.products => const AdminProductsScreen(),
+    AdminDestination.locations => const AdminLocationsScreen(),
     AdminDestination.analytics => const AdminAnalyticsScreen(),
     _ => AdminScaffold(
         title: destination.label(l10n),

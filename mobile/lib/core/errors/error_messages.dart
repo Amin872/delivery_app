@@ -27,6 +27,8 @@ String localizedErrorMessage(BuildContext context, Object error) {
       return l10n.permissionDeniedMessage;
     case 'not-found':
       return l10n.notFoundMessage;
+    case 'already-exists':
+      return l10n.duplicateIdError;
     case 'action-no-longer-available':
       return l10n.actionNoLongerAvailableMessage;
     case 'requires-recent-login':

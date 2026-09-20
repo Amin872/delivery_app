@@ -37,3 +37,11 @@ class GovernorateOption {
     };
   }
 }
+
+/// Enabled governorates from [governorates], sorted by [GovernorateOption.order]
+/// — same shape and reasoning as models/city.dart's `visibleCities`.
+List<GovernorateOption> visibleGovernorates(List<GovernorateOption> governorates) {
+  final visible = governorates.where((g) => g.enabled).toList()
+    ..sort((a, b) => a.order.compareTo(b.order));
+  return visible;
+}

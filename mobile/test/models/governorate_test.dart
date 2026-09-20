@@ -54,4 +54,41 @@ void main() {
 
     expect(restored.enabled, isFalse);
   });
+
+  group('visibleGovernorates', () {
+    test('excludes disabled governorates', () {
+      const governorates = [
+        GovernorateOption(id: 'damascus', nameEn: 'Damascus', nameAr: 'دمشق', enabled: true, order: 0),
+        GovernorateOption(id: 'homs', nameEn: 'Homs', nameAr: 'حمص', enabled: false, order: 1),
+      ];
+
+      final result = visibleGovernorates(governorates);
+
+      expect(result.map((g) => g.id), ['damascus']);
+    });
+
+    test('sorts by order, regardless of input order', () {
+      const governorates = [
+        GovernorateOption(id: 'tartus', nameEn: 'Tartus', nameAr: 'طرطوس', enabled: true, order: 4),
+        GovernorateOption(id: 'damascus', nameEn: 'Damascus', nameAr: 'دمشق', enabled: true, order: 0),
+        GovernorateOption(id: 'aleppo', nameEn: 'Aleppo', nameAr: 'حلب', enabled: true, order: 1),
+      ];
+
+      final result = visibleGovernorates(governorates);
+
+      expect(result.map((g) => g.id).toList(), ['damascus', 'aleppo', 'tartus']);
+    });
+
+    test('returns an empty list when every governorate is disabled', () {
+      const governorates = [
+        GovernorateOption(id: 'damascus', nameEn: 'Damascus', nameAr: 'دمشق', enabled: false, order: 0),
+      ];
+
+      expect(visibleGovernorates(governorates), isEmpty);
+    });
+
+    test('returns an empty list for an empty input', () {
+      expect(visibleGovernorates(const []), isEmpty);
+    });
+  });
 }

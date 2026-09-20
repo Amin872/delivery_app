@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/app_user.dart';
 import '../../models/city.dart';
+import '../../models/governorate.dart';
 import '../../models/order.dart';
 import '../../models/vendor.dart';
 
@@ -96,6 +97,20 @@ String _legacyCityLabel(BuildContext context, String cityId) {
     default:
       return cityId;
   }
+}
+
+/// Display name for [governorate] — unlike [cityLabel], governorates have no
+/// retired-enum/legacy-ARB era to fall back to (Locations Phase 3 was
+/// Firestore-data-driven from day one), so this is just a locale pick, plus
+/// an explicit "unassigned" label when [governorate] is null — covers both
+/// a city with no governorateId and a governorateId that no longer resolves
+/// against the currently-loaded list (stale/removed reference), so this
+/// never crashes on a dangling reference.
+String governorateLabel(BuildContext context, GovernorateOption? governorate) {
+  if (governorate == null) {
+    return AppLocalizations.of(context)!.governorateUnassignedLabel;
+  }
+  return _isArabic(context) ? governorate.nameAr : governorate.nameEn;
 }
 
 String userRoleLabel(BuildContext context, UserRole role) {

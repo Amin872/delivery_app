@@ -294,6 +294,32 @@
     "placeholders": {"count": {"type": "int"}}
   },
 
+  "adminLocationsTitle": "Locations",
+  "governoratesTabLabel": "Governorates",
+  "citiesTabLabel": "Cities",
+  "addGovernorateTitle": "Add governorate",
+  "editGovernorateTitle": "Edit governorate",
+  "addCityTitle": "Add city",
+  "editCityTitle": "Edit city",
+  "searchGovernoratesHint": "Search governorates",
+  "searchCitiesHint": "Search cities",
+  "noGovernoratesFoundMessage": "No governorates found.",
+  "noCitiesFoundMessage": "No cities found.",
+  "locationIdFieldLabel": "ID (e.g. damascus)",
+  "nameEnFieldLabel": "Name (English)",
+  "nameArFieldLabel": "Name (Arabic)",
+  "locationOrderFieldLabel": "Display order",
+  "locationEnabledLabel": "Enabled",
+  "governorateAssignmentFieldLabel": "Governorate",
+  "governorateUnassignedLabel": "Unassigned",
+  "duplicateIdError": "This ID already exists.",
+  "invalidIdError": "Use lowercase letters, numbers, and underscores only.",
+  "disableLocationInUseWarning": "{count} restaurant(s) currently use this location. It will stop appearing as a choice for new selections, but nothing existing will break. Continue?",
+  "@disableLocationInUseWarning": {
+    "description": "Confirmation dialog message when disabling a governorate/city that vendors currently reference.",
+    "placeholders": {"count": {"type": "int"}}
+  },
+
   "signOutTooltip": "Sign out",
   "languageToggleTooltip": "Change language",
 
