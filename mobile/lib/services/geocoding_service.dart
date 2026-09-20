@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/errors/app_exception.dart';
 import '../core/errors/guard.dart';
 import '../models/coordinates.dart';
+import 'mapbox_geocoding_service.dart';
 
 // Architectural boundary (see the Location/Maps Architecture audit):
 //   Coordinates      = application-level geographic value (models/coordinates.dart)
@@ -116,8 +117,16 @@ class UnimplementedGeocodingService implements GeocodingService {
 // Co-located with the service (rather than in a feature's own provider
 // file, the pattern locationServiceProvider/firestoreServiceProvider
 // follow) since GeocodingService has no feature owner yet — nothing
-// consumes it in this phase. Swap the implementation here, in one place,
-// once a real (Mapbox-backed) GeocodingService exists.
+// consumes it in this phase. This is the one place allowed to construct a
+// concrete implementation (DI wiring is inherently the composition root —
+// the abstraction above stays Mapbox-free; only this provider and
+// mapbox_geocoding_service.dart itself know a MapboxGeocodingService
+// exists). Always constructs MapboxGeocodingService, even when
+// mapboxPublicToken is empty — MapboxGeocodingService itself detects a
+// missing token and throws AppException('missing-token') without ever
+// making a network request, so no separate "is it configured" branch is
+// needed here. UnimplementedGeocodingService remains available as an
+// explicit test double via ProviderScope overrides.
 final geocodingServiceProvider = Provider<GeocodingService>((ref) {
-  return const UnimplementedGeocodingService();
+  return MapboxGeocodingService(accessToken: mapboxPublicToken);
 });

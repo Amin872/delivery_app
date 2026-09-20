@@ -52,6 +52,11 @@ dependencies:
   # Maps & location (for live delivery tracking)
   google_maps_flutter: ^2.9.0
   geolocator: ^13.0.1
+  # Standard Dart HTTP client — used only by MapboxGeocodingService's raw
+  # REST calls to Mapbox's Geocoding v6 API (see services/geocoding_service.dart's
+  # architectural-boundary note). No other networking package is used
+  # anywhere in this app (Firebase's own SDKs handle everything else).
+  http: ^1.2.0
 
   # Vendor/menu-item photo picking, uploaded via firebase_storage
   image_picker: ^1.1.2
