@@ -11,6 +11,7 @@ import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/star_rating.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../models/city.dart';
 import '../../../models/review.dart';
 import '../../../models/vendor.dart';
 import '../../../routing/page_transitions.dart';
@@ -28,7 +29,7 @@ import '../widgets/store_promo_banner.dart';
 import '../widgets/store_search_bar.dart';
 import '../widgets/store_sticky_tabs.dart';
 import 'cart_screen.dart';
-import 'customer_home_screen.dart' show firestoreServiceProvider;
+import 'customer_home_screen.dart' show allCitiesProvider, firestoreServiceProvider;
 import 'most_ordered_screen.dart';
 import 'search_screen.dart';
 
@@ -146,6 +147,7 @@ class _VendorMenuScreenState extends ConsumerState<VendorMenuScreen> {
     final cart = ref.watch(cartProvider);
     final l10n = AppLocalizations.of(context)!;
     final currencyFormat = ref.watch(currencyFormatProvider);
+    final liveCities = ref.watch(allCitiesProvider).valueOrNull ?? const <CityOption>[];
     final currentUser = ref.watch(currentAppUserProvider).valueOrNull;
     final isFavorite = currentUser?.favoriteVendorIds.contains(vendor.id) ?? false;
     final heroImage = widget.heroImageUrl ?? vendor.imageUrl;
@@ -251,7 +253,11 @@ class _VendorMenuScreenState extends ConsumerState<VendorMenuScreen> {
                   ),
                 ),
                 SliverToBoxAdapter(
-                  child: StoreInfoSection(vendor: vendor, currencyFormat: currencyFormat),
+                  child: StoreInfoSection(
+                    vendor: vendor,
+                    currencyFormat: currencyFormat,
+                    liveCities: liveCities,
+                  ),
                 ),
                 const SliverToBoxAdapter(child: StorePromoBanner()),
                 if (sections.isNotEmpty)

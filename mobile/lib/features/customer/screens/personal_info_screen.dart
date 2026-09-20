@@ -18,6 +18,7 @@ import '../../../routing/page_transitions.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../widgets/account_menu_section.dart';
 import '../widgets/profile_header.dart';
+import 'customer_home_screen.dart' show allCitiesProvider;
 import 'delivery_addresses_screen.dart';
 import 'edit_profile_screen.dart';
 import 'settings_screen.dart';
@@ -69,8 +70,14 @@ class _PersonalInfoBody extends ConsumerWidget {
 
   final AppUser appUser;
 
-  Future<void> _openCityPicker(BuildContext context, WidgetRef ref, City current) {
+  Future<void> _openCityPicker(BuildContext context, WidgetRef ref, String current) {
     final l10n = AppLocalizations.of(context)!;
+    // Same canonical-list + legacy-fallback pattern CustomerHomeScreen's
+    // own city picker uses — reuses the same [allCitiesProvider], not a
+    // second independent city-data source.
+    final liveCities = ref.read(allCitiesProvider).valueOrNull ?? const <CityOption>[];
+    final visible = visibleCities(liveCities);
+    final cityIds = visible.isNotEmpty ? visible.map((c) => c.id).toList() : legacyCityIds;
     return showModalBottomSheet<void>(
       context: context,
       builder: (sheetContext) => SafeArea(
@@ -81,14 +88,14 @@ class _PersonalInfoBody extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               child: Text(l10n.selectCityTitle, style: Theme.of(sheetContext).textTheme.titleMedium),
             ),
-            for (final city in City.values)
+            for (final cityId in cityIds)
               ListTile(
-                title: Text(cityLabel(sheetContext, city)),
-                trailing: city == current
+                title: Text(cityLabel(sheetContext, cityId, liveCities)),
+                trailing: cityId == current
                     ? Icon(Icons.check, color: Theme.of(sheetContext).colorScheme.primary)
                     : null,
                 onTap: () {
-                  ref.read(selectedCityProvider.notifier).setCity(city);
+                  ref.read(selectedCityProvider.notifier).setCity(cityId);
                   Navigator.of(sheetContext).pop();
                 },
               ),
@@ -143,6 +150,7 @@ class _PersonalInfoBody extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     final selectedCity = ref.watch(selectedCityProvider);
+    final liveCities = ref.watch(allCitiesProvider).valueOrNull ?? const <CityOption>[];
 
     return ListView(
       padding: const EdgeInsets.only(bottom: AppSpacing.xxxl),
@@ -172,7 +180,7 @@ class _PersonalInfoBody extends ConsumerWidget {
             AccountMenuItem(
               icon: Icons.map_outlined,
               label: l10n.regionCityLabel,
-              subtitle: cityLabel(context, selectedCity),
+              subtitle: cityLabel(context, selectedCity, liveCities),
               onTap: () => _openCityPicker(context, ref, selectedCity),
             ),
             AccountMenuItem(

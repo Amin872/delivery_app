@@ -23,7 +23,8 @@ import '../../../models/order.dart';
 import '../../../models/vendor.dart';
 import '../../../routing/page_transitions.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
+import '../../customer/screens/customer_home_screen.dart'
+    show allCitiesProvider, firestoreServiceProvider;
 import 'menu_management_screen.dart' show MenuManagementScreen, storageServiceProvider;
 import 'vendor_stats_screen.dart';
 
@@ -274,7 +275,7 @@ class _StoreDetailsForm extends ConsumerStatefulWidget {
 class _StoreDetailsFormState extends ConsumerState<_StoreDetailsForm> {
   final _formKey = GlobalKey<FormState>();
   late VendorCategory _category;
-  late City _city;
+  late String _city;
   late final TextEditingController _feeController;
   late final TextEditingController _etaMinController;
   late final TextEditingController _etaMaxController;
@@ -373,6 +374,21 @@ class _StoreDetailsFormState extends ConsumerState<_StoreDetailsForm> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final liveCities = ref.watch(allCitiesProvider).valueOrNull ?? const <CityOption>[];
+    final enabledCities = visibleCities(liveCities);
+    // Selectable ids for a *new* choice are enabled-only (falling back to
+    // the five legacy ids if the live list is empty) — but the vendor's
+    // current city is always included even if it's disabled or has since
+    // been removed from the live list, so opening this form never
+    // silently reassigns an existing vendor away from their real city
+    // (DropdownButtonFormField also requires `initialValue` to be among
+    // `items`, so this is a correctness requirement, not just a nicety).
+    final selectableCityIds = enabledCities.isNotEmpty
+        ? enabledCities.map((c) => c.id).toList()
+        : List<String>.from(legacyCityIds);
+    if (!selectableCityIds.contains(_city)) {
+      selectableCityIds.add(_city);
+    }
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Form(
@@ -395,12 +411,12 @@ class _StoreDetailsFormState extends ConsumerState<_StoreDetailsForm> {
               },
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<City>(
+            DropdownButtonFormField<String>(
               initialValue: _city,
               decoration: InputDecoration(labelText: l10n.cityFieldLabel),
               items: [
-                for (final city in City.values)
-                  DropdownMenuItem(value: city, child: Text(cityLabel(context, city))),
+                for (final cityId in selectableCityIds)
+                  DropdownMenuItem(value: cityId, child: Text(cityLabel(context, cityId, liveCities))),
               ],
               onChanged: (value) {
                 if (value != null) setState(() => _city = value);

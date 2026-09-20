@@ -187,7 +187,7 @@ class FirestoreService {
   Future<void> updateVendorDetails(
     String vendorId, {
     required VendorCategory category,
-    required City city,
+    required String city,
     double? deliveryFee,
     int? etaMinMinutes,
     int? etaMaxMinutes,
@@ -197,7 +197,7 @@ class FirestoreService {
   }) {
     return guardFuture(() => _vendors.doc(vendorId).update({
           'category': category.name,
-          'city': city.name,
+          'city': city,
           'deliveryFee': deliveryFee,
           'etaMinMinutes': etaMinMinutes,
           'etaMaxMinutes': etaMaxMinutes,

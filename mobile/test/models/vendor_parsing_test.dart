@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:delivery_app/models/city.dart';
 import 'package:delivery_app/models/vendor.dart';
 
 void main() {
@@ -45,19 +44,38 @@ void main() {
       'approvalStatus': 'approved',
     });
 
-    expect(vendor.city, City.damascus);
+    expect(vendor.city, 'damascus');
   });
 
-  test('Vendor.fromMap defaults city to damascus for an unrecognized value', () {
+  test('Vendor.fromMap preserves a city id string it doesn\'t recognize', () {
+    // Unlike the fixed category enum above, `city` is now an open string id
+    // (see the Locations/City migration) — a value that isn't one of the
+    // five legacy ids might be a real, live `cities/{id}` doc (e.g. one an
+    // admin added later), so it must be preserved rather than silently
+    // reset to a default.
     final vendor = Vendor.fromMap('vendor-1', {
       'ownerId': 'owner-1',
       'name': 'Vendor',
       'description': 'desc',
       'isOpen': true,
       'approvalStatus': 'approved',
-      'city': 'not-a-real-city',
+      'city': 'a-future-admin-added-city',
     });
 
-    expect(vendor.city, City.damascus);
+    expect(vendor.city, 'a-future-admin-added-city');
+  });
+
+  test('Vendor round-trips a legacy city id unchanged', () {
+    final vendor = Vendor.fromMap('vendor-1', {
+      'ownerId': 'owner-1',
+      'name': 'Vendor',
+      'description': 'desc',
+      'isOpen': true,
+      'approvalStatus': 'approved',
+      'city': 'aleppo',
+    });
+
+    expect(vendor.city, 'aleppo');
+    expect(vendor.toMap()['city'], 'aleppo');
   });
 }

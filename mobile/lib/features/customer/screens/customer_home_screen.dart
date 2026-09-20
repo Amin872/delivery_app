@@ -45,6 +45,15 @@ final allMenuItemsProvider = StreamProvider<List<MenuItem>>((ref) {
   return ref.watch(firestoreServiceProvider).watchAllMenuItems();
 });
 
+// Single source for the canonical city list (see the Locations/City
+// migration plan) — every city picker/dropdown across the app (Home,
+// Personal Info, Vendor Dashboard, Admin Vendors) watches this same
+// provider via `show allCitiesProvider` rather than each starting its own
+// `watchCities()` stream, so there's only ever one live city-data source.
+final allCitiesProvider = StreamProvider<List<CityOption>>((ref) {
+  return ref.watch(firestoreServiceProvider).watchCities();
+});
+
 class CustomerHomeScreen extends ConsumerStatefulWidget {
   const CustomerHomeScreen({super.key});
 
@@ -98,8 +107,14 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
     _syncingCategoryScroll = false;
   }
 
-  Future<void> _openCityPicker(City current) {
+  Future<void> _openCityPicker(String current) {
     final l10n = AppLocalizations.of(context)!;
+    // Enabled, order-sorted live cities — falling back to the five legacy
+    // ids (see models/city.dart) if the live collection is empty/hasn't
+    // loaded, so the picker is never left with nothing to show.
+    final liveCities = ref.read(allCitiesProvider).valueOrNull ?? const <CityOption>[];
+    final visible = visibleCities(liveCities);
+    final cityIds = visible.isNotEmpty ? visible.map((c) => c.id).toList() : legacyCityIds;
     return showModalBottomSheet<void>(
       context: context,
       builder: (sheetContext) => SafeArea(
@@ -110,14 +125,14 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
               padding: const EdgeInsets.all(16),
               child: Text(l10n.selectCityTitle, style: Theme.of(sheetContext).textTheme.titleMedium),
             ),
-            for (final city in City.values)
+            for (final cityId in cityIds)
               ListTile(
-                title: Text(cityLabel(sheetContext, city)),
-                trailing: city == current
+                title: Text(cityLabel(sheetContext, cityId, liveCities)),
+                trailing: cityId == current
                     ? Icon(Icons.check, color: Theme.of(sheetContext).colorScheme.primary)
                     : null,
                 onTap: () {
-                  ref.read(selectedCityProvider.notifier).setCity(city);
+                  ref.read(selectedCityProvider.notifier).setCity(cityId);
                   Navigator.of(sheetContext).pop();
                 },
               ),
@@ -181,6 +196,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
     final customerId = ref.watch(currentAppUserProvider).valueOrNull?.id;
     final currencyFormat = ref.watch(currencyFormatProvider);
     final selectedCity = ref.watch(selectedCityProvider);
+    final liveCities = ref.watch(allCitiesProvider).valueOrNull ?? const <CityOption>[];
     final cart = ref.watch(cartProvider);
     // Phase: home-page redesign — this screen now carries the same fixed
     // dark-navy/cyan palette as VendorMenuScreen/MostOrderedScreen instead
@@ -196,7 +212,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
             Column(
               children: [
                 CustomerHomeHeader(
-                  locationLabel: cityLabel(context, selectedCity),
+                  locationLabel: cityLabel(context, selectedCity, liveCities),
                   onLocationTap: () => _openCityPicker(selectedCity),
                   onNotificationsTap: () =>
                       Navigator.of(context).push(fadeSlideRoute(const NotificationsScreen())),
@@ -265,7 +281,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
     AsyncValue<List<Vendor>> vendorsAsync,
     AppLocalizations l10n,
     NumberFormat currencyFormat,
-    City selectedCity,
+    String selectedCity,
   ) {
     late final Widget child;
     late final String stateKey;

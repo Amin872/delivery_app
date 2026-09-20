@@ -6,6 +6,11 @@ import '../../models/city.dart';
 import '../../models/order.dart';
 import '../../models/vendor.dart';
 
+// Bundled fonts cover Arabic/Latin only (see AppTheme's font-family note) —
+// languageCode is enough to tell the two apart, no need for a full Locale
+// comparison.
+bool _isArabic(BuildContext context) => Localizations.localeOf(context).languageCode == 'ar';
+
 String orderStatusLabel(BuildContext context, OrderStatus status) {
   final l10n = AppLocalizations.of(context)!;
   switch (status) {
@@ -56,19 +61,40 @@ String vendorApprovalStatusLabel(BuildContext context, VendorApprovalStatus stat
   }
 }
 
-String cityLabel(BuildContext context, City city) {
+/// Display name for [cityId] — looks it up in [knownCities] (the live
+/// `cities` collection, see `FirestoreService.watchCities()`) first, so an
+/// admin-managed name change or a newly-added city shows up immediately.
+/// Falls back to the five legacy ARB strings (`cityDamascus`..`cityTartus`)
+/// for [legacyCityIds] when [knownCities] is empty/hasn't loaded/doesn't
+/// contain [cityId] yet — so every vendor's city always renders as a real
+/// name, never a blank or an exception, even before the live list is
+/// available. An id that's neither in [knownCities] nor a legacy id (e.g.
+/// stale/removed reference data) falls back to the raw id itself rather
+/// than crashing.
+String cityLabel(BuildContext context, String cityId, [List<CityOption> knownCities = const []]) {
+  for (final city in knownCities) {
+    if (city.id == cityId) {
+      return _isArabic(context) ? city.nameAr : city.nameEn;
+    }
+  }
+  return _legacyCityLabel(context, cityId);
+}
+
+String _legacyCityLabel(BuildContext context, String cityId) {
   final l10n = AppLocalizations.of(context)!;
-  switch (city) {
-    case City.damascus:
+  switch (cityId) {
+    case 'damascus':
       return l10n.cityDamascus;
-    case City.aleppo:
+    case 'aleppo':
       return l10n.cityAleppo;
-    case City.homs:
+    case 'homs':
       return l10n.cityHoms;
-    case City.latakia:
+    case 'latakia':
       return l10n.cityLatakia;
-    case City.tartus:
+    case 'tartus':
       return l10n.cityTartus;
+    default:
+      return cityId;
   }
 }
 

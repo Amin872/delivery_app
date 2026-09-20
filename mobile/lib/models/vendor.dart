@@ -1,5 +1,4 @@
 import '../core/parsing/safe_enum.dart';
-import 'city.dart';
 
 enum VendorApprovalStatus { pending, approved, rejected }
 
@@ -29,7 +28,11 @@ class Vendor {
   final num ratingSum;
   final int ratingCount;
   final VendorCategory category;
-  final City city;
+  // Canonical `cities/{id}` document id (see models/city.dart) — a plain
+  // string, not the retired `City` enum. Firestore already stored this as
+  // a lowercase string before the enum was retired, so the wire format is
+  // unchanged; only the Dart-side type changed.
+  final String city;
   // Null means "not set by the vendor yet" — always render as an omitted
   // badge, never a fabricated 0/placeholder value.
   final double? deliveryFee;
@@ -55,7 +58,7 @@ class Vendor {
     this.ratingSum = 0,
     this.ratingCount = 0,
     this.category = VendorCategory.groceries,
-    this.city = City.damascus,
+    this.city = 'damascus',
     this.deliveryFee,
     this.etaMinMinutes,
     this.etaMaxMinutes,
@@ -89,11 +92,14 @@ class Vendor {
         (c) => c.name == map['category'],
         orElse: () => VendorCategory.groceries,
       ),
-      // Same reasoning as category above — postdates every pre-existing doc.
-      city: City.values.firstWhere(
-        (c) => c.name == map['city'],
-        orElse: () => City.damascus,
-      ),
+      // Plain string passthrough — 'damascus' if missing, matching the
+      // retired City enum's old default. A non-empty but unrecognized city
+      // id (e.g. one belonging to a since-disabled/removed cities/{id} doc)
+      // is preserved as-is rather than reset, so a vendor's own city
+      // assignment is never silently overwritten by a display-layer gap —
+      // see enum_labels.dart's cityLabel() for how that's still shown
+      // safely.
+      city: (map['city'] as String?) ?? 'damascus',
       deliveryFee: (map['deliveryFee'] as num?)?.toDouble(),
       etaMinMinutes: map['etaMinMinutes'] as int?,
       etaMaxMinutes: map['etaMaxMinutes'] as int?,
@@ -115,7 +121,7 @@ class Vendor {
       'ratingSum': ratingSum,
       'ratingCount': ratingCount,
       'category': category.name,
-      'city': city.name,
+      'city': city,
       'deliveryFee': deliveryFee,
       'etaMinMinutes': etaMinMinutes,
       'etaMaxMinutes': etaMaxMinutes,

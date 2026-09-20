@@ -5,7 +5,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:delivery_app/models/app_user.dart';
-import 'package:delivery_app/models/city.dart';
 import 'package:delivery_app/models/order.dart';
 import 'package:delivery_app/models/review.dart';
 import 'package:delivery_app/models/vendor.dart';
@@ -110,7 +109,7 @@ void main() {
       isOpen: true,
       approvalStatus: VendorApprovalStatus.approved,
       category: VendorCategory.groceries,
-      city: City.aleppo,
+      city: 'aleppo',
       deliveryFee: 0,
       etaMinMinutes: 15,
       etaMaxMinutes: 25,

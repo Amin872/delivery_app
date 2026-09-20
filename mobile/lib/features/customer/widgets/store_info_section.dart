@@ -9,6 +9,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/star_rating.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../models/city.dart';
 import '../../../models/vendor.dart';
 
 const _logoBorderWidth = 4.0;
@@ -32,10 +33,23 @@ const _logoOverlapAboveFraction = 0.58;
 /// Owns its own expand/collapse state since nothing outside this widget
 /// needs to observe it.
 class StoreInfoSection extends StatefulWidget {
-  const StoreInfoSection({required this.vendor, required this.currencyFormat, super.key});
+  const StoreInfoSection({
+    required this.vendor,
+    required this.currencyFormat,
+    this.liveCities = const [],
+    super.key,
+  });
 
   final Vendor vendor;
   final NumberFormat currencyFormat;
+
+  // Canonical live city list (see FirestoreService.watchCities() /
+  // allCitiesProvider) — passed in by the caller rather than watched here,
+  // since this widget is a plain StatefulWidget, not Riverpod-aware, same
+  // reasoning as currencyFormat above. Defaults to empty (falls back to
+  // cityLabel's own legacy ARB names) so existing/other callers, if any,
+  // keep working unchanged.
+  final List<CityOption> liveCities;
 
   @override
   State<StoreInfoSection> createState() => _StoreInfoSectionState();
@@ -156,7 +170,7 @@ class _StoreInfoSectionState extends State<StoreInfoSection> {
                                   ),
                                   const SizedBox(height: AppSpacing.xs),
                                   Text(
-                                    '${vendorCategoryLabel(context, vendor.category)} · ${cityLabel(context, vendor.city)}',
+                                    '${vendorCategoryLabel(context, vendor.category)} · ${cityLabel(context, vendor.city, widget.liveCities)}',
                                     textAlign: TextAlign.start,
                                     style: textTheme.bodyMedium
                                         ?.copyWith(color: VendorPalette.textSecondary),

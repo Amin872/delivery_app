@@ -1,20 +1,20 @@
-/// Cities this delivery marketplace operates in — a small fixed set, mirroring
-/// [VendorCategory]'s shape. Used both as a field on [Vendor] (which city a
-/// vendor operates in) and as the customer's browsing preference (see
-/// `selectedCityProvider` in `core/providers/preferences_provider.dart`).
-enum City { damascus, aleppo, homs, latakia, tartus }
+/// The five cities this marketplace has always operated in, as canonical
+/// Firestore document ids (`cities/{id}`) — same ids the retired `City`
+/// enum used to declare, in the same order. Used as a last-resort picker
+/// fallback wherever the live `cities` collection (see [CityOption]) is
+/// empty or hasn't loaded yet (e.g. before it's been seeded, or a
+/// transient network hiccup), so a city picker is never left with nothing
+/// to show. Display names for these ids are resolved through
+/// `cityLabel`'s own ARB-based fallback (`core/l10n/enum_labels.dart`) —
+/// this list only carries the ids themselves, never a hardcoded name.
+const legacyCityIds = ['damascus', 'aleppo', 'homs', 'latakia', 'tartus'];
 
-/// Firestore-backed city record — `cities/{cityId}`. Distinct from the
-/// fixed [City] enum above: this is the future canonical source for the
-/// city list (eventually managed by an Admin Locations screen, not built
-/// yet), seeded with the same five cities using the exact same document
-/// ids as [City]'s enum values — see `functions/scripts/seed-cities.ts` —
-/// so every existing `Vendor.city` string already matches a real
+/// Firestore-backed city record — `cities/{cityId}`. The canonical source
+/// for the city list, seeded with the same five cities and the same
+/// document ids [legacyCityIds] names — see
+/// `functions/scripts/seed-cities.ts` — so every existing `Vendor.city`
+/// string (a plain id, see models/vendor.dart) already matches a real
 /// `cities/{id}` doc with no backfill needed.
-///
-/// Purely additive in this phase: nothing reads [CityOption] yet. [City]
-/// remains the only city type any screen or model actually uses until a
-/// later migration phase switches them over.
 class CityOption {
   final String id;
   final String nameEn;
@@ -48,4 +48,13 @@ class CityOption {
       'order': order,
     };
   }
+}
+
+/// Enabled cities from [cities], sorted by [CityOption.order] — the shape
+/// every city picker actually wants to render. Pure so it's testable
+/// without Firebase/Riverpod, same reasoning as core/discovery's functions.
+List<CityOption> visibleCities(List<CityOption> cities) {
+  final visible = cities.where((c) => c.enabled).toList()
+    ..sort((a, b) => a.order.compareTo(b.order));
+  return visible;
 }

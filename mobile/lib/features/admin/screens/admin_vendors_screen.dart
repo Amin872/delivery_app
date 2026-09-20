@@ -16,7 +16,8 @@ import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/city.dart';
 import '../../../models/vendor.dart';
-import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
+import '../../customer/screens/customer_home_screen.dart'
+    show allCitiesProvider, firestoreServiceProvider;
 import '../widgets/admin_scaffold.dart';
 
 /// Full restaurant directory (any approvalStatus/isOpen), unlike
@@ -56,6 +57,7 @@ class _AdminVendorsScreenState extends ConsumerState<AdminVendorsScreen> {
   @override
   Widget build(BuildContext context) {
     final vendorsAsync = ref.watch(allVendorsProvider);
+    final liveCities = ref.watch(allCitiesProvider).valueOrNull ?? const <CityOption>[];
     final l10n = AppLocalizations.of(context)!;
 
     return AdminScaffold(
@@ -137,7 +139,7 @@ class _AdminVendorsScreenState extends ConsumerState<AdminVendorsScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${vendorCategoryLabel(context, vendor.category)} · ${cityLabel(context, vendor.city)}',
+                              '${vendorCategoryLabel(context, vendor.category)} · ${cityLabel(context, vendor.city, liveCities)}',
                             ),
                             Text(
                               vendor.description.isEmpty
@@ -249,7 +251,7 @@ class _AdminVendorEditForm extends ConsumerStatefulWidget {
 class _AdminVendorEditFormState extends ConsumerState<_AdminVendorEditForm> {
   final _formKey = GlobalKey<FormState>();
   late VendorCategory _category;
-  late City _city;
+  late String _city;
   late final TextEditingController _feeController;
   late final TextEditingController _etaMinController;
   late final TextEditingController _etaMaxController;
@@ -348,6 +350,17 @@ class _AdminVendorEditFormState extends ConsumerState<_AdminVendorEditForm> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final liveCities = ref.watch(allCitiesProvider).valueOrNull ?? const <CityOption>[];
+    final enabledCities = visibleCities(liveCities);
+    // Same "preserve current, enabled-only for new" reasoning as
+    // vendor_dashboard_screen.dart's _StoreDetailsForm — an admin editing a
+    // vendor must never silently move it off a disabled/stale city either.
+    final selectableCityIds = enabledCities.isNotEmpty
+        ? enabledCities.map((c) => c.id).toList()
+        : List<String>.from(legacyCityIds);
+    if (!selectableCityIds.contains(_city)) {
+      selectableCityIds.add(_city);
+    }
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Form(
@@ -370,12 +383,12 @@ class _AdminVendorEditFormState extends ConsumerState<_AdminVendorEditForm> {
               },
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<City>(
+            DropdownButtonFormField<String>(
               initialValue: _city,
               decoration: InputDecoration(labelText: l10n.cityFieldLabel),
               items: [
-                for (final city in City.values)
-                  DropdownMenuItem(value: city, child: Text(cityLabel(context, city))),
+                for (final cityId in selectableCityIds)
+                  DropdownMenuItem(value: cityId, child: Text(cityLabel(context, cityId, liveCities))),
               ],
               onChanged: (value) {
                 if (value != null) setState(() => _city = value);

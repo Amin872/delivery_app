@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../models/city.dart';
-
 /// Overridden in `main.dart` with the [SharedPreferences] instance awaited
 /// before `runApp`, so the app's persisted language/theme choice is
 /// available synchronously on first frame instead of flashing a default.
@@ -75,21 +73,23 @@ class ThemeModeController extends StateNotifier<ThemeMode> {
 /// city here never touches Firestore. Drives a client-side filter over the
 /// already-fetched open-vendor list on [CustomerHomeScreen], same shape as
 /// the existing category filter.
-final selectedCityProvider = StateNotifierProvider<SelectedCityController, City>((ref) {
+///
+/// Stores a plain canonical `cities/{id}` document id (see
+/// models/city.dart) rather than the retired `City` enum — the
+/// SharedPreferences key and the stored string values are unchanged, so a
+/// value saved before this migration (e.g. `"damascus"`) is read back
+/// identically, with no conversion needed.
+final selectedCityProvider = StateNotifierProvider<SelectedCityController, String>((ref) {
   return SelectedCityController(ref.watch(sharedPreferencesProvider));
 });
 
-class SelectedCityController extends StateNotifier<City> {
-  SelectedCityController(this._prefs) : super(_fromString(_prefs.getString(_cityKey)));
+class SelectedCityController extends StateNotifier<String> {
+  SelectedCityController(this._prefs) : super(_prefs.getString(_cityKey) ?? 'damascus');
 
   final SharedPreferences _prefs;
 
-  static City _fromString(String? value) {
-    return City.values.firstWhere((c) => c.name == value, orElse: () => City.damascus);
-  }
-
-  void setCity(City city) {
-    state = city;
-    _prefs.setString(_cityKey, city.name);
+  void setCity(String cityId) {
+    state = cityId;
+    _prefs.setString(_cityKey, cityId);
   }
 }
