@@ -366,4 +366,35 @@ void main() {
     final reviews = await service.watchVendorReviews('vendor-1').first;
     expect(reviews.map((r) => r.id).toList(), ['order-2', 'order-1']);
   });
+
+  test('watchCities returns every city ordered by `order`, regardless of insertion order',
+      () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    await firestore.collection('cities').doc('aleppo').set({
+      'nameEn': 'Aleppo',
+      'nameAr': 'حلب',
+      'enabled': true,
+      'order': 1,
+    });
+    await firestore.collection('cities').doc('damascus').set({
+      'nameEn': 'Damascus',
+      'nameAr': 'دمشق',
+      'enabled': true,
+      'order': 0,
+    });
+    await firestore.collection('cities').doc('homs').set({
+      'nameEn': 'Homs',
+      'nameAr': 'حمص',
+      'enabled': false,
+      'order': 2,
+    });
+
+    final cities = await service.watchCities().first;
+
+    expect(cities.map((c) => c.id).toList(), ['damascus', 'aleppo', 'homs']);
+    expect(cities.map((c) => c.order).toList(), [0, 1, 2]);
+    expect(cities.firstWhere((c) => c.id == 'homs').enabled, isFalse);
+  });
 }

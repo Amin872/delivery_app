@@ -187,5 +187,16 @@ service cloud.firestore {
       allow read: if true;
       allow write: if hasRole('admin');
     }
+
+    // cities/{cityId} — canonical city list for the Locations migration
+    // (see the Locations/City migration plan). Same public-read/admin-write
+    // shape as promotions above. Purely additive: no existing screen reads
+    // this collection yet — Vendor.city and every city picker still use the
+    // fixed City enum until a later migration phase, so this block has no
+    // effect on any current flow.
+    match /cities/{cityId} {
+      allow read: if true;
+      allow write: if hasRole('admin');
+    }
   }
 }

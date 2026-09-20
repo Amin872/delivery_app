@@ -38,6 +38,9 @@ class FirestoreService {
   CollectionReference<Map<String, dynamic>> get _promotions =>
       _db.collection('promotions');
 
+  CollectionReference<Map<String, dynamic>> get _cities =>
+      _db.collection('cities');
+
   // AdminUsersScreen's list. NOTE: firestore.rules' users/{userId} read rule
   // is currently `isSelf(userId)` only — there is no admin read branch yet
   // (see ADMIN_AUDIT_REPORT.md §2/§15) — so this stream will surface a
@@ -540,5 +543,19 @@ class FirestoreService {
   // overwriting the rest of the doc from possibly-stale list-item state.
   Future<void> setPromotionEnabled(String promotionId, bool enabled) {
     return guardFuture(() => _promotions.doc(promotionId).update({'enabled': enabled}));
+  }
+
+  // Canonical city list for the Locations migration (see the migration
+  // plan) — unfiltered, ordered by `order` only, so — same reasoning as
+  // watchAllPromotions() above — a single-field automatic index is enough;
+  // no composite index needed. Not consumed by any screen yet in this
+  // phase: the fixed `City` enum remains the only city type any screen or
+  // model actually uses until a later migration phase.
+  Stream<List<CityOption>> watchCities() {
+    return guardStream(_cities
+        .orderBy('order')
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((doc) => CityOption.fromMap(doc.id, doc.data())).toList()));
   }
 }
