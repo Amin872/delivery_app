@@ -226,5 +226,15 @@ service cloud.firestore {
       allow read: if true;
       allow write: if hasRole('admin');
     }
+
+    // governorates/{governorateId} — Locations Phase 3 (Governorate → City
+    // architecture). Same public-read/admin-write shape as cities/promotions
+    // above. Purely additive: cities/{cityId} keeps its own existing rule
+    // unchanged — governorateId is just another admin-writable field on an
+    // already-admin-write-gated doc, no allowlist to widen there.
+    match /governorates/{governorateId} {
+      allow read: if true;
+      allow write: if hasRole('admin');
+    }
   }
 }

@@ -21,6 +21,12 @@ class CityOption {
   final String nameAr;
   final bool enabled;
   final int order;
+  // Optional link to governorates/{governorateId} (see models/governorate.dart)
+  // — additive, Locations Phase 3. Null for a city that hasn't been grouped
+  // under a governorate yet; every existing consumer that doesn't care about
+  // this field keeps working unmodified, same as enabled/order's own
+  // absent-safe defaulting above.
+  final String? governorateId;
 
   const CityOption({
     required this.id,
@@ -28,6 +34,7 @@ class CityOption {
     required this.nameAr,
     required this.enabled,
     required this.order,
+    this.governorateId,
   });
 
   factory CityOption.fromMap(String id, Map<String, dynamic> map) {
@@ -37,6 +44,7 @@ class CityOption {
       nameAr: map['nameAr'] as String,
       enabled: map['enabled'] as bool? ?? true,
       order: map['order'] as int? ?? 0,
+      governorateId: map['governorateId'] as String?,
     );
   }
 
@@ -46,6 +54,7 @@ class CityOption {
       'nameAr': nameAr,
       'enabled': enabled,
       'order': order,
+      'governorateId': governorateId,
     };
   }
 }

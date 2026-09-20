@@ -5,6 +5,7 @@ import '../models/address.dart';
 import '../models/app_user.dart';
 import '../models/city.dart';
 import '../models/driver.dart';
+import '../models/governorate.dart';
 import '../models/order.dart';
 import '../models/promotion.dart';
 import '../models/review.dart';
@@ -40,6 +41,9 @@ class FirestoreService {
 
   CollectionReference<Map<String, dynamic>> get _cities =>
       _db.collection('cities');
+
+  CollectionReference<Map<String, dynamic>> get _governorates =>
+      _db.collection('governorates');
 
   // AdminUsersScreen's list. NOTE: firestore.rules' users/{userId} read rule
   // is currently `isSelf(userId)` only — there is no admin read branch yet
@@ -571,5 +575,19 @@ class FirestoreService {
         .snapshots()
         .map((snap) =>
             snap.docs.map((doc) => CityOption.fromMap(doc.id, doc.data())).toList()));
+  }
+
+  // Canonical governorate list (Locations Phase 3 — see models/governorate.dart)
+  // — unfiltered, ordered by `order` only, same reasoning as watchCities()
+  // above: a single-field automatic index is enough, no composite index
+  // needed. Grouping cities under a governorate (via CityOption.governorateId)
+  // is done client-side, same "fetch everything small, group in Dart"
+  // pattern as visibleCities().
+  Stream<List<GovernorateOption>> watchGovernorates() {
+    return guardStream(_governorates
+        .orderBy('order')
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((doc) => GovernorateOption.fromMap(doc.id, doc.data())).toList()));
   }
 }

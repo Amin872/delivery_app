@@ -55,6 +55,32 @@ void main() {
     expect(restored.enabled, isFalse);
   });
 
+  test('CityOption.fromMap defaults governorateId to null when missing', () {
+    final restored = CityOption.fromMap('damascus', {
+      'nameEn': 'Damascus',
+      'nameAr': 'دمشق',
+      'enabled': true,
+      'order': 0,
+    });
+
+    expect(restored.governorateId, isNull);
+  });
+
+  test('CityOption round-trips a governorateId when present', () {
+    const city = CityOption(
+      id: 'damascus',
+      nameEn: 'Damascus',
+      nameAr: 'دمشق',
+      enabled: true,
+      order: 0,
+      governorateId: 'damascus',
+    );
+
+    final restored = CityOption.fromMap(city.id, city.toMap());
+
+    expect(restored.governorateId, 'damascus');
+  });
+
   group('visibleCities', () {
     test('excludes disabled cities', () {
       const cities = [

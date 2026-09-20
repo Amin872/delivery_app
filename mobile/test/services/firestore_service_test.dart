@@ -420,4 +420,35 @@ void main() {
     expect(cities.map((c) => c.order).toList(), [0, 1, 2]);
     expect(cities.firstWhere((c) => c.id == 'homs').enabled, isFalse);
   });
+
+  test('watchGovernorates returns every governorate ordered by `order`, regardless of insertion order',
+      () async {
+    final firestore = FakeFirebaseFirestore();
+    final service = FirestoreService(firestore: firestore);
+
+    await firestore.collection('governorates').doc('aleppo').set({
+      'nameEn': 'Aleppo',
+      'nameAr': 'حلب',
+      'enabled': true,
+      'order': 2,
+    });
+    await firestore.collection('governorates').doc('damascus').set({
+      'nameEn': 'Damascus',
+      'nameAr': 'دمشق',
+      'enabled': true,
+      'order': 0,
+    });
+    await firestore.collection('governorates').doc('rif_dimashq').set({
+      'nameEn': 'Rif Dimashq',
+      'nameAr': 'ريف دمشق',
+      'enabled': false,
+      'order': 1,
+    });
+
+    final governorates = await service.watchGovernorates().first;
+
+    expect(governorates.map((g) => g.id).toList(), ['damascus', 'rif_dimashq', 'aleppo']);
+    expect(governorates.map((g) => g.order).toList(), [0, 1, 2]);
+    expect(governorates.firstWhere((g) => g.id == 'rif_dimashq').enabled, isFalse);
+  });
 }
