@@ -8,11 +8,20 @@ import '../theme/app_theme.dart';
 /// place order, save, ...). Keeps the same `onPressed`/`child` API
 /// `FilledButton` call sites already use (including the loading-spinner-swap
 /// pattern), so replacing one with the other is a near-drop-in change.
+///
+/// [gradient] optionally overrides the default [AppGradients.primary] fill —
+/// that default is a fixed brand-burgundy gradient regardless of the ambient
+/// theme (see its own doc), which is correct for the auth screens it was
+/// designed for but clashes on a [VendorPalette]-themed screen (Edit
+/// Profile, Edit Address, Cart). Those screens pass their own cyan gradient
+/// built from the same `VendorPalette` constants Home already uses, rather
+/// than this widget guessing its ambient theme.
 class GradientButton extends StatefulWidget {
-  const GradientButton({required this.onPressed, required this.child, super.key});
+  const GradientButton({required this.onPressed, required this.child, this.gradient, super.key});
 
   final VoidCallback? onPressed;
   final Widget child;
+  final Gradient? gradient;
 
   @override
   State<GradientButton> createState() => _GradientButtonState();
@@ -45,7 +54,7 @@ class _GradientButtonState extends State<GradientButton> {
           width: double.infinity,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            gradient: enabled ? AppGradients.primary(colorScheme) : null,
+            gradient: enabled ? (widget.gradient ?? AppGradients.primary(colorScheme)) : null,
             color: enabled ? null : colorScheme.onSurface.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
             boxShadow: enabled
@@ -61,14 +70,14 @@ class _GradientButtonState extends State<GradientButton> {
           child: DefaultTextStyle.merge(
             style: TextStyle(
               color: enabled
-                  ? colorScheme.onPrimary
+                  ? AppGradients.onPrimary
                   : colorScheme.onSurface.withValues(alpha: 0.38),
               fontWeight: FontWeight.w600,
             ),
             child: IconTheme.merge(
               data: IconThemeData(
                 color: enabled
-                    ? colorScheme.onPrimary
+                    ? AppGradients.onPrimary
                     : colorScheme.onSurface.withValues(alpha: 0.38),
               ),
               child: widget.child,

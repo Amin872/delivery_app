@@ -41,17 +41,17 @@ class StatCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (icon != null) Icon(icon, color: colorScheme.onPrimary),
+            if (icon != null) Icon(icon, color: AppGradients.onPrimary),
             const SizedBox(height: 8),
             Text(
               value,
               style: Theme.of(context)
                   .textTheme
                   .headlineSmall
-                  ?.copyWith(color: colorScheme.onPrimary),
+                  ?.copyWith(color: AppGradients.onPrimary),
             ),
             const SizedBox(height: 4),
-            Text(label, style: TextStyle(color: colorScheme.onPrimary.withValues(alpha: 0.9))),
+            Text(label, style: TextStyle(color: AppGradients.onPrimary.withValues(alpha: 0.9))),
           ],
         ),
       ),

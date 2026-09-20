@@ -23,7 +23,7 @@ class ListSkeletonLoader extends StatelessWidget {
           height: itemHeight,
           margin: const EdgeInsets.symmetric(vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(16),
           ),
         ),
@@ -50,7 +50,7 @@ class StatCardRowSkeleton extends StatelessWidget {
             child: Container(
               height: 110,
               decoration:
-                  BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                  BoxDecoration(color: colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(16)),
             ),
           ),
           const SizedBox(width: 12),
@@ -58,7 +58,7 @@ class StatCardRowSkeleton extends StatelessWidget {
             child: Container(
               height: 110,
               decoration:
-                  BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                  BoxDecoration(color: colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(16)),
             ),
           ),
         ],

@@ -51,8 +51,13 @@ class ThemeModeController extends StateNotifier<ThemeMode> {
         return ThemeMode.light;
       case 'dark':
         return ThemeMode.dark;
-      default:
+      case 'system':
         return ThemeMode.system;
+      default:
+        // No stored preference yet (first run) — default to dark, since the
+        // app's burgundy theme is designed dark-first. An explicit prior
+        // choice of 'system' (stored by setThemeMode) is still honored above.
+        return ThemeMode.dark;
     }
   }
 
