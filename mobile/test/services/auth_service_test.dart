@@ -63,9 +63,52 @@ void main() {
     expect(driverDoc.exists, isTrue);
     expect(driverDoc.data()!['userId'], 'driver-uid');
     expect(driverDoc.data()!['isAvailable'], isTrue);
+    // firestore.rules' drivers create rule requires exactly 'pending'.
+    expect(driverDoc.data()!['approvalStatus'], 'pending');
+    expect(driverDoc.data()!['ratingSum'], 0);
+    expect(driverDoc.data()!['ratingCount'], 0);
 
     final vendorDoc = await firestore.collection('vendors').doc('driver-uid').get();
     expect(vendorDoc.exists, isFalse);
+  });
+
+  test('signUp creates a pending vendors/{uid} doc with empty pickup fields when role is vendor',
+      () async {
+    final auth = MockFirebaseAuth();
+    final firestore = FakeFirebaseFirestore();
+    final credential = MockUserCredential();
+    final user = MockUser();
+
+    when(() => auth.createUserWithEmailAndPassword(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        )).thenAnswer((_) async => credential);
+    when(() => credential.user).thenReturn(user);
+    when(() => user.uid).thenReturn('vendor-uid');
+
+    final service = AuthService(auth: auth, firestore: firestore);
+
+    await service.signUp(
+      email: 'vendor@example.com',
+      password: 'password123',
+      displayName: 'Vendor One',
+      role: UserRole.vendor,
+      phoneNumber: '+15551234567',
+    );
+
+    final vendorDoc = await firestore.collection('vendors').doc('vendor-uid').get();
+    expect(vendorDoc.exists, isTrue);
+    final data = vendorDoc.data()!;
+    expect(data['ownerId'], 'vendor-uid');
+    expect(data['approvalStatus'], 'pending');
+    // Present but unset — no fabricated address or coordinate.
+    expect(data.containsKey('pickupAddress'), isTrue);
+    expect(data['pickupAddress'], isNull);
+    expect(data['pickupLatitude'], isNull);
+    expect(data['pickupLongitude'], isNull);
+
+    final driverDoc = await firestore.collection('drivers').doc('vendor-uid').get();
+    expect(driverDoc.exists, isFalse);
   });
 
   test('signIn creates a default customer profile when users/{uid} is missing', () async {
@@ -137,5 +180,75 @@ void main() {
     final doc = await firestore.collection('users').doc('user-1').get();
     expect(doc.data()!.containsKey('fcmToken'), isFalse);
     verify(() => auth.signOut()).called(1);
+  });
+
+  // Phase 31 (M1): deleteAccount deletes only the Firebase Auth account;
+  // users/{uid} and its addresses are removed server-side by the
+  // onAuthUserDeleted Cloud Function (firestore.rules forbid client deletes).
+  group('deleteAccount (Phase 31 M1)', () {
+    Future<FakeFirebaseFirestore> seededFirestore() async {
+      final firestore = FakeFirebaseFirestore();
+      await firestore.collection('users').doc('user-1').set({'email': 'a@b.com', 'role': 'customer'});
+      await firestore.collection('users').doc('user-1').collection('addresses').doc('home').set({'addressText': 'Mezzeh'});
+      await firestore.collection('users').doc('user-1').collection('addresses').doc('work').set({'addressText': 'Malki'});
+      return firestore;
+    }
+
+    Future<void> expectProfileUntouched(FakeFirebaseFirestore firestore) async {
+      expect((await firestore.collection('users').doc('user-1').get()).exists, isTrue);
+      final addresses = await firestore.collection('users').doc('user-1').collection('addresses').get();
+      expect(addresses.docs.map((d) => d.id), unorderedEquals(['home', 'work']));
+    }
+
+    test('deletes the Auth account and nothing in Firestore from the client', () async {
+      final auth = MockFirebaseAuth();
+      final user = MockUser();
+      when(() => auth.currentUser).thenReturn(user);
+      when(() => user.uid).thenReturn('user-1');
+      when(() => user.delete()).thenAnswer((_) async {});
+      final firestore = await seededFirestore();
+
+      await AuthService(auth: auth, firestore: firestore).deleteAccount();
+
+      verify(() => user.delete()).called(1);
+      await expectProfileUntouched(firestore);
+    });
+
+    test('requires-recent-login: surfaces the mapped error and deletes nothing', () async {
+      final auth = MockFirebaseAuth();
+      final user = MockUser();
+      when(() => auth.currentUser).thenReturn(user);
+      when(() => user.uid).thenReturn('user-1');
+      when(() => user.delete()).thenThrow(FirebaseAuthException(code: 'requires-recent-login'));
+      final firestore = await seededFirestore();
+
+      await expectLater(
+        () => AuthService(auth: auth, firestore: firestore).deleteAccount(),
+        throwsA(isA<AppException>().having((e) => e.code, 'code', 'requires-recent-login')),
+      );
+      await expectProfileUntouched(firestore);
+    });
+
+    test('any other Auth failure also leaves Firestore untouched', () async {
+      final auth = MockFirebaseAuth();
+      final user = MockUser();
+      when(() => auth.currentUser).thenReturn(user);
+      when(() => user.uid).thenReturn('user-1');
+      when(() => user.delete()).thenThrow(FirebaseAuthException(code: 'network-request-failed'));
+      final firestore = await seededFirestore();
+
+      await expectLater(() => AuthService(auth: auth, firestore: firestore).deleteAccount(), throwsA(isA<AppException>()));
+      await expectProfileUntouched(firestore);
+    });
+
+    test('does nothing when no one is signed in', () async {
+      final auth = MockFirebaseAuth();
+      when(() => auth.currentUser).thenReturn(null);
+      final firestore = await seededFirestore();
+
+      await AuthService(auth: auth, firestore: firestore).deleteAccount();
+
+      await expectProfileUntouched(firestore);
+    });
   });
 }

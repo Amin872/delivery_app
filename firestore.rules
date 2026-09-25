@@ -16,6 +16,17 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
     }
 
+    // Phase 31 (L1): who may create a vendor/driver storefront doc -- a caller
+    // whose users doc already has [role], or one with no users doc yet.
+    // The latter is the signup window: AuthService.signUp deliberately writes
+    // vendors/{uid} or drivers/{uid} BEFORE users/{uid} (see the ordering
+    // note there). An existing customer/driver/vendor can no longer create
+    // another role's doc.
+    function canCreateAsRole(role) {
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+
     // users/{userId} doc id == auth uid, created at sign-up.
     match /users/{userId} {
       // Admin read-only carve-out for AdminUsersScreen's directory — write/
@@ -24,13 +35,23 @@ service cloud.firestore {
       allow read: if isSelf(userId) || hasRole('admin');
       allow create: if isSelf(userId) && request.resource.data.role in ['customer', 'driver', 'vendor'];
       // Role is fixed at sign-up; only profile fields may change afterwards.
-      allow update: if isSelf(userId) && request.resource.data.role == resource.data.role;
-      // Only the account owner may delete their own doc — used by the
-      // Personal Information screen's "Delete account" flow
-      // (AuthService.deleteAccount). Deleting a Firestore doc does not
-      // cascade to subcollections, so deleteAccount() clears addresses/
-      // below itself before deleting this doc.
-      allow delete: if isSelf(userId);
+      // Phase 31 (L2): exactly the fields the app itself updates --
+      // displayName + phoneNumber (FirestoreService.updateUserProfile),
+      // favoriteVendorIds (toggleFavoriteVendor), fcmToken (PushNotification-
+      // Service.registerToken/refresh; deleted by AuthService.signOut) and
+      // locale (PushNotificationService.saveLocale). Anything else (role,
+      // email, arbitrary new keys) is not client-writable after creation.
+      allow update: if isSelf(userId) &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'phoneNumber', 'favoriteVendorIds', 'fcmToken', 'locale'
+        ]);
+      // Phase 31 (M1): no client may delete a profile. Deleting it would
+      // let the owner re-create it with a different role (create allows any
+      // non-admin role). Account deletion deletes the Firebase Auth account
+      // only (AuthService.deleteAccount); the onAuthUserDeleted Cloud
+      // Function then removes this doc and its addresses with the Admin SDK.
+      allow delete: if false;
 
       // A customer's saved delivery addresses — free-form text, no
       // structured street/building/postal fields (see models/address.dart).
@@ -47,9 +68,15 @@ service cloud.firestore {
     // (enforced at signup by AuthService.signUp, and at write-time here).
     match /vendors/{vendorId} {
       allow read: if true;
+      // Phase 31 (H2): a new storefront starts with no ratings -- ratingSum/
+      // ratingCount absent or 0 (signup writes 0), so a vendor can't launch
+      // with fabricated reviews that the update rule would then freeze in.
       allow create: if isSignedIn() &&
+        canCreateAsRole('vendor') &&
         request.resource.data.ownerId == request.auth.uid &&
-        request.resource.data.approvalStatus == 'pending';
+        request.resource.data.approvalStatus == 'pending' &&
+        request.resource.data.get('ratingSum', 0) == 0 &&
+        request.resource.data.get('ratingCount', 0) == 0;
       // ratingSum/ratingCount are aggregated by the onReviewCreated Cloud
       // Function (Admin SDK, bypasses these rules) — an owner may update
       // everything else about their own storefront, but not self-inflate
@@ -70,7 +97,12 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'approvalStatus', 'category', 'city', 'deliveryFee', 'etaMinMinutes',
             'etaMaxMinutes', 'minimumOrderAmount', 'openTime', 'closeTime', 'isOpen'
-          ]))
+          ]) &&
+          // Phase 31 (L4): an approval change must be a real state. Checked
+          // only when approvalStatus is being written, so editing other
+          // fields of a legacy doc without one still works.
+          (!('approvalStatus' in request.resource.data.diff(resource.data).affectedKeys()) ||
+            request.resource.data.approvalStatus in ['pending', 'approved', 'rejected']))
       );
       allow delete: if false;
 
@@ -78,14 +110,20 @@ service cloud.firestore {
       // (Admin SDK, bypasses these rules) when an order reaches 'delivered'
       // — same self-inflation guard as vendors/{vendorId}'s ratingSum/
       // ratingCount above, one level deeper.
+      // Phase 31 (M2): an item's vendorId field must name the vendor it is
+      // stored under -- collection-group listings (search, admin products)
+      // group items by that field, so a mismatch would list an item under
+      // another store.
       match /menuItems/{itemId} {
         allow read: if true;
         allow create: if isSignedIn() &&
           get(/databases/$(database)/documents/vendors/$(vendorId)).data.ownerId == request.auth.uid &&
-          request.resource.data.get('orderCount', 0) == 0;
+          request.resource.data.get('orderCount', 0) == 0 &&
+          request.resource.data.vendorId == vendorId;
         allow update: if isSignedIn() &&
           get(/databases/$(database)/documents/vendors/$(vendorId)).data.ownerId == request.auth.uid &&
-          request.resource.data.get('orderCount', 0) == resource.data.get('orderCount', 0);
+          request.resource.data.get('orderCount', 0) == resource.data.get('orderCount', 0) &&
+          request.resource.data.vendorId == vendorId;
         allow delete: if isSignedIn() &&
           get(/databases/$(database)/documents/vendors/$(vendorId)).data.ownerId == request.auth.uid;
       }
@@ -113,27 +151,68 @@ service cloud.firestore {
     // Live Location redesign. Editable only by the driver themself — except
     // ratingSum/ratingCount, which only the onReviewCreated Cloud Function
     // (Admin SDK) may touch, same reasoning as vendors/{vendorId} above.
+    //
+    // approvalStatus follows the vendors/{vendorId} approval pattern: a
+    // driver always starts 'pending' (AuthService.signUp), can never change
+    // it themself, and an admin may change approvalStatus alone — the admin
+    // branch is field-scoped, not a general admin write to driver docs.
+    // Rating fields must also start at zero, so a driver can't create their
+    // own doc with a pre-inflated rating.
     match /drivers/{driverId} {
       allow read: if isSelf(driverId) || hasRole('admin');
-      allow create: if isSelf(driverId);
-      allow update: if isSelf(driverId) &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ratingSum', 'ratingCount']);
+      allow create: if isSelf(driverId) &&
+        canCreateAsRole('driver') &&
+        request.resource.data.approvalStatus == 'pending' &&
+        request.resource.data.get('ratingSum', 0) == 0 &&
+        request.resource.data.get('ratingCount', 0) == 0;
+      allow update: if isSignedIn() && (
+        (isSelf(driverId) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ratingSum', 'ratingCount', 'approvalStatus'])) ||
+        (hasRole('admin') &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvalStatus']) &&
+          request.resource.data.approvalStatus in ['pending', 'approved', 'rejected'])
+      );
       allow delete: if false;
+    }
+
+    // The only order status changes a vendor may make directly — exactly
+    // what vendor_dashboard_screen.dart offers (_nextVendorStatus and
+    // _vendorCanCancel): advance their own prep stages, or cancel while the
+    // order is still theirs to fulfill. Everything from readyForPickup on
+    // (driverAssigned, pickedUp, delivering, delivered) belongs to the
+    // acceptDelivery/advanceDelivery/admin callables, and terminal orders
+    // (delivered/cancelled) can't be changed at all.
+    function isVendorStatusTransition(from, to) {
+      return (from == 'pending' && to == 'accepted') ||
+        (from == 'accepted' && to == 'preparing') ||
+        (from == 'preparing' && to == 'readyForPickup') ||
+        (from in ['pending', 'accepted', 'preparing'] && to == 'cancelled');
     }
 
     // orders/{orderId} — visible to the customer who placed it, the vendor
     // that owns it, the driver assigned to deliver it, and (for the unclaimed
-    // "readyForPickup" queue only) any signed-in driver browsing for work.
+    // "readyForPickup" queue only) any admin-approved driver browsing for
+    // work. The queue exposes customers' delivery addresses, so a pending,
+    // rejected or legacy (no approvalStatus) driver can't read it; they can
+    // still read an order already assigned to them (the driverId branch),
+    // so an in-flight delivery isn't stranded if approval is revoked.
     match /orders/{orderId} {
       allow read: if isSignedIn() && (
         resource.data.customerId == request.auth.uid ||
         resource.data.driverId == request.auth.uid ||
         get(/databases/$(database)/documents/vendors/$(resource.data.vendorId)).data.ownerId == request.auth.uid ||
-        (resource.data.status == 'readyForPickup' && resource.data.driverId == null && hasRole('driver')) ||
+        (resource.data.status == 'readyForPickup' && resource.data.driverId == null && hasRole('driver') &&
+          get(/databases/$(database)/documents/drivers/$(request.auth.uid)).data.get('approvalStatus', '') == 'approved') ||
         hasRole('admin')
       );
 
-      allow create: if isSignedIn() && request.resource.data.customerId == request.auth.uid;
+      // No client may create an order. Orders are created only by the
+      // `createOrder` callable Cloud Function (Admin SDK, bypasses these
+      // rules), which re-prices every item from the vendor's menu, adds the
+      // vendor's delivery fee, forces status 'pending' and driverId null,
+      // and snapshots the vendor — none of which a client-written document
+      // could be trusted with.
+      allow create: if false;
 
       // Status transitions before a driver is assigned are handled by the
       // vendor; driver assignment itself goes through the `acceptDelivery`
@@ -146,8 +225,30 @@ service cloud.firestore {
       // Firestore evaluates each write's rules against the document state
       // at the moment that write is applied, so a customer's cancel loses
       // cleanly to a vendor's concurrent accept once status != 'pending'.
+      //
+      // The vendor branch is field-scoped to `status` only, same as the
+      // customer branch below — confirmed against the only two client call
+      // sites that ever touch this document as a vendor
+      // (FirestoreService.updateOrderStatus/cancelOrder, both single-field
+      // `{'status': ...}` writes from vendor_dashboard_screen.dart). Without
+      // this, an owning vendor could rewrite total/items/customerId/
+      // deliveryLatitude&Longitude/driverId directly — in particular
+      // driverId, which must only ever be set by the acceptDelivery/
+      // adminReassignDriver Cloud Functions (Admin SDK transactions), never
+      // a direct client write, per the driver-assignment race-safety
+      // architecture noted throughout this file. The new status value is
+      // also restricted to the vendor's own lifecycle stages
+      // (isVendorStatusTransition above) — without that, a vendor could
+      // jump an order straight to 'delivered' (firing the orderCount
+      // trigger) or move it backwards.
+      //
+      // No branch exists for drivers or admins: every driver and admin
+      // order change goes through a callable (Admin SDK), so a direct write
+      // from either is denied.
       allow update: if isSignedIn() && (
-        get(/databases/$(database)/documents/vendors/$(resource.data.vendorId)).data.ownerId == request.auth.uid ||
+        (get(/databases/$(database)/documents/vendors/$(resource.data.vendorId)).data.ownerId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+          isVendorStatusTransition(resource.data.status, request.resource.data.status)) ||
         (resource.data.customerId == request.auth.uid &&
           resource.data.status == 'pending' &&
           request.resource.data.status == 'cancelled' &&
@@ -174,22 +275,45 @@ service cloud.firestore {
           get(/databases/$(database)/documents/vendors/$(get(/databases/$(database)/documents/orders/$(orderId)).data.vendorId)).data.ownerId == request.auth.uid ||
           hasRole('admin')
         );
+        // Phase 31 (C1/M5): only the fixed id 'current', and only the
+        // payload LocationService.publishDriverLocation writes — driverId
+        // (the writer's own uid), latitude/longitude, optional heading/
+        // speed, updatedAt (epoch ms). Anything else (e.g. customerId or
+        // status smuggled into a doc a callable might mistake for an order)
+        // is rejected.
         allow create, update: if isSignedIn() &&
+          locationId == 'current' &&
+          isValidDriverLocation(request.resource.data) &&
           get(/databases/$(database)/documents/orders/$(orderId)).data.driverId == request.auth.uid &&
           get(/databases/$(database)/documents/orders/$(orderId)).data.status in ['pickedUp', 'delivering'];
         allow delete: if false;
       }
     }
 
+    function isValidDriverLocation(data) {
+      return data.keys().hasOnly(['driverId', 'latitude', 'longitude', 'heading', 'speed', 'updatedAt']) &&
+        data.keys().hasAll(['driverId', 'latitude', 'longitude', 'updatedAt']) &&
+        data.driverId == request.auth.uid &&
+        data.latitude is number && data.latitude >= -90 && data.latitude <= 90 &&
+        data.longitude is number && data.longitude >= -180 && data.longitude <= 180 &&
+        (data.get('heading', null) == null ||
+          (data.heading is number && data.heading >= 0 && data.heading <= 360)) &&
+        (data.get('speed', null) == null || (data.speed is number && data.speed >= 0)) &&
+        data.updatedAt is int;
+    }
+
     // reviews/{orderId} — doc id is the order's id, not auto-generated, so
     // "one review per order" falls out of create-only semantics (a second
     // write to the same id is an update, and no update rule allows one).
-    // Public read, like vendors, since these are storefront testimonials.
+    // Readable by any signed-in user (storefront testimonials shown on
+    // VendorMenuScreen — every app screen is behind sign-in). Phase 31 (M3):
+    // no longer unauthenticated, so the customer/driver/order linkage these
+    // docs carry can't be scraped anonymously.
     // ratingSum/ratingCount on vendors/{vendorId} and drivers/{driverId} are
     // aggregated from these by the onReviewCreated Cloud Function — see the
     // architecture note in CLAUDE.md.
     match /reviews/{orderId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow create: if isSignedIn() &&
         request.resource.data.orderId == orderId &&
         request.resource.data.customerId == request.auth.uid &&
@@ -202,7 +326,17 @@ service cloud.firestore {
         request.resource.data.vendorRating is int &&
         request.resource.data.vendorRating >= 1 && request.resource.data.vendorRating <= 5 &&
         request.resource.data.driverRating is int &&
-        request.resource.data.driverRating >= 1 && request.resource.data.driverRating <= 5;
+        request.resource.data.driverRating >= 1 && request.resource.data.driverRating <= 5 &&
+        // Phase 31 (L3): exactly Review.toMap()'s fields — nothing extra —
+        // and a bounded comment (string or null; the rating dialog trims
+        // it and sends null when empty).
+        request.resource.data.keys().hasOnly([
+          'orderId', 'customerId', 'vendorId', 'driverId',
+          'vendorRating', 'driverRating', 'comment', 'createdAt'
+        ]) &&
+        (request.resource.data.get('comment', null) == null ||
+          (request.resource.data.comment is string && request.resource.data.comment.size() <= 1000)) &&
+        request.resource.data.createdAt is int;
       allow update, delete: if false;
     }
 
@@ -264,6 +398,33 @@ service cloud.firestore {
       allow read: if true;
       allow create: if hasRole('admin') && !exists(/databases/$(database)/documents/districts/$(districtId)) && exists(/databases/$(database)/documents/cities/$(request.resource.data.cityId));
       allow update: if hasRole('admin') && exists(/databases/$(database)/documents/cities/$(request.resource.data.cityId));
+      allow delete: if false;
+    }
+
+    // neighborhoods/{neighborhoodId} — Phase 4 Location & Address
+    // Architecture (Governorate → City → Neighborhood). A standalone
+    // collection, independent of districts/{districtId} above (see
+    // models/neighborhood.dart's own doc comment for why) — same flat
+    // top-level shape and same cityId-must-exist referential check on both
+    // create and update as districts/{districtId}, same reasoning.
+    match /neighborhoods/{neighborhoodId} {
+      allow read: if true;
+      allow create: if hasRole('admin') && !exists(/databases/$(database)/documents/neighborhoods/$(neighborhoodId)) && exists(/databases/$(database)/documents/cities/$(request.resource.data.cityId));
+      allow update: if hasRole('admin') && exists(/databases/$(database)/documents/cities/$(request.resource.data.cityId));
+      allow delete: if false;
+    }
+
+    // serviceAreas/{serviceAreaId} — Phase 4's standalone future layer (see
+    // models/service_area.dart's own doc comment: no consumer reads this
+    // for delivery eligibility yet). Same public-read/admin-write/no-delete
+    // shape as cities/governorates above; no referential-integrity check
+    // against cities/governorates since governorateId/cityId are both
+    // optional here (a service area need not be scoped to an existing
+    // city), unlike districts/neighborhoods' required cityId.
+    match /serviceAreas/{serviceAreaId} {
+      allow read: if true;
+      allow create: if hasRole('admin') && !exists(/databases/$(database)/documents/serviceAreas/$(serviceAreaId));
+      allow update: if hasRole('admin');
       allow delete: if false;
     }
   }

@@ -1,6 +1,6 @@
 // Comprehensive multi-role E2E suite, driven live on the connected Android
 // emulator. Runs against the local Firebase Emulator Suite ONLY — see
-// test_helpers.dart's connectToEmulators() — never the live orient-food-9c1e0
+// test_helpers.dart's connectToEmulators() — never the live delivery-app-syria-2026
 // project. One continuous, ordered scenario: later steps depend on earlier
 // ones' state, which is the honest shape of "the full lifecycle across
 // roles," not an isolated-unit-test anti-pattern.
@@ -113,7 +113,7 @@ void main() {
     expect(find.text(menuItemName), findsWidgets);
   });
 
-  testWidgets('3. Driver signs up, toggles availability', (tester) async {
+  testWidgets('3. Driver signs up and waits for admin approval', (tester) async {
     await pumpApp(tester);
     await signOut(tester);
 
@@ -128,16 +128,17 @@ void main() {
     expect(find.text('Available deliveries'), findsOneWidget);
     driverUid = FirebaseAuth.instance.currentUser!.uid;
 
-    await tester.tap(find.byKey(const ValueKey('driver_available_switch')));
-    await tester.pumpAndSettle();
-
+    // A new driver starts pending (Phase 24): no delivery queue and no
+    // availability switch until an admin approves them in scenario 4.
+    expect(find.byKey(const ValueKey('driver_approval_pending')), findsOneWidget);
+    expect(find.byKey(const ValueKey('driver_available_switch')), findsNothing);
     final driverDoc = await FirebaseFirestore.instance.collection('drivers').doc(driverUid).get();
-    expect(driverDoc.data()!['isAvailable'], isFalse); // toggled off from its default-true
+    expect(driverDoc.data()!['approvalStatus'], 'pending');
 
     await signOut(tester);
   });
 
-  testWidgets('4. Admin approves the vendor', (tester) async {
+  testWidgets('4. Admin approves the vendor and the driver', (tester) async {
     await pumpApp(tester);
 
     await signIn(tester, email: _adminEmail, password: _adminPassword);
@@ -157,6 +158,26 @@ void main() {
     expect(vendorDoc.data()!['approvalStatus'], 'approved');
     expect(vendorDoc.data()!['isOpen'], isTrue);
 
+    // Approve this run's driver through the real admin UI: Drivers screen
+    // (via the navigation drawer on a phone-width screen), search by the
+    // run-unique email, open the driver, tap Approve.
+    await tester.tap(find.byTooltip('Open navigation menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Drivers').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, driverEmail);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('E2E Driver').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('driver_approve_button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Driver approved.'), findsOneWidget);
+
+    final driverDoc = await FirebaseFirestore.instance.collection('drivers').doc(driverUid).get();
+    expect(driverDoc.data()!['approvalStatus'], 'approved');
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await signOut(tester);
   });
 
@@ -166,6 +187,26 @@ void main() {
     await signIn(tester, email: customerEmail, password: password);
     expect(find.text('Nearby vendors'), findsOneWidget);
     expect(find.text(vendorName), findsWidgets);
+
+    // Orders are placed by the createOrder callable (Functions emulator),
+    // which requires one of the customer's own saved addresses with a map
+    // pin. Seeded directly as the signed-in customer (firestore.rules lets
+    // an owner write their own addresses) rather than driven through the
+    // map picker, which isn't what this scenario covers. isDefault: true
+    // makes CartScreen preselect it.
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(customerUid)
+        .collection('addresses')
+        .add({
+      'userId': customerUid,
+      'label': 'Home',
+      'addressText': '123 E2E Street',
+      'latitude': 31.9539,
+      'longitude': 35.9106,
+      'isDefault': true,
+      'createdAt': DateTime.now().millisecondsSinceEpoch,
+    });
 
     await tester.tap(find.text(vendorName).first);
     await tester.pumpAndSettle();
@@ -177,15 +218,22 @@ void main() {
     await tester.tap(find.textContaining('View cart'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(const ValueKey('cart_address_field')), '123 E2E Street');
-    await tester.pumpAndSettle();
+    // The seeded default address is preselected on the cart's location tile.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('cart_address_field')),
+        matching: find.textContaining('123 E2E Street'),
+      ),
+      findsOneWidget,
+    );
     await tester.ensureVisible(find.byKey(const ValueKey('cart_place_order_button')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('cart_place_order_button')));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(milliseconds: 1200));
 
-    expect(find.text('Order placed!'), findsOneWidget);
+    // Confirmation now carries the server-calculated total.
+    expect(find.textContaining('Order placed!'), findsOneWidget);
     expect(find.text('Track order'), findsOneWidget);
 
     // Filtered by customerId, not vendorId — firestore.rules' orders read
@@ -200,7 +248,16 @@ void main() {
         .get();
     expect(orders.docs.length, 1);
     orderId = orders.docs.first.id;
-    expect(orders.docs.first.data()['status'], 'pending');
+    final placedOrder = orders.docs.first.data();
+    expect(placedOrder['status'], 'pending');
+    expect(placedOrder['driverId'], isNull);
+    // Priced server-side from the menu: one item, and this E2E vendor never
+    // sets a delivery fee (null => 0), so total == subtotal == item price.
+    expect(placedOrder['subtotal'], double.parse(menuItemPrice));
+    expect(placedOrder['deliveryFee'], 0);
+    expect(placedOrder['total'], double.parse(menuItemPrice));
+    expect(placedOrder['vendorName'], vendorName);
+    expect(placedOrder['deliveryLatitude'], 31.9539);
 
     // Placing an order pushReplace()s CartScreen with OrderTrackingScreen,
     // two pushes deep from CustomerHomeScreen (Home -> VendorMenuScreen ->
@@ -239,14 +296,53 @@ void main() {
 
     await signIn(tester, email: driverEmail, password: password);
     expect(find.text('Available deliveries'), findsOneWidget);
+
+    // Approved in scenario 4, so the availability switch is back (it moved
+    // here from scenario 3, where a pending driver no longer has it).
+    // Going offline hides the queue (Phase 25; acceptDelivery also rejects
+    // offline drivers server-side) — so toggle off, check, and back on.
+    await tester.tap(find.byKey(const ValueKey('driver_available_switch')));
+    await tester.pumpAndSettle();
+    var availabilityDoc =
+        await FirebaseFirestore.instance.collection('drivers').doc(driverUid).get();
+    expect(availabilityDoc.data()!['isAvailable'], isFalse); // toggled off from its default-true
+    expect(find.byKey(const ValueKey('driver_offline')), findsOneWidget);
+    expect(find.text('Accept'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('driver_available_switch')));
+    await tester.pumpAndSettle();
+    availabilityDoc = await FirebaseFirestore.instance.collection('drivers').doc(driverUid).get();
+    expect(availabilityDoc.data()!['isAvailable'], isTrue);
+
     expect(find.text('Accept'), findsWidgets);
 
     await tester.tap(find.text('Accept').first);
     await tester.pumpAndSettle(const Duration(seconds: 2));
     expect(find.text('Order accepted.'), findsOneWidget);
 
+    // acceptDelivery lands the order on driverAssigned (Phase 4), not
+    // straight on pickedUp — the driver must separately confirm physical
+    // collection before advancing to delivering.
+    var orderDoc = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
+    expect(orderDoc.data()!['status'], 'driverAssigned');
+
+    // The active-delivery card scrolls within a capped height (Phase 25), so
+    // bring each action into view before tapping it.
+    await tester.ensureVisible(find.text('Move to Picked up').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Move to Picked up').first);
+    await tester.pumpAndSettle(const Duration(seconds: 2));
+
+    orderDoc = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
+    expect(orderDoc.data()!['status'], 'pickedUp');
+
+    await tester.ensureVisible(find.text('Move to Delivering').first);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Move to Delivering').first);
     await tester.pumpAndSettle();
+
+    orderDoc = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
+    expect(orderDoc.data()!['status'], 'delivering');
 
     // The order's status write (delivering) is async — the active-delivery
     // card (and its proof-of-delivery photo icon) only appears once the
@@ -274,7 +370,11 @@ void main() {
     // Proof-of-delivery photo, required before "delivered" is reachable —
     // FakeImagePicker (installed in setUpAll) returns the bundled fixture
     // instead of an OS gallery chooser WidgetTester couldn't drive anyway.
+    await tester.ensureVisible(proofIcon.first);
+    await tester.pumpAndSettle();
     await tester.tap(proofIcon.first);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Move to Delivered').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Move to Delivered').first);
     await tester.pumpAndSettle(const Duration(seconds: 2));
@@ -282,7 +382,7 @@ void main() {
     final driverDoc = await FirebaseFirestore.instance.collection('drivers').doc(driverUid).get();
     expect(driverDoc.data()!['lastKnownLocation'], isNotNull);
 
-    final orderDoc = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
+    orderDoc = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
     expect(orderDoc.data()!['status'], 'delivered');
     expect(orderDoc.data()!['proofImageUrl'], isNotNull);
 

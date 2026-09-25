@@ -215,10 +215,11 @@ class _StatusBadge extends StatelessWidget {
 
   final VendorApprovalStatus status;
 
-  Color get _color => switch (status) {
-        VendorApprovalStatus.pending => Colors.orange,
-        VendorApprovalStatus.approved => Colors.green,
-        VendorApprovalStatus.rejected => Colors.red,
+  // Design tokens, same mapping as DriverApprovalBadge.
+  Color _color(ColorScheme colorScheme) => switch (status) {
+        VendorApprovalStatus.pending => AppColors.warning(colorScheme),
+        VendorApprovalStatus.approved => AppColors.success(colorScheme),
+        VendorApprovalStatus.rejected => colorScheme.error,
       };
 
   @override
@@ -228,7 +229,7 @@ class _StatusBadge extends StatelessWidget {
       decoration: BoxDecoration(color: VendorPalette.surfaceElevated, borderRadius: AppRadius.pill),
       child: Text(
         vendorApprovalStatusLabel(context, status),
-        style: TextStyle(color: _color, fontWeight: FontWeight.w600, fontSize: 12),
+        style: TextStyle(color: _color(Theme.of(context).colorScheme), fontWeight: FontWeight.w600, fontSize: 12),
       ),
     );
   }

@@ -1,1 +1,4 @@
 #include "Generated.xcconfig"
+// Optional, untracked (see ios/.gitignore): defines MAPS_API_KEY for the
+// Google Maps SDK. Missing file = no key; AppDelegate falls back.
+#include? "Maps.xcconfig"

@@ -1,6 +1,10 @@
 import '../core/parsing/safe_enum.dart';
+import 'approval_status.dart';
 
-enum VendorApprovalStatus { pending, approved, rejected }
+// Kept as an alias of the shared [ApprovalStatus] (also used by Driver) so
+// every existing vendor call site keeps compiling unchanged — same values,
+// same `approvalStatus` wire format.
+typedef VendorApprovalStatus = ApprovalStatus;
 
 enum VendorCategory { groceries, restaurants, bakery, drinks, pharmacy }
 
@@ -45,6 +49,13 @@ class Vendor {
   // fabricated time (see VendorMenuScreen's status line).
   final String? openTime;
   final String? closeTime;
+  // Where drivers collect orders from. All null means "not set by the
+  // vendor yet" — never a fabricated default coordinate. Named after
+  // DeliveryOrder.deliveryLatitude/deliveryLongitude's convention, and
+  // snapshotted onto each order under the same names.
+  final String? pickupAddress;
+  final double? pickupLatitude;
+  final double? pickupLongitude;
 
   const Vendor({
     required this.id,
@@ -65,6 +76,9 @@ class Vendor {
     this.minimumOrderAmount,
     this.openTime,
     this.closeTime,
+    this.pickupAddress,
+    this.pickupLatitude,
+    this.pickupLongitude,
   });
 
   double? get averageRating => ratingCount == 0 ? null : ratingSum / ratingCount;
@@ -106,6 +120,10 @@ class Vendor {
       minimumOrderAmount: (map['minimumOrderAmount'] as num?)?.toDouble(),
       openTime: map['openTime'] as String?,
       closeTime: map['closeTime'] as String?,
+      // Postdate every existing vendor doc — absent reads as null.
+      pickupAddress: map['pickupAddress'] as String?,
+      pickupLatitude: (map['pickupLatitude'] as num?)?.toDouble(),
+      pickupLongitude: (map['pickupLongitude'] as num?)?.toDouble(),
     );
   }
 
@@ -128,8 +146,37 @@ class Vendor {
       'minimumOrderAmount': minimumOrderAmount,
       'openTime': openTime,
       'closeTime': closeTime,
+      'pickupAddress': pickupAddress,
+      'pickupLatitude': pickupLatitude,
+      'pickupLongitude': pickupLongitude,
     };
   }
+}
+
+/// Why a vendor pickup location can't be saved, or null when it can — see
+/// [validatePickupLocation].
+enum PickupLocationError { incompleteCoordinates, latitudeOutOfRange, longitudeOutOfRange, addressRequired }
+
+/// Checks a pickup location before it's written to a vendor doc. The
+/// coordinates must be set together or not at all (never one without the
+/// other, and never a fabricated default), within valid ranges, and a pin
+/// needs a human-readable address drivers can read. An address with no pin
+/// yet is allowed, as is clearing everything.
+PickupLocationError? validatePickupLocation({
+  String? address,
+  double? latitude,
+  double? longitude,
+}) {
+  if ((latitude == null) != (longitude == null)) return PickupLocationError.incompleteCoordinates;
+  if (latitude == null || longitude == null) return null;
+  if (!latitude.isFinite || latitude < -90 || latitude > 90) {
+    return PickupLocationError.latitudeOutOfRange;
+  }
+  if (!longitude.isFinite || longitude < -180 || longitude > 180) {
+    return PickupLocationError.longitudeOutOfRange;
+  }
+  if (address == null || address.trim().isEmpty) return PickupLocationError.addressRequired;
+  return null;
 }
 
 class MenuItem {

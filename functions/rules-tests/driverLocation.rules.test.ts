@@ -41,7 +41,16 @@ function locationDoc(db: FirebaseFirestore.Firestore) {
   return db.collection("orders").doc(ORDER_ID).collection("driverLocation").doc("current");
 }
 
-const samplePosition = { latitude: 33.5, longitude: 36.3, updatedAt: Date.now() };
+// Exactly what LocationService.publishDriverLocation writes (heading/speed
+// are null when the device reports none).
+const samplePosition = {
+  driverId: "driver-1",
+  latitude: 33.5,
+  longitude: 36.3,
+  heading: null,
+  speed: null,
+  updatedAt: Date.now(),
+};
 
 before(async () => {
   testEnv = await initializeTestEnvironment({
@@ -179,5 +188,85 @@ describe("drivers/{driverId} general read (narrowed off the broad isSignedIn() s
   it("denies an unrelated signed-in customer from reading a driver doc", async () => {
     const customerDb = testEnv.authenticatedContext("customer-1").firestore();
     await assertFails(customerDb.collection("drivers").doc("driver-1").get());
+  });
+});
+
+// Phase 31 (C1/M5): only orders/{id}/driverLocation/current, and only the
+// app's own payload shape, so a driver can't plant order-like fields
+// (customerId, status, ...) in a document under the order.
+describe("orders/{orderId}/driverLocation payload hardening (Phase 31)", () => {
+  async function driverDb() {
+    await seedOrder("delivering");
+    return testEnv.authenticatedContext("driver-1").firestore();
+  }
+
+  function locationAt(db: FirebaseFirestore.Firestore, id: string) {
+    return db.collection("orders").doc(ORDER_ID).collection("driverLocation").doc(id);
+  }
+
+  it("accepts the app payload at 'current', including real heading/speed and updates", async () => {
+    const db = await driverDb();
+    await assertSucceeds(locationDoc(db).set(samplePosition));
+    await assertSucceeds(locationDoc(db).set({ ...samplePosition, heading: 182.5, speed: 7.2 }));
+    await assertSucceeds(locationDoc(db).set({ ...samplePosition, latitude: -90, longitude: 180 }));
+  });
+
+  it("accepts the minimal payload without heading/speed", async () => {
+    const db = await driverDb();
+    const { heading, speed, ...minimal } = samplePosition;
+    void heading;
+    void speed;
+    await assertSucceeds(locationDoc(db).set(minimal));
+  });
+
+  it("denies any document id other than 'current'", async () => {
+    const db = await driverDb();
+    for (const id of ["X", "current2", "history-1"]) {
+      await assertFails(locationAt(db, id).set(samplePosition));
+    }
+  });
+
+  it("denies extra fields — including order-like ones", async () => {
+    const db = await driverDb();
+    for (const extra of [
+      { customerId: "victim" },
+      { status: "delivering" },
+      { vendorId: "vendor-1" },
+      { accuracy: 5 },
+    ]) {
+      await assertFails(locationDoc(db).set({ ...samplePosition, ...extra }));
+    }
+  });
+
+  it("denies a payload missing a required field", async () => {
+    const db = await driverDb();
+    for (const field of ["driverId", "latitude", "longitude", "updatedAt"] as const) {
+      const partial: Record<string, unknown> = { ...samplePosition };
+      delete partial[field];
+      await assertFails(locationDoc(db).set(partial));
+    }
+  });
+
+  it("denies a driverId other than the writer's own uid", async () => {
+    const db = await driverDb();
+    await assertFails(locationDoc(db).set({ ...samplePosition, driverId: "driver-2" }));
+  });
+
+  it("denies wrong types and out-of-range values", async () => {
+    const db = await driverDb();
+    for (const bad of [
+      { latitude: "33.5" },
+      { longitude: true },
+      { latitude: 91 },
+      { longitude: -181 },
+      { heading: "north" },
+      { heading: 400 },
+      { speed: -1 },
+      { speed: "fast" },
+      { updatedAt: "now" },
+      { updatedAt: 1.5 },
+    ]) {
+      await assertFails(locationDoc(db).set({ ...samplePosition, ...bad }));
+    }
   });
 });

@@ -9,6 +9,8 @@ firebase-debug.log
 firestore-debug.log
 ui-debug.log
 .runtimeconfig.json
+# Local emulator snapshots (firebase emulators:export) — never committed.
+.emulator-data/
 
 # OS / editor
 .DS_Store

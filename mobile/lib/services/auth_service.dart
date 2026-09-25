@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../core/errors/guard.dart';
 import '../models/app_user.dart';
+import '../models/approval_status.dart';
 import '../models/driver.dart';
 import '../models/vendor.dart';
 
@@ -107,9 +108,15 @@ class AuthService {
       // firestore.rules' isSelf(driverId) check) — without it, the first
       // location update (LocationService.publishDriverLocation) would fail
       // since there'd be nothing to update. Same ordering reasoning as the
-      // vendor doc above.
+      // vendor doc above. Starts pending — firestore.rules rejects any other
+      // approvalStatus on create; only an admin can approve.
       if (role == UserRole.driver) {
-        final driver = Driver(id: uid, userId: uid, isAvailable: true);
+        final driver = Driver(
+          id: uid,
+          userId: uid,
+          isAvailable: true,
+          approvalStatus: ApprovalStatus.pending,
+        );
         await _firestore.collection('drivers').doc(uid).set(driver.toMap());
       }
 
@@ -141,30 +148,20 @@ class AuthService {
     return guardFuture(() => _auth.sendPasswordResetEmail(email: email));
   }
 
-  // Firestore doc deletion doesn't cascade to subcollections, so the saved
-  // addresses under users/{uid}/addresses are cleared first — otherwise
-  // they'd be orphaned, unreachable data left behind in the project.
-  // `user.delete()` can throw 'requires-recent-login' (mapped in
-  // AppException) if the session is old; the Firestore doc is deleted first
-  // since that's the safer partial-failure state — a stray Auth account
-  // with no profile doc already has a recovery path (AuthService.signIn's
-  // `_ensureUserProfile` backfills a fresh customer profile on next sign-in),
-  // whereas a stray profile doc with no Auth account would be permanently
-  // unreachable (nothing could ever sign in as that uid again).
+  // Phase 31 (M1): deletes ONLY the Firebase Auth account. firestore.rules
+  // forbid clients from deleting users/{uid} (otherwise a user could delete
+  // their profile and recreate it with another role); the onAuthUserDeleted
+  // Cloud Function removes users/{uid} and its addresses once Auth has
+  // actually deleted the account. Orders and reviews are kept.
+  //
+  // Auth goes first and alone, so a failure — notably
+  // 'requires-recent-login' (mapped in AppException) when the session is
+  // old — leaves every Firestore document untouched and the account fully
+  // usable; the user just signs in again and retries.
   Future<void> deleteAccount() {
     return guardFuture(() async {
       final user = _auth.currentUser;
       if (user == null) return;
-      final uid = user.uid;
-
-      final addresses = await _firestore.collection('users').doc(uid).collection('addresses').get();
-      final batch = _firestore.batch();
-      for (final doc in addresses.docs) {
-        batch.delete(doc.reference);
-      }
-      batch.delete(_firestore.collection('users').doc(uid));
-      await batch.commit();
-
       await user.delete();
     });
   }

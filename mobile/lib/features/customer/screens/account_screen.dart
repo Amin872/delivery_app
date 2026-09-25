@@ -92,9 +92,12 @@ class _NoProfileState extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.lg),
-            FilledButton(
-              onPressed: () => ref.invalidate(currentAppUserProvider),
-              child: Text(l10n.retryButton),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => ref.invalidate(currentAppUserProvider),
+                child: Text(l10n.retryButton),
+              ),
             ),
             TextButton(
               onPressed: () => ref.read(authServiceProvider).signOut(),

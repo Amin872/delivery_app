@@ -20,12 +20,49 @@ class AppException implements Exception {
       return AppException(_authCode(error.code), cause: error);
     }
     if (error is FirebaseFunctionsException) {
+      // A callable that knows exactly why it refused (e.g. createOrder's
+      // "vendor-closed") says so in `details.reason` — surface that instead
+      // of collapsing it into the generic code-level message.
+      final reason = _functionsReason(error.details);
+      if (reason != null) return AppException(reason, cause: error);
       return AppException(_sharedCode(error.code), cause: error);
     }
     if (error is FirebaseException) {
       return AppException(_sharedCode(error.code), cause: error);
     }
     return AppException('unknown', cause: error);
+  }
+
+  /// Reason codes the order callables send in `HttpsError.details.reason`
+  /// (mostly createOrder, functions/src/createOrder.ts; plus acceptDelivery's
+  /// `driver-unavailable`). Each has its own localized message in
+  /// error_messages.dart; anything not listed here falls back to the
+  /// code-level mapping, so an unknown server reason never leaks through.
+  static const orderReasons = {
+    'invalid-order-input',
+    'vendor-not-found',
+    'vendor-not-approved',
+    'vendor-closed',
+    'vendor-invalid-delivery-fee',
+    'vendor-invalid-minimum',
+    'menu-item-not-found',
+    'menu-item-unavailable',
+    'menu-item-invalid',
+    'minimum-order-not-met',
+    'address-not-found',
+    'address-missing-location',
+    // acceptDelivery (functions/src/auth.ts assertDriverAvailable).
+    'driver-unavailable',
+    // getOrderContact (functions/src/contacts.ts).
+    'invalid-contact-request',
+    'contact-not-authorized',
+    'phone-unavailable',
+  };
+
+  static String? _functionsReason(Object? details) {
+    if (details is! Map) return null;
+    final reason = details['reason'];
+    return reason is String && orderReasons.contains(reason) ? reason : null;
   }
 
   static String _authCode(String code) {

@@ -1,10 +1,17 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../../../core/location/distance_estimator.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_spinner.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../models/coordinates.dart';
 import '../../../models/driver.dart';
+import '../../../models/order.dart';
 import '../screens/customer_home_screen.dart' show firestoreServiceProvider;
 
 final driverOrderLocationProvider =
@@ -35,23 +42,91 @@ const _darkMapStyle = '''
 ]
 ''';
 
-/// Live map of the driver currently delivering [orderId], fed by
+/// Live map of the driver currently delivering [order], fed by
 /// `orders/{orderId}/driverLocation/current` — the order-scoped feed that
 /// `driverLocationSyncProvider` (driver side) keeps updated while that
 /// specific delivery is in flight. A `ConsumerStatefulWidget` because the
 /// map camera needs to re-center via a `GoogleMapController` as new
 /// positions arrive, which a stateless rebuild can't drive.
+///
+/// Also shows a straight-line distance/rough ETA (when [order] has a
+/// delivery pin to measure against — see models/order.dart's
+/// deliveryLatitude/deliveryLongitude), purely additive over the live
+/// position itself. The "call driver" action is not part of the map: it
+/// lives on OrderTrackingScreen so it shows for the whole contact window,
+/// whether or not a driver position has arrived yet.
 class DriverTrackingMap extends ConsumerStatefulWidget {
-  const DriverTrackingMap({required this.orderId, super.key});
+  const DriverTrackingMap({required this.order, super.key});
 
-  final String orderId;
+  final DeliveryOrder order;
 
   @override
   ConsumerState<DriverTrackingMap> createState() => _DriverTrackingMapState();
 }
 
+/// Driver marker plus, when the order has a drop-off pin, a destination
+/// marker. Pure (no map controller) so it's unit-testable.
+Set<Marker> trackingMarkers(LatLng driver, LatLng? destination, {String? destinationTitle}) {
+  return {
+    Marker(markerId: const MarkerId('driver'), position: driver),
+    if (destination != null)
+      Marker(
+        markerId: const MarkerId('drop_off'),
+        position: destination,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        infoWindow: InfoWindow(title: destinationTitle),
+      ),
+  };
+}
+
+/// Smallest bounds containing both points, in either order.
+LatLngBounds trackingBounds(LatLng a, LatLng b) {
+  return LatLngBounds(
+    southwest: LatLng(math.min(a.latitude, b.latitude), math.min(a.longitude, b.longitude)),
+    northeast: LatLng(math.max(a.latitude, b.latitude), math.max(a.longitude, b.longitude)),
+  );
+}
+
 class _DriverTrackingMapState extends ConsumerState<DriverTrackingMap> {
   GoogleMapController? _controller;
+  bool _fittedBothPoints = false;
+
+  LatLng? get _destination {
+    final drop = widget.order.deliveryCoordinates;
+    return drop == null ? null : LatLng(drop.latitude, drop.longitude);
+  }
+
+  Future<void> _fitBoth(LatLng driver, LatLng destination) async {
+    try {
+      await _controller?.animateCamera(
+        CameraUpdate.newLatLngBounds(trackingBounds(driver, destination), 48),
+      );
+      _fittedBothPoints = true;
+    } catch (_) {
+      // Map not laid out yet — the next location update retries.
+    }
+  }
+
+  // Keeps driver and drop-off in view without re-animating on every GPS
+  // tick: fit both once, then only refit if the driver leaves the visible
+  // area. With no drop-off pin, follow the driver as before.
+  Future<void> _onDriverMoved(LatLng driver) async {
+    final controller = _controller;
+    if (controller == null) return;
+    final destination = _destination;
+    if (destination == null) {
+      await controller.animateCamera(CameraUpdate.newLatLng(driver));
+      return;
+    }
+    if (!_fittedBothPoints) {
+      await _fitBoth(driver, destination);
+      return;
+    }
+    try {
+      final visible = await controller.getVisibleRegion();
+      if (!visible.contains(driver)) await _fitBoth(driver, destination);
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -62,14 +137,13 @@ class _DriverTrackingMapState extends ConsumerState<DriverTrackingMap> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final locationAsync = ref.watch(driverOrderLocationProvider(widget.orderId));
+    final orderId = widget.order.id;
+    final locationAsync = ref.watch(driverOrderLocationProvider(orderId));
 
-    ref.listen(driverOrderLocationProvider(widget.orderId), (previous, next) {
+    ref.listen(driverOrderLocationProvider(orderId), (previous, next) {
       final location = next.valueOrNull;
       if (location != null) {
-        _controller?.animateCamera(
-          CameraUpdate.newLatLng(LatLng(location.latitude, location.longitude)),
-        );
+        _onDriverMoved(LatLng(location.latitude, location.longitude));
       }
     });
 
@@ -86,17 +160,64 @@ class _DriverTrackingMapState extends ConsumerState<DriverTrackingMap> {
     }
 
     final position = LatLng(location.latitude, location.longitude);
+    final destination = _destination;
+    final estimate = estimateTrip(
+      Coordinates(latitude: location.latitude, longitude: location.longitude),
+      widget.order.deliveryCoordinates,
+    );
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: SizedBox(
         height: 220,
-        child: GoogleMap(
-          initialCameraPosition: CameraPosition(target: position, zoom: 15),
-          onMapCreated: (controller) => _controller = controller,
-          markers: {Marker(markerId: const MarkerId('driver'), position: position)},
-          myLocationButtonEnabled: false,
-          zoomControlsEnabled: false,
-          style: Theme.of(context).brightness == Brightness.dark ? _darkMapStyle : null,
+        child: Stack(
+          children: [
+            GoogleMap(
+              initialCameraPosition: CameraPosition(target: position, zoom: 15),
+              onMapCreated: (controller) {
+                _controller = controller;
+                if (destination != null) _fitBoth(position, destination);
+              },
+              markers: trackingMarkers(position, destination, destinationTitle: l10n.dropOffMarkerTitle),
+              myLocationButtonEnabled: false,
+              zoomControlsEnabled: false,
+              style: Theme.of(context).brightness == Brightness.dark ? _darkMapStyle : null,
+            ),
+            if (estimate != null)
+              Positioned(
+                left: AppSpacing.sm,
+                top: AppSpacing.sm,
+                child: _InfoPill(
+                  text: '${l10n.distanceAwayLabel(estimate.distanceKmLabel)}'
+                      ' · ${l10n.etaLabel(estimate.etaMinutes)}',
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  const _InfoPill({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: VendorPalette.surfaceContainer.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: VendorPalette.textPrimary,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );

@@ -4,13 +4,16 @@ import '../core/errors/app_exception.dart';
 import '../core/errors/guard.dart';
 import '../models/address.dart';
 import '../models/app_user.dart';
+import '../models/approval_status.dart';
 import '../models/city.dart';
 import '../models/district.dart';
 import '../models/driver.dart';
 import '../models/governorate.dart';
+import '../models/neighborhood.dart';
 import '../models/order.dart';
 import '../models/promotion.dart';
 import '../models/review.dart';
+import '../models/service_area.dart';
 import '../models/vendor.dart';
 
 /// Thin wrapper around Firestore collections used across features.
@@ -49,6 +52,12 @@ class FirestoreService {
 
   CollectionReference<Map<String, dynamic>> get _districts =>
       _db.collection('districts');
+
+  CollectionReference<Map<String, dynamic>> get _neighborhoods =>
+      _db.collection('neighborhoods');
+
+  CollectionReference<Map<String, dynamic>> get _serviceAreas =>
+      _db.collection('serviceAreas');
 
   // AdminUsersScreen's list. NOTE: firestore.rules' users/{userId} read rule
   // is currently `isSelf(userId)` only — there is no admin read branch yet
@@ -96,35 +105,46 @@ class FirestoreService {
   CollectionReference<Map<String, dynamic>> _addresses(String userId) =>
       _users.doc(userId).collection('addresses');
 
-  Stream<List<DeliveryAddress>> watchAddresses(String userId) {
+  Stream<List<SavedAddress>> watchAddresses(String userId) {
     return guardStream(_addresses(userId).snapshots().map((snap) => snap.docs
-        .map((doc) => DeliveryAddress.fromMap(doc.id, doc.data()))
+        .map((doc) => SavedAddress.fromMap(doc.id, doc.data()))
         .toList()));
   }
 
   // Powers CartScreen's automatic prefill — a single default address (or
   // none) rather than the full list, so the cart doesn't need to watch and
   // filter every saved address itself.
-  Stream<DeliveryAddress?> watchDefaultAddress(String userId) {
+  Stream<SavedAddress?> watchDefaultAddress(String userId) {
     return guardStream(_addresses(userId)
         .where('isDefault', isEqualTo: true)
         .limit(1)
         .snapshots()
         .map((snap) => snap.docs.isEmpty
             ? null
-            : DeliveryAddress.fromMap(snap.docs.first.id, snap.docs.first.data())));
+            : SavedAddress.fromMap(snap.docs.first.id, snap.docs.first.data())));
   }
 
-  Future<String> addAddress(String userId, DeliveryAddress address) {
+  // Stamps createdAt/updatedAt server-side (this service's own clock, not
+  // the caller's) so every newly-created address gets a real timestamp
+  // regardless of what (if anything) the caller passed in — see
+  // SavedAddress's own doc comment on why these fields are nullable at the
+  // model layer despite always being set from this path onward.
+  Future<String> addAddress(String userId, SavedAddress address) {
     return guardFuture(() async {
-      final doc = await _addresses(userId).add(address.toMap());
+      final now = DateTime.now();
+      final doc = await _addresses(userId).add(address.toMap()
+        ..['userId'] = userId
+        ..['createdAt'] = now.millisecondsSinceEpoch
+        ..['updatedAt'] = now.millisecondsSinceEpoch);
       if (address.isDefault) await setDefaultAddress(userId, doc.id);
       return doc.id;
     });
   }
 
-  Future<void> updateAddress(String userId, DeliveryAddress address) {
-    return guardFuture(() => _addresses(userId).doc(address.id).update(address.toMap()));
+  Future<void> updateAddress(String userId, SavedAddress address) {
+    return guardFuture(() => _addresses(userId).doc(address.id).update(address.toMap()
+      ..['userId'] = userId
+      ..['updatedAt'] = DateTime.now().millisecondsSinceEpoch));
   }
 
   Future<void> deleteAddress(String userId, String addressId) {
@@ -193,6 +213,20 @@ class FirestoreService {
     return guardFuture(() => _vendors.doc(vendorId).update({'isOpen': isOpen}));
   }
 
+  Future<void> updateVendorLogo(String vendorId, String logoUrl) {
+    return guardFuture(() => _vendors.doc(vendorId).update({'logoUrl': logoUrl}));
+  }
+
+  /// Field-level update of a vendor's editable store details. Never touches
+  /// ownerId, approvalStatus, ratingSum or ratingCount (firestore.rules
+  /// rejects those from the owner anyway).
+  ///
+  /// [name] and [description] are written only when non-null, and the
+  /// pickup fields only when [updatePickupLocation] is true — so a caller
+  /// that doesn't manage them (the admin edit form, whose rule branch
+  /// doesn't allow those fields) leaves them untouched. Throws an
+  /// [ArgumentError] without writing anything if [name] is blank or the
+  /// pickup location fails [validatePickupLocation].
   Future<void> updateVendorDetails(
     String vendorId, {
     required VendorCategory category,
@@ -203,7 +237,31 @@ class FirestoreService {
     double? minimumOrderAmount,
     String? openTime,
     String? closeTime,
+    String? name,
+    String? description,
+    bool updatePickupLocation = false,
+    String? pickupAddress,
+    double? pickupLatitude,
+    double? pickupLongitude,
   }) {
+    final trimmedName = name?.trim();
+    if (trimmedName != null && trimmedName.isEmpty) {
+      return Future.error(ArgumentError.value(name, 'name', 'must not be empty'));
+    }
+    final trimmedPickupAddress = pickupAddress?.trim();
+    final normalizedPickupAddress =
+        (trimmedPickupAddress == null || trimmedPickupAddress.isEmpty) ? null : trimmedPickupAddress;
+    if (updatePickupLocation) {
+      final pickupError = validatePickupLocation(
+        address: normalizedPickupAddress,
+        latitude: pickupLatitude,
+        longitude: pickupLongitude,
+      );
+      if (pickupError != null) {
+        return Future.error(ArgumentError('Invalid pickup location: ${pickupError.name}'));
+      }
+    }
+
     return guardFuture(() => _vendors.doc(vendorId).update({
           'category': category.name,
           'city': city,
@@ -213,6 +271,13 @@ class FirestoreService {
           'minimumOrderAmount': minimumOrderAmount,
           'openTime': openTime,
           'closeTime': closeTime,
+          if (trimmedName != null) 'name': trimmedName,
+          if (description != null) 'description': description.trim(),
+          if (updatePickupLocation) ...{
+            'pickupAddress': normalizedPickupAddress,
+            'pickupLatitude': pickupLatitude,
+            'pickupLongitude': pickupLongitude,
+          },
         }));
   }
 
@@ -316,12 +381,8 @@ class FirestoreService {
             .toList()));
   }
 
-  Future<String> createOrder(DeliveryOrder order) {
-    return guardFuture(() async {
-      final doc = await _orders.add(order.toMap());
-      return doc.id;
-    });
-  }
+  // Orders are created only by the `createOrder` callable — see
+  // FunctionsService.createOrder. firestore.rules denies client-side creates.
 
   Future<void> updateOrderStatus(String orderId, OrderStatus status) {
     return guardFuture(
@@ -476,13 +537,24 @@ class FirestoreService {
     return guardFuture(() => _drivers.doc(driverId).update({'isAvailable': isAvailable}));
   }
 
-  // Null when the driver has no delivery currently in flight — `pickedUp`
-  // and `delivering` are the only statuses between accepting an order
-  // (acceptDelivery) and it being marked delivered.
+  /// Admin-only (firestore.rules' drivers admin branch permits exactly this
+  /// one field) — the driver counterpart of [setVendorApprovalStatus].
+  Future<void> setDriverApprovalStatus(String driverId, ApprovalStatus status) {
+    return guardFuture(
+      () => _drivers.doc(driverId).update({'approvalStatus': status.name}),
+    );
+  }
+
+  // Null when the driver has no delivery currently in flight —
+  // `driverAssigned`, `pickedUp`, and `delivering` are the only statuses
+  // between accepting an order (acceptDelivery) and it being marked
+  // delivered. `driverAssigned` was added in Phase 4 (see models/order.dart)
+  // for the "assigned but not yet physically picked up" stage.
   Stream<DeliveryOrder?> watchActiveDriverOrder(String driverId) {
     return guardStream(_orders
         .where('driverId', isEqualTo: driverId)
         .where('status', whereIn: [
+          OrderStatus.driverAssigned.name,
           OrderStatus.pickedUp.name,
           OrderStatus.delivering.name,
         ])
@@ -684,5 +756,70 @@ class FirestoreService {
 
   Future<void> setDistrictEnabled(String districtId, bool enabled) {
     return guardFuture(() => _districts.doc(districtId).update({'enabled': enabled}));
+  }
+
+  // Neighbourhoods (Phase 4 — see models/neighborhood.dart's own doc comment
+  // for why this is a standalone collection rather than reusing districts/).
+  // Same unfiltered/order-only query, same transactional duplicate-id
+  // protection on add, and same referential integrity on the cityId
+  // foreign key (enforced server-side by firestore.rules) as
+  // watchDistricts/addDistrict above.
+  Stream<List<NeighborhoodOption>> watchNeighborhoods() {
+    return guardStream(_neighborhoods
+        .orderBy('order')
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((doc) => NeighborhoodOption.fromMap(doc.id, doc.data()))
+            .toList()));
+  }
+
+  Future<void> addNeighborhood(NeighborhoodOption neighborhood) {
+    return guardFuture(() => _db.runTransaction((tx) async {
+          final ref = _neighborhoods.doc(neighborhood.id);
+          final snapshot = await tx.get(ref);
+          if (snapshot.exists) {
+            throw const AppException('already-exists');
+          }
+          tx.set(ref, neighborhood.toMap());
+        }));
+  }
+
+  Future<void> updateNeighborhood(NeighborhoodOption neighborhood) {
+    return guardFuture(
+        () => _neighborhoods.doc(neighborhood.id).update(neighborhood.toMap()));
+  }
+
+  Future<void> setNeighborhoodEnabled(String neighborhoodId, bool enabled) {
+    return guardFuture(() => _neighborhoods.doc(neighborhoodId).update({'enabled': enabled}));
+  }
+
+  // Service areas (Phase 4 — see models/service_area.dart's own doc comment:
+  // a standalone future layer, no consumer reads this for delivery
+  // eligibility yet). Same shape/reasoning as watchCities/addCity above.
+  Stream<List<ServiceArea>> watchServiceAreas() {
+    return guardStream(_serviceAreas
+        .orderBy('order')
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((doc) => ServiceArea.fromMap(doc.id, doc.data())).toList()));
+  }
+
+  Future<void> addServiceArea(ServiceArea area) {
+    return guardFuture(() => _db.runTransaction((tx) async {
+          final ref = _serviceAreas.doc(area.id);
+          final snapshot = await tx.get(ref);
+          if (snapshot.exists) {
+            throw const AppException('already-exists');
+          }
+          tx.set(ref, area.toMap());
+        }));
+  }
+
+  Future<void> updateServiceArea(ServiceArea area) {
+    return guardFuture(() => _serviceAreas.doc(area.id).update(area.toMap()));
+  }
+
+  Future<void> setServiceAreaEnabled(String serviceAreaId, bool enabled) {
+    return guardFuture(() => _serviceAreas.doc(serviceAreaId).update({'enabled': enabled}));
   }
 }

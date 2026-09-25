@@ -2,6 +2,7 @@ import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:delivery_app/core/errors/app_exception.dart';
+import 'package:delivery_app/models/approval_status.dart';
 import 'package:delivery_app/models/city.dart';
 import 'package:delivery_app/models/district.dart';
 import 'package:delivery_app/models/governorate.dart';
@@ -729,5 +730,177 @@ void main() {
     final doc = await firestore.collection('districts').doc('al_mazzeh').get();
     expect(doc.data()!['enabled'], isFalse);
     expect(doc.data()!['cityId'], 'damascus');
+  });
+
+  group('vendor store details (Phase 23)', () {
+    Future<FakeFirebaseFirestore> seededVendor() async {
+      final firestore = FakeFirebaseFirestore();
+      await firestore.collection('vendors').doc('vendor-1').set({
+        'ownerId': 'owner-1',
+        'name': 'Old name',
+        'description': 'Old description',
+        'isOpen': true,
+        'approvalStatus': 'approved',
+        'ratingSum': 9,
+        'ratingCount': 2,
+        'category': 'restaurants',
+        'city': 'damascus',
+        'pickupAddress': null,
+        'pickupLatitude': null,
+        'pickupLongitude': null,
+      });
+      return firestore;
+    }
+
+    Future<Map<String, dynamic>> vendorData(FakeFirebaseFirestore firestore) async =>
+        (await firestore.collection('vendors').doc('vendor-1').get()).data()!;
+
+    test('updates name, description and pickup location; leaves protected fields alone', () async {
+      final firestore = await seededVendor();
+      final service = FirestoreService(firestore: firestore);
+
+      await service.updateVendorDetails(
+        'vendor-1',
+        category: VendorCategory.restaurants,
+        city: 'damascus',
+        name: '  Abu Kamal Falafel  ',
+        description: ' Best falafel in town ',
+        updatePickupLocation: true,
+        pickupAddress: ' Hamra St, Damascus ',
+        pickupLatitude: 33.5138,
+        pickupLongitude: 36.2765,
+      );
+
+      final data = await vendorData(firestore);
+      expect(data['name'], 'Abu Kamal Falafel');
+      expect(data['description'], 'Best falafel in town');
+      expect(data['pickupAddress'], 'Hamra St, Damascus');
+      expect(data['pickupLatitude'], 33.5138);
+      expect(data['pickupLongitude'], 36.2765);
+      expect(data['ownerId'], 'owner-1');
+      expect(data['approvalStatus'], 'approved');
+      expect(data['ratingSum'], 9);
+      expect(data['ratingCount'], 2);
+    });
+
+    test('a caller that omits the new fields (the admin form) leaves them untouched', () async {
+      final firestore = await seededVendor();
+      final service = FirestoreService(firestore: firestore);
+
+      await service.updateVendorDetails(
+        'vendor-1',
+        category: VendorCategory.bakery,
+        city: 'aleppo',
+        deliveryFee: 1000,
+      );
+
+      final data = await vendorData(firestore);
+      expect(data['category'], 'bakery');
+      expect(data['deliveryFee'], 1000);
+      expect(data['name'], 'Old name');
+      expect(data['description'], 'Old description');
+      expect(data.containsKey('pickupAddress'), isTrue);
+      expect(data['pickupAddress'], isNull);
+    });
+
+    test('clears the pickup location when all three pickup values are null', () async {
+      final firestore = await seededVendor();
+      await firestore.collection('vendors').doc('vendor-1').update({
+        'pickupAddress': 'Somewhere',
+        'pickupLatitude': 33.5,
+        'pickupLongitude': 36.3,
+      });
+      final service = FirestoreService(firestore: firestore);
+
+      await service.updateVendorDetails(
+        'vendor-1',
+        category: VendorCategory.restaurants,
+        city: 'damascus',
+        updatePickupLocation: true,
+        pickupAddress: '   ',
+      );
+
+      final data = await vendorData(firestore);
+      expect(data['pickupAddress'], isNull);
+      expect(data['pickupLatitude'], isNull);
+      expect(data['pickupLongitude'], isNull);
+    });
+
+    final invalidUpdates = <String, Future<void> Function(FirestoreService)>{
+      'a blank name': (s) => s.updateVendorDetails('vendor-1',
+          category: VendorCategory.restaurants, city: 'damascus', name: '   '),
+      'a latitude without a longitude': (s) => s.updateVendorDetails('vendor-1',
+          category: VendorCategory.restaurants,
+          city: 'damascus',
+          updatePickupLocation: true,
+          pickupAddress: 'Addr',
+          pickupLatitude: 33.5),
+      'a latitude above 90': (s) => s.updateVendorDetails('vendor-1',
+          category: VendorCategory.restaurants,
+          city: 'damascus',
+          updatePickupLocation: true,
+          pickupAddress: 'Addr',
+          pickupLatitude: 91,
+          pickupLongitude: 36.3),
+      'a longitude below -180': (s) => s.updateVendorDetails('vendor-1',
+          category: VendorCategory.restaurants,
+          city: 'damascus',
+          updatePickupLocation: true,
+          pickupAddress: 'Addr',
+          pickupLatitude: 33.5,
+          pickupLongitude: -181),
+      'a map pin with no address text': (s) => s.updateVendorDetails('vendor-1',
+          category: VendorCategory.restaurants,
+          city: 'damascus',
+          updatePickupLocation: true,
+          pickupAddress: ' ',
+          pickupLatitude: 33.5,
+          pickupLongitude: 36.3),
+    };
+    invalidUpdates.forEach((label, update) {
+      test('rejects $label without writing anything', () async {
+        final firestore = await seededVendor();
+        final before = await vendorData(firestore);
+        final service = FirestoreService(firestore: firestore);
+
+        await expectLater(update(service), throwsArgumentError);
+        expect(await vendorData(firestore), before);
+      });
+    });
+
+    test('updateVendorLogo writes only logoUrl, leaving the storefront imageUrl alone', () async {
+      final firestore = await seededVendor();
+      await firestore.collection('vendors').doc('vendor-1').update({'imageUrl': 'https://x/storefront.jpg'});
+      final service = FirestoreService(firestore: firestore);
+
+      await service.updateVendorLogo('vendor-1', 'https://x/logo.jpg');
+
+      final data = await vendorData(firestore);
+      expect(data['logoUrl'], 'https://x/logo.jpg');
+      expect(data['imageUrl'], 'https://x/storefront.jpg');
+    });
+  });
+
+  group('setDriverApprovalStatus (Phase 24)', () {
+    for (final status in ApprovalStatus.values) {
+      test('writes approvalStatus ${status.name} and nothing else', () async {
+        final firestore = FakeFirebaseFirestore();
+        final driverDoc = {
+          'userId': 'driver-1',
+          'isAvailable': true,
+          'ratingSum': 9,
+          'ratingCount': 2,
+          'lastKnownLocation': null,
+          'approvalStatus': 'pending',
+        };
+        await firestore.collection('drivers').doc('driver-1').set(driverDoc);
+        final service = FirestoreService(firestore: firestore);
+
+        await service.setDriverApprovalStatus('driver-1', status);
+
+        final data = (await firestore.collection('drivers').doc('driver-1').get()).data()!;
+        expect(data, {...driverDoc, 'approvalStatus': status.name});
+      });
+    }
   });
 }

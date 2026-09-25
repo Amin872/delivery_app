@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/l10n/enum_labels.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -10,6 +11,7 @@ import '../../../core/widgets/staggered_list_item.dart';
 import '../../../core/widgets/star_rating.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/app_user.dart';
+import '../../../models/approval_status.dart';
 import '../../../models/driver.dart';
 import '../../../routing/page_transitions.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
@@ -29,6 +31,7 @@ class DriverRow {
     required this.isAvailable,
     required this.averageRating,
     required this.ratingCount,
+    required this.approvalStatus,
   });
 
   final String driverId;
@@ -37,6 +40,7 @@ class DriverRow {
   final bool isAvailable;
   final double? averageRating;
   final int ratingCount;
+  final ApprovalStatus approvalStatus;
 }
 
 /// Joins `drivers` (availability/rating) with `users` (identity) client-side
@@ -59,16 +63,28 @@ List<DriverRow> buildDriverRows(List<Driver> drivers, List<AppUser> users) {
           isAvailable: driver.isAvailable,
           averageRating: driver.averageRating,
           ratingCount: driver.ratingCount,
+          approvalStatus: driver.approvalStatus,
         );
       })
       .toList();
 }
 
-/// Read-only admin driver directory — joins `drivers` (availability/rating)
-/// with `users` (identity), same client-side join
-/// `AdminOrderDetailScreen`'s reassignment picker already established in
-/// Phase 3, just surfaced as its own browsable list instead of a picker.
-/// No enable/disable/approval here — Phase 4 Drivers is read-only.
+/// The rows matching both the search [query] (already trimmed and
+/// lower-cased; matched against name and email) and the approval [status]
+/// chip (null = any status).
+List<DriverRow> filterDriverRows(List<DriverRow> rows, {required String query, ApprovalStatus? status}) {
+  return rows
+      .where((row) => status == null || row.approvalStatus == status)
+      .where((row) =>
+          query.isEmpty || row.name.toLowerCase().contains(query) || row.email.toLowerCase().contains(query))
+      .toList();
+}
+
+/// Admin driver directory — joins `drivers` (availability/rating/approval)
+/// with `users` (identity) via [buildDriverRows], the same join
+/// `AdminOrderDetailScreen`'s reassignment picker uses. Each row shows the
+/// driver's approval state; approving/rejecting happens on
+/// [AdminDriverDetailScreen]. No enable/disable or suspension here.
 class AdminDriversScreen extends ConsumerStatefulWidget {
   const AdminDriversScreen({super.key});
 
@@ -78,6 +94,8 @@ class AdminDriversScreen extends ConsumerStatefulWidget {
 
 class _AdminDriversScreenState extends ConsumerState<AdminDriversScreen> {
   String _query = '';
+  // Null = all. Combined with [_query] (both must match).
+  ApprovalStatus? _statusFilter;
 
   @override
   Widget build(BuildContext context) {
@@ -102,7 +120,37 @@ class _AdminDriversScreenState extends ConsumerState<AdminDriversScreen> {
             onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
           ),
           const SizedBox(height: AppSpacing.md),
-          Expanded(child: _DriverList(query: _query)),
+          // Same approval chips as AdminVendorsScreen (same three states and
+          // labels); filtering is client-side over the existing stream.
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 8),
+                  child: ChoiceChip(
+                    key: const ValueKey('driver_filter_all'),
+                    label: Text(l10n.allStatusesLabel),
+                    selected: _statusFilter == null,
+                    onSelected: (_) => setState(() => _statusFilter = null),
+                  ),
+                ),
+                for (final status in ApprovalStatus.values)
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(end: 8),
+                    child: ChoiceChip(
+                      key: ValueKey('driver_filter_${status.name}'),
+                      label: Text(vendorApprovalStatusLabel(context, status)),
+                      selected: _statusFilter == status,
+                      onSelected: (_) => setState(() => _statusFilter = status),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Expanded(child: _DriverList(query: _query, status: _statusFilter)),
         ],
       ),
     );
@@ -110,9 +158,10 @@ class _AdminDriversScreenState extends ConsumerState<AdminDriversScreen> {
 }
 
 class _DriverList extends ConsumerWidget {
-  const _DriverList({required this.query});
+  const _DriverList({required this.query, required this.status});
 
   final String query;
+  final ApprovalStatus? status;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -130,14 +179,11 @@ class _DriverList extends ConsumerWidget {
       return Center(child: Text(localizedErrorMessage(context, usersAsync.error!)));
     }
 
-    final rows = buildDriverRows(driversAsync.value!, usersAsync.value!);
-
-    final filtered = query.isEmpty
-        ? rows
-        : rows
-            .where((row) =>
-                row.name.toLowerCase().contains(query) || row.email.toLowerCase().contains(query))
-            .toList();
+    final filtered = filterDriverRows(
+      buildDriverRows(driversAsync.value!, usersAsync.value!),
+      query: query,
+      status: status,
+    );
 
     if (filtered.isEmpty) {
       return Center(child: Text(l10n.noDriversFoundMessage));
@@ -158,12 +204,29 @@ class _DriverList extends ConsumerWidget {
               ),
             ),
             title: Text(row.name),
-            subtitle: StarRatingDisplay(
-              rating: row.averageRating,
-              count: row.ratingCount == 0 ? null : row.ratingCount,
-              size: 14,
+            // The two status pills sit under the rating rather than stacked
+            // in `trailing`: ListTile caps trailing at the tile's fixed
+            // height, which two pills overflowed; here the tile grows with
+            // its content (and with the user's text scale).
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                StarRatingDisplay(
+                  rating: row.averageRating,
+                  count: row.ratingCount == 0 ? null : row.ratingCount,
+                  size: 14,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Wrap(
+                  spacing: AppSpacing.xs,
+                  runSpacing: AppSpacing.xs,
+                  children: [
+                    DriverApprovalBadge(status: row.approvalStatus),
+                    _AvailabilityBadge(isAvailable: row.isAvailable),
+                  ],
+                ),
+              ],
             ),
-            trailing: _AvailabilityBadge(isAvailable: row.isAvailable),
             onTap: () => Navigator.of(context)
                 .push(fadeSlideRoute(AdminDriverDetailScreen(driverId: row.driverId))),
           ),
@@ -188,6 +251,34 @@ class _AvailabilityBadge extends StatelessWidget {
       decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: AppRadius.pill),
       child: Text(
         isAvailable ? l10n.driverAvailableStatusLabel : l10n.driverUnavailableStatusLabel,
+        style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
+      ),
+    );
+  }
+}
+
+/// Pill showing a driver's approval state (pending / approved / rejected),
+/// shared by the driver list and [AdminDriverDetailScreen]. Labels reuse the
+/// vendor approval strings — same three states, same wording.
+class DriverApprovalBadge extends StatelessWidget {
+  const DriverApprovalBadge({required this.status, super.key});
+
+  final ApprovalStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final color = switch (status) {
+      ApprovalStatus.approved => AppColors.success(colorScheme),
+      ApprovalStatus.pending => AppColors.warning(colorScheme),
+      ApprovalStatus.rejected => colorScheme.error,
+    };
+    return Container(
+      key: ValueKey('driver_approval_badge_${status.name}'),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: AppRadius.pill),
+      child: Text(
+        vendorApprovalStatusLabel(context, status),
         style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
       ),
     );

@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "837061684401",
-    "project_id": "orient-food-9c1e0",
-    "storage_bucket": "orient-food-9c1e0.firebasestorage.app"
+    "project_number": "637107525940",
+    "project_id": "delivery-app-syria-2026",
+    "storage_bucket": "delivery-app-syria-2026.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:837061684401:android:ca167e9674055c6f0a0690",
+        "mobilesdk_app_id": "1:637107525940:android:58654e30de67123d58ad61",
         "android_client_info": {
           "package_name": "com.deliveryapp.delivery_app"
         }
@@ -15,26 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyC_yk-KNIVKIIlgTYdRZnKrbjouddzWvR8"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:837061684401:android:6fb527e9056731670a0690",
-        "android_client_info": {
-          "package_name": "com.example.orient_food"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyC_yk-KNIVKIIlgTYdRZnKrbjouddzWvR8"
+          "current_key": "AIzaSyAO0P8zt9jbWg47aGZJEFQk-v5No6CSXX8"
         }
       ],
       "services": {

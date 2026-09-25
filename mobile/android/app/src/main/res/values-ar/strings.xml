@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">تطبيق التوصيل</string>
+    <string name="order_updates_channel_name">تحديثات الطلبات</string>
+</resources>

@@ -12,6 +12,7 @@ import '../features/auth/screens/signup_screen.dart';
 import '../features/auth/screens/forgot_password_screen.dart';
 import '../features/customer/screens/customer_home_screen.dart';
 import '../features/driver/screens/driver_home_screen.dart';
+import '../features/notifications/widgets/notification_tap_handler.dart';
 import '../features/vendor/screens/vendor_dashboard_screen.dart';
 import '../l10n/app_localizations.dart';
 import '../models/app_user.dart';
@@ -84,9 +85,12 @@ class _RoleGate extends ConsumerWidget {
                 children: [
                   Text(l10n.noProfileFoundMessage),
                   const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: () => ref.invalidate(currentAppUserProvider),
-                    child: Text(l10n.retryButton),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () => ref.invalidate(currentAppUserProvider),
+                      child: Text(l10n.retryButton),
+                    ),
                   ),
                   TextButton(
                     onPressed: () => ref.read(authServiceProvider).signOut(),
@@ -97,16 +101,14 @@ class _RoleGate extends ConsumerWidget {
             ),
           );
         }
-        switch (appUser.role) {
-          case UserRole.customer:
-            return const CustomerHomeScreen();
-          case UserRole.driver:
-            return const DriverHomeScreen();
-          case UserRole.vendor:
-            return VendorDashboardScreen(vendorId: appUser.id);
-          case UserRole.admin:
-            return const AdminDashboardScreen();
-        }
+        final Widget home = switch (appUser.role) {
+          UserRole.customer => const CustomerHomeScreen(),
+          UserRole.driver => const DriverHomeScreen(),
+          UserRole.vendor => VendorDashboardScreen(vendorId: appUser.id),
+          UserRole.admin => const AdminDashboardScreen(),
+        };
+        // Opens the order behind a tapped push notification, per this role.
+        return NotificationTapHandler(user: appUser, child: home);
       },
       loading: () => Scaffold(body: Center(child: screenSpinner(context))),
       error: (error, _) => Scaffold(

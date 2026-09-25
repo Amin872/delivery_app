@@ -8,11 +8,13 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    // google_maps_flutter requires a Maps SDK for iOS key from the Google
-    // Cloud Console (same project as orient-food-9c1e0, or any project with
-    // the Maps SDK for iOS enabled). Replace the placeholder below — without
-    // a real key, GoogleMap widgets fail to render map tiles.
-    GMSServices.provideAPIKey("YOUR_MAPS_API_KEY_HERE")
+    // google_maps_flutter's Maps SDK for iOS key, read from Info.plist's
+    // GMSApiKey, which Xcode fills from MAPS_API_KEY in the untracked
+    // ios/Flutter/Maps.xcconfig (see mobile/README.md) — never committed.
+    // Without it, a placeholder is used and map tiles stay blank.
+    let configuredKey = Bundle.main.object(forInfoDictionaryKey: "GMSApiKey") as? String ?? ""
+    let hasKey = !configuredKey.isEmpty && !configuredKey.hasPrefix("$(")
+    GMSServices.provideAPIKey(hasKey ? configuredKey : "YOUR_MAPS_API_KEY_HERE")
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }

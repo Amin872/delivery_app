@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-build-only (src/debug/, merged in by src/debug/AndroidManifest.xml)
+  — never part of a release build. Without this, Android blocks the plain
+  HTTP the local Firebase Emulator Suite talks (Auth/Firestore/Functions/
+  Storage all serve cleartext, not TLS), which is otherwise invisible from
+  Dart: the app just hangs/fails network calls silently rather than
+  throwing a catchable exception. See mobile/integration_test/.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>

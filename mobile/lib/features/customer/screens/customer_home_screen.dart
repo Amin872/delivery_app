@@ -13,6 +13,8 @@ import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/city.dart';
+import '../../../models/governorate.dart';
+import '../../../models/neighborhood.dart';
 import '../../../models/vendor.dart';
 import '../../../routing/page_transitions.dart';
 import '../../../services/firestore_service.dart';
@@ -52,6 +54,21 @@ final allMenuItemsProvider = StreamProvider<List<MenuItem>>((ref) {
 // `watchCities()` stream, so there's only ever one live city-data source.
 final allCitiesProvider = StreamProvider<List<CityOption>>((ref) {
   return ref.watch(firestoreServiceProvider).watchCities();
+});
+
+// Canonical governorate/neighbourhood lists (Phase 4 Location & Address
+// Architecture) — same single-shared-provider reasoning as
+// allCitiesProvider above. Consumed by LocationPickerScreen/
+// EditAddressScreen's reverse-geocode matching (see
+// core/location/location_matcher.dart's matchNeighborhoodLocation) and by
+// AdminLocationsScreen's Governorates/Neighborhoods tabs — one live stream
+// per collection, not one per screen.
+final allGovernoratesProvider = StreamProvider<List<GovernorateOption>>((ref) {
+  return ref.watch(firestoreServiceProvider).watchGovernorates();
+});
+
+final allNeighborhoodsProvider = StreamProvider<List<NeighborhoodOption>>((ref) {
+  return ref.watch(firestoreServiceProvider).watchNeighborhoods();
 });
 
 class CustomerHomeScreen extends ConsumerStatefulWidget {

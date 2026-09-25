@@ -42,8 +42,16 @@ class LocationService {
   }) {
     return guardFuture(() {
       final locationMap = {
+        'driverId': driverId,
         'latitude': position.latitude,
         'longitude': position.longitude,
+        // geolocator reports 0.0 (never null) when the platform has no real
+        // heading/speed reading rather than omitting the field — treated as
+        // "no reading" here so DriverLocation.heading/speed stay honestly
+        // null instead of implying the driver is stationary/facing due
+        // north when the device simply didn't report anything.
+        'heading': position.heading > 0 ? position.heading : null,
+        'speed': position.speed > 0 ? position.speed : null,
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
       };
       final batch = _db.batch();

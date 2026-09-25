@@ -28,4 +28,27 @@ void main() {
     final doc = await firestore.collection('users').doc('user-1').get();
     expect(doc.data()!['fcmToken'], 'token-abc');
   });
+
+  group('locale (Phase 28)', () {
+    test('pushLocaleCode keeps en, maps everything else to ar', () {
+      expect(pushLocaleCode('en'), 'en');
+      expect(pushLocaleCode('ar'), 'ar');
+      expect(pushLocaleCode('fr'), 'ar');
+      expect(pushLocaleCode(''), 'ar');
+    });
+
+    for (final (languageCode, stored) in [('en', 'en'), ('ar', 'ar'), ('de', 'ar')]) {
+      test('saveLocale("$languageCode") writes users/{uid}.locale = "$stored" only', () async {
+        final firestore = FakeFirebaseFirestore();
+        final original = {'email': 'a@b.com', 'displayName': 'A', 'role': 'customer'};
+        await firestore.collection('users').doc('user-1').set(original);
+        final service = PushNotificationService(messaging: MockFirebaseMessaging(), firestore: firestore);
+
+        await service.saveLocale('user-1', languageCode);
+
+        final doc = await firestore.collection('users').doc('user-1').get();
+        expect(doc.data(), {...original, 'locale': stored});
+      });
+    }
+  });
 }

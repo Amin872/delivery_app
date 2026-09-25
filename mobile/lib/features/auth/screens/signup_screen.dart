@@ -93,6 +93,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
               TextFormField(
+                key: const ValueKey('signup_name_field'),
                 controller: _nameController,
                 decoration: InputDecoration(labelText: l10n.displayNameLabel),
                 validator: (value) =>
@@ -100,6 +101,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               ),
               const SizedBox(height: 12),
               TextFormField(
+                key: const ValueKey('signup_email_field'),
                 controller: _emailController,
                 decoration: InputDecoration(labelText: l10n.emailLabel),
                 keyboardType: TextInputType.emailAddress,
@@ -112,6 +114,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               ),
               const SizedBox(height: 12),
               TextFormField(
+                key: const ValueKey('signup_password_field'),
                 controller: _passwordController,
                 decoration: InputDecoration(labelText: l10n.passwordLabel),
                 obscureText: true,
@@ -123,6 +126,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               ),
               const SizedBox(height: 12),
               TextFormField(
+                key: const ValueKey('signup_phone_field'),
                 controller: _phoneController,
                 decoration: InputDecoration(labelText: l10n.phoneNumberLabel),
                 keyboardType: TextInputType.phone,
@@ -135,6 +139,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<UserRole>(
+                key: const ValueKey('signup_role_dropdown'),
                 initialValue: _role,
                 decoration: InputDecoration(labelText: l10n.roleLabel),
                 items: _selfServiceRoles
@@ -152,6 +157,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   style: TextStyle(color: colorScheme.error),
                 ),
               GradientButton(
+                key: const ValueKey('signup_submit_button'),
                 onPressed: _isSubmitting ? null : _submit,
                 child: _isSubmitting
                     ? buttonSpinner(colorScheme.onPrimary)

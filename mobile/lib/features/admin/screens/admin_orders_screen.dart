@@ -5,18 +5,16 @@ import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/providers/formatters_provider.dart';
 import '../../../core/widgets/animated_async.dart';
-import '../../../core/widgets/language_toggle_button.dart';
-import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
 import '../../../routing/page_transitions.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
+import '../widgets/admin_scaffold.dart';
 import 'admin_order_detail_screen.dart';
 
-final adminOrdersProvider =
-    StreamProvider.autoDispose.family<List<DeliveryOrder>, OrderStatus?>((ref, status) {
+final adminOrdersProvider = StreamProvider.autoDispose.family<List<DeliveryOrder>, OrderStatus?>((ref, status) {
   return ref.watch(firestoreServiceProvider).watchAllOrders(status: status);
 });
 
@@ -37,19 +35,20 @@ class _AdminOrdersScreenState extends ConsumerState<AdminOrdersScreen> {
     final currencyFormat = ref.watch(currencyFormatProvider);
     final dateFormat = ref.watch(dateTimeFormatProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.adminOrdersTitle),
-        actions: const [LanguageToggleButton()],
-      ),
-      body: ResponsiveCenter(
-        child: Column(
-          children: [
+    // Inside the shared AdminScaffold (admin theme + nav), like every other
+    // admin destination; the scaffold supplies the language toggle and
+    // the responsive width.
+    return AdminScaffold(
+      title: l10n.adminOrdersTitle,
+      selected: AdminDestination.orders,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           SizedBox(
             height: 56,
             child: ListView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -89,20 +88,18 @@ class _AdminOrdersScreenState extends ConsumerState<AdminOrdersScreen> {
                           '${orderStatusLabel(context, order.status)} · ${dateFormat.format(order.createdAt)}',
                         ),
                         trailing: Text(currencyFormat.format(order.total)),
-                        onTap: () => Navigator.of(context)
-                            .push(fadeSlideRoute(AdminOrderDetailScreen(orderId: order.id))),
+                        onTap: () =>
+                            Navigator.of(context).push(fadeSlideRoute(AdminOrderDetailScreen(orderId: order.id))),
                       ),
                     ).staggeredEntrance(index);
                   },
                 );
               },
               loading: () => const ListSkeletonLoader(),
-              error: (error, _) =>
-                  Center(child: Text(localizedErrorMessage(context, error))),
+              error: (error, _) => Center(child: Text(localizedErrorMessage(context, error))),
             ),
           ),
         ],
-        ),
       ),
     );
   }

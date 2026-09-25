@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launcher label; mirrors appTitle in lib/l10n/app_en.arb. -->
+    <string name="app_name">Delivery App</string>
+    <!-- Name of the Android notification channel order pushes arrive on
+         (Settings > Apps > Notifications). See MainActivity.kt. -->
+    <string name="order_updates_channel_name">Order updates</string>
+</resources>

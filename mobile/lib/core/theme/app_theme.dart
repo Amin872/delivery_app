@@ -35,16 +35,23 @@ class AppTheme {
         centerTitle: false,
         titleTextStyle: textTheme.titleLarge,
       ),
+      // Minimum sizes set a height but keep a finite minimum width (64 is
+      // Material's own default): `Size.fromHeight` means a minimum width of
+      // infinity, which throws "BoxConstraints forces an infinite width" for
+      // any button laid out with unbounded width — directly in a Row, a
+      // ListTile trailing, or a dialog's actions. Buttons that should span
+      // their parent get that from the parent (a stretch Column, Expanded,
+      // or an explicit full-width SizedBox), not from the theme.
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(48),
+          minimumSize: const Size(64, 48),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           textStyle: textTheme.labelLarge,
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          minimumSize: const Size.fromHeight(44),
+          minimumSize: const Size(64, 44),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(

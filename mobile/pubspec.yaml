@@ -60,6 +60,10 @@ dependencies:
 
   # Vendor/menu-item photo picking, uploaded via firebase_storage
   image_picker: ^1.1.2
+  # Launches the phone dialer (tel: URI) for the customer's "call driver"
+  # button during live tracking (Phase 4) — the only use of this package
+  # anywhere in the app.
+  url_launcher: ^6.3.1
 
   # Localization (Arabic-first, RTL) & local persistence (locale/theme choice)
   intl: any

@@ -47,20 +47,27 @@ for `firebase deploy --only functions` — a broken build or lint error blocks d
 
 ## Firebase project
 
-Wired to `orient-food-9c1e0` (see `.firebaserc`) — an existing, already-active project (Firestore
-Native mode, Auth, and Storage all provisioned; it also has pre-existing `orient_food` Android/web apps
-and users unrelated to this codebase). `flutterfire configure -p orient-food-9c1e0 -y --platforms=android,ios,web`
+Wired to `delivery-app-syria-2026` (see `.firebaserc`) — a dedicated project created specifically for
+delivery_app (Firestore Native mode, Auth, and Storage all provisioned; no other app shares it).
+`flutterfire configure -p delivery-app-syria-2026 -y --platforms=android,ios,web`
 has been run, generating `mobile/lib/firebase_options.dart` (wired into `lib/main.dart` via
 `DefaultFirebaseOptions.currentPlatform`) and `mobile/android/app/google-services.json`.
 
 `ios/Runner/GoogleService-Info.plist` was **not** generated — FlutterFire CLI only embeds it into the
 Xcode project from macOS. Re-run the same `flutterfire configure` command from a Mac before building
-for iOS. The Maps API key wiring for `google_maps_flutter` (live delivery tracking) is in place —
-`android/app/src/main/AndroidManifest.xml`'s `com.google.android.geo.API_KEY` meta-data and
-`ios/Runner/AppDelegate.swift`'s `GMSServices.provideAPIKey(...)` call — but both still hold the
-placeholder `"YOUR_MAPS_API_KEY_HERE"`; swap in a real Maps SDK key from the Google Cloud Console
-(same project as `orient-food-9c1e0`, or any project with Maps SDK for Android/iOS enabled) before
-`GoogleMap` widgets will render actual tiles instead of a blank grey view.
+for iOS.
+
+The Google Maps SDK key (`google_maps_flutter` tiles: live tracking map, location picker) is
+**never committed** — it's injected from untracked local files, with a placeholder fallback so builds
+without a key still compile (tiles then stay grey):
+- Android: `MAPS_API_KEY=...` in the gitignored `mobile/android/local.properties`, read by
+  `android/app/build.gradle.kts` into `manifestPlaceholders`, used as `${MAPS_API_KEY}` by the
+  `com.google.android.geo.API_KEY` meta-data in `AndroidManifest.xml`.
+- iOS: `MAPS_API_KEY = ...` in the gitignored `mobile/ios/Flutter/Maps.xcconfig` (optionally included by
+  `Debug.xcconfig`/`Release.xcconfig`) → `GMSApiKey` in `Info.plist` → read by `AppDelegate.swift`.
+Mapbox geocoding (search / reverse geocoding) is a separate token, `--dart-define=MAPBOX_PUBLIC_TOKEN=...`.
+See `mobile/README.md` for setup and key restrictions. Driver turn-by-turn navigation is a Google Maps
+HTTPS directions link (`lib/core/location/navigation_launcher.dart`) and needs no key.
 
 To repoint this app at a different Firebase project: update `.firebaserc`, then re-run
 `flutterfire configure -p <project-id> -y --platforms=android,ios,web` from `mobile/`.
@@ -112,8 +119,12 @@ just the Dart model.
 
 New vendors are created with `approvalStatus: 'pending'` (`AuthService.signUp`); `firestore.rules`'
 `vendors/{vendorId}` `allow update` only lets an owner touch their own doc while leaving `ownerId` and
-`approvalStatus` unchanged, and only lets a caller with `hasRole('admin')` change `approvalStatus`
-alone (`request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvalStatus'])`). Unlike
+`approvalStatus` unchanged. A caller with `hasRole('admin')` may change only a fixed whitelist of
+fields — `approvalStatus`, `category`, `city`, `deliveryFee`, `etaMinMinutes`, `etaMaxMinutes`,
+`minimumOrderAmount`, `openTime`, `closeTime`, `isOpen`
+(`request.resource.data.diff(resource.data).affectedKeys().hasOnly([...])`) — covering approval, the
+store's operating terms and open/closed; name, description, logo, pickup location, `ownerId` and the
+rating aggregates stay out of the admin's reach. Unlike
 driver assignment below, this is a plain client write straight from `FirestoreService` — there's no
 race to arbitrate, so no callable is needed.
 
@@ -129,16 +140,22 @@ race-condition reason.
 
 ### Push notifications: FCM token on the user doc, not a separate collection
 
-`functions/src/notifications.ts`'s `notifyUser(userId, ...)` reads `fcmToken` off `users/{userId}` and
-no-ops if absent. The client side lives in `mobile/lib/services/push_notification_service.dart`
-(`registerToken` requests permission and writes the token, `onTokenRefresh` keeps it current) and is
-wired up as a side-effect Riverpod provider, `pushNotificationSyncProvider` in
-`lib/features/notifications/providers/push_notification_provider.dart`, which re-runs on every
-auth-state change so it covers both a fresh sign-in and an app restart with an existing session; the
-token is cleared on sign-out in `AuthService.signOut`. Order-lifecycle triggers (`onOrderCreated`
-notifies the vendor owner, `onOrderStatusChanged` notifies the customer) live in
-`functions/src/orders.ts` alongside `acceptDelivery`, since they all operate on the same
-`orders/{orderId}` trigger surface.
+`functions/src/notifications.ts` is the single push module: `orderNotifications(before, after, orderId,
+vendorOwnerId)` is a pure planner deciding who gets which template for an order write (vendor on
+creation; customer on every status step; vendor on driverAssigned/delivered; customer + vendor +
+assigned driver on cancellation; new/previous driver on reassignment, even when the status doesn't
+change), and `notifyUser(intent)` is the one sender. It reads `fcmToken` and `locale` off
+`users/{uid}`, sends bilingual (ar/en, default ar) text plus a data payload `{type, orderId}`, no-ops
+without a token, and clears a token FCM reports as unregistered. Both triggers (`onOrderCreated`,
+`onOrderStatusChanged` in `functions/src/orders.ts`) just call the planner and the sender. The client
+side lives in `mobile/lib/services/push_notification_service.dart` and
+`lib/features/notifications/providers/push_notification_provider.dart`:
+`pushNotificationSyncProvider` (re-runs on every auth-state change) registers the single
+`users/{uid}.fcmToken` and keeps `users/{uid}.locale` in sync with the app language;
+`pushNotificationTapProvider` turns a tapped notification (launch or background) into a pending
+target that `NotificationTapHandler` (wrapping each role home in `_RoleGate`) opens with the
+existing order screen for the signed-in role. The token is cleared on sign-out in `AuthService.signOut`.
+There is no notification inbox/history collection and no preferences yet.
 
 ### Ratings: a client-written review, aggregated by a trigger, never a client-written average
 

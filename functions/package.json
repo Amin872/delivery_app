@@ -14,7 +14,7 @@
     "test:rules": "mocha --require ts-node/register --timeout 20000 'rules-tests/**/*.test.ts'"
   },
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "lib/index.js",
   "dependencies": {

@@ -1,7 +1,7 @@
 /**
  * One-off script: seeds the five existing delivery cities — matching
  * mobile/lib/models/city.dart's `City` enum values exactly — into
- * `cities/{cityId}` on the LIVE orient-food-9c1e0 Firestore project. See
+ * `cities/{cityId}` on the LIVE delivery-app-syria-2026 Firestore project. See
  * the Locations/City migration plan for why: `Vendor.city` is already
  * stored as one of these five lowercase strings, so seeding `cities` with
  * these exact same document ids means no existing vendor document needs
@@ -33,7 +33,7 @@
  */
 import * as admin from "firebase-admin";
 
-const PROJECT_ID = "orient-food-9c1e0";
+const PROJECT_ID = "delivery-app-syria-2026";
 
 interface CitySeed {
   id: string;
@@ -57,7 +57,7 @@ const CITIES: CitySeed[] = [
 async function main() {
   if (!process.argv.includes("--yes")) {
     throw new Error(
-      "Refusing to run without --yes — this writes to the LIVE orient-food-9c1e0 project."
+      "Refusing to run without --yes — this writes to the LIVE delivery-app-syria-2026 project."
     );
   }
   if (process.env.FIRESTORE_EMULATOR_HOST) {

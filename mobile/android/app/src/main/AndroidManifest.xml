@@ -1,6 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Network access for Firebase, Maps tiles and Mapbox geocoding —
+         declared explicitly for release builds rather than relied on via
+         plugin manifest merging. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Foreground location only (geolocator): the driver's live position
+         while delivering, and the location picker's "current location"
+         button. No background location. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <application
-        android:label="delivery_app"
+        android:label="@string/app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -30,14 +39,18 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <!-- google_maps_flutter requires a Maps SDK for Android key from the
-             Google Cloud Console (same project as orient-food-9c1e0, or any
-             project with the Maps SDK for Android enabled). Replace the
-             placeholder below — without a real key, GoogleMap widgets render
-             a blank grey tile instead of map tiles. -->
+        <!-- google_maps_flutter's Maps SDK for Android key. Injected at build
+             time from MAPS_API_KEY in the untracked android/local.properties
+             (see app/build.gradle.kts and mobile/README.md) — never committed.
+             Without a real key, GoogleMap widgets render blank grey tiles. -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="YOUR_MAPS_API_KEY_HERE" />
+            android:value="${MAPS_API_KEY}" />
+        <!-- Order push notifications (FCM) arrive on this channel, created in
+             MainActivity.kt. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="order_updates" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

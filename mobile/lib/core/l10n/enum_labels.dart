@@ -4,6 +4,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/app_user.dart';
 import '../../models/city.dart';
 import '../../models/governorate.dart';
+import '../../models/neighborhood.dart';
 import '../../models/order.dart';
 import '../../models/vendor.dart';
 
@@ -23,6 +24,8 @@ String orderStatusLabel(BuildContext context, OrderStatus status) {
       return l10n.orderStatusPreparing;
     case OrderStatus.readyForPickup:
       return l10n.orderStatusReadyForPickup;
+    case OrderStatus.driverAssigned:
+      return l10n.orderStatusDriverAssigned;
     case OrderStatus.pickedUp:
       return l10n.orderStatusPickedUp;
     case OrderStatus.delivering:
@@ -111,6 +114,18 @@ String governorateLabel(BuildContext context, GovernorateOption? governorate) {
     return AppLocalizations.of(context)!.governorateUnassignedLabel;
   }
   return _isArabic(context) ? governorate.nameAr : governorate.nameEn;
+}
+
+/// Display name for [neighborhood] — same shape/reasoning as
+/// [governorateLabel]: a locale pick, plus an explicit "unassigned" label
+/// when null (a SavedAddress/DeliveryOrder with no resolved neighbourhood —
+/// see models/neighborhood.dart's own doc comment on why that's never
+/// required, not just a loading/error state).
+String neighborhoodLabel(BuildContext context, NeighborhoodOption? neighborhood) {
+  if (neighborhood == null) {
+    return AppLocalizations.of(context)!.neighborhoodUnassignedLabel;
+  }
+  return _isArabic(context) ? neighborhood.nameAr : neighborhood.nameEn;
 }
 
 String userRoleLabel(BuildContext context, UserRole role) {

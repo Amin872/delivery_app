@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/animated_async.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/confirm_dialog.dart';
@@ -17,11 +18,14 @@ import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/app_user.dart';
+import '../../../models/approval_status.dart';
 import '../../../models/driver.dart';
 import '../../../models/order.dart';
 import '../../../models/vendor.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
+import '../../customer/widgets/price_breakdown.dart';
 import '../../driver/screens/driver_home_screen.dart' show functionsServiceProvider;
+import 'admin_drivers_screen.dart' show DriverRow, buildDriverRows;
 import 'admin_users_screen.dart' show allUsersProvider;
 
 final _orderProvider = StreamProvider.autoDispose.family<DeliveryOrder, String>((ref, orderId) {
@@ -55,6 +59,7 @@ const _adminCancellableStatuses = {
 
 const _adminReassignableStatuses = {
   OrderStatus.readyForPickup,
+  OrderStatus.driverAssigned,
   OrderStatus.pickedUp,
 };
 
@@ -106,7 +111,7 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
   }
 
   Future<void> _pickAndReassignDriver(DeliveryOrder order) async {
-    final selected = await showModalBottomSheet<_DriverOption>(
+    final selected = await showModalBottomSheet<DriverRow>(
       context: context,
       backgroundColor: VendorPalette.surface,
       shape: const RoundedRectangleBorder(
@@ -172,10 +177,15 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
               return ListView(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 children: [
-                  Row(
+                  // Wraps onto two lines when the chip and date don't fit side
+                  // by side (narrow screens, large text).
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
                     children: [
                       _StatusChip(status: order.status),
-                      const Spacer(),
                       Text(
                         dateFormat.format(order.createdAt),
                         style: const TextStyle(color: VendorPalette.textSecondary),
@@ -183,11 +193,6 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
                     ],
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  _InfoCard(children: [
-                    _InfoRow(label: l10n.totalLabel, value: currencyFormat.format(order.total)),
-                    _InfoRow(label: l10n.deliveryAddressLabel, value: order.deliveryAddress),
-                  ]),
-                  const SizedBox(height: AppSpacing.md),
                   _InfoCard(children: [
                     ref.watch(_userProvider(order.customerId)).animatedWhen(
                           data: (customer) =>
@@ -212,23 +217,107 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
                                   label: l10n.assignedDriverLabel, value: order.driverId!),
                             ),
                   ]),
-                  const SizedBox(height: AppSpacing.lg),
-                  Text(l10n.itemsLabel, style: vendorTheme.textTheme.titleSmall),
-                  const SizedBox(height: AppSpacing.sm),
+                  _SectionTitle(l10n.itemsLabel),
                   _InfoCard(
+                    key: const ValueKey('admin_order_items'),
                     children: [
+                      // Same line layout as VendorOrderDetailScreen: name,
+                      // "quantity × unit price", line total.
                       for (final item in order.items)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                          child: Row(
-                            children: [
-                              Expanded(child: Text('${item.quantity}× ${item.name}')),
-                              Text(currencyFormat.format(item.unitPrice * item.quantity)),
-                            ],
+                        Semantics(
+                          // Spelled out for screen readers instead of "2 × 5,000".
+                          label: '${item.name}, ${l10n.quantityLabel} ${item.quantity}, '
+                              '${l10n.unitPriceLabel} ${currencyFormat.format(item.unitPrice)}, '
+                              '${currencyFormat.format(item.unitPrice * item.quantity)}',
+                          excludeSemantics: true,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.name,
+                                        style: const TextStyle(
+                                          color: VendorPalette.textPrimary,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      Text(
+                                        l10n.orderItemQuantityPrice(
+                                          item.quantity,
+                                          currencyFormat.format(item.unitPrice),
+                                        ),
+                                        style: const TextStyle(color: VendorPalette.textSecondary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Flexible(
+                                  child: Text(
+                                    currencyFormat.format(item.unitPrice * item.quantity),
+                                    textAlign: TextAlign.end,
+                                    style: const TextStyle(color: VendorPalette.textPrimary),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
+                      if (order.items.isNotEmpty) const Divider(color: VendorPalette.divider),
+                      // effective* fall back for orders placed before the
+                      // breakdown existed (their total was the item
+                      // subtotal, with no fee).
+                      PriceBreakdown(
+                        subtotal: order.effectiveSubtotal,
+                        deliveryFee: order.effectiveDeliveryFee,
+                        total: order.total,
+                        rowPadding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                      ),
                     ],
                   ),
+                  if (_hasText(order.vendorName) || _hasText(order.pickupAddress)) ...[
+                    // The pickup snapshot taken when the order was placed —
+                    // only the store name and address, nothing about the owner.
+                    _SectionTitle(l10n.pickupLocationTitle),
+                    _InfoCard(key: const ValueKey('admin_order_pickup'), children: [
+                      if (_hasText(order.vendorName))
+                        _InfoRow(label: l10n.vendorLabel, value: order.vendorName!.trim()),
+                      if (_hasText(order.pickupAddress))
+                        _InfoRow(label: l10n.pickupAddressFieldLabel, value: order.pickupAddress!.trim()),
+                    ]),
+                  ],
+                  _SectionTitle(l10n.deliveryTitle),
+                  _InfoCard(key: const ValueKey('admin_order_delivery'), children: [
+                    _InfoRow(label: l10n.deliveryAddressLabel, value: order.deliveryAddress),
+                    // Coordinates as data only — the admin area has no map.
+                    if (order.deliveryCoordinates != null)
+                      _InfoRow(
+                        label: l10n.deliveryLocationLabel,
+                        value: '${order.deliveryCoordinates!.latitude.toStringAsFixed(5)}, '
+                            '${order.deliveryCoordinates!.longitude.toStringAsFixed(5)}',
+                      ),
+                    if (_hasText(order.deliveryInstructions))
+                      _InfoRow(
+                        label: l10n.orderDeliveryInstructionsLabel,
+                        value: order.deliveryInstructions!.trim(),
+                      ),
+                    if (_hasText(order.driverNote))
+                      _InfoRow(label: l10n.orderDriverNoteLabel, value: order.driverNote!.trim()),
+                  ]),
+                  if (_hasText(order.proofImageUrl)) ...[
+                    _SectionTitle(l10n.proofOfDeliveryLabel),
+                    AppNetworkImage(
+                      key: const ValueKey('admin_order_proof'),
+                      imageUrl: order.proofImageUrl!,
+                      height: 200,
+                      borderRadius: AppRadius.large,
+                    ),
+                  ],
                   if (canCancel || canReassign) ...[
                     const SizedBox(height: AppSpacing.xl),
                     if (canReassign)
@@ -294,7 +383,7 @@ class _StatusChip extends StatelessWidget {
 }
 
 class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.children});
+  const _InfoCard({required this.children, super.key});
 
   final List<Widget> children;
 
@@ -322,10 +411,13 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      // Label and value both wrap rather than overflow on a narrow screen.
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: VendorPalette.textSecondary)),
-          const Spacer(),
+          Flexible(child: Text(label, style: const TextStyle(color: VendorPalette.textSecondary))),
+          const SizedBox(width: AppSpacing.md),
           Flexible(
             child: Text(
               value,
@@ -339,20 +431,25 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-class _DriverOption {
-  const _DriverOption({required this.driverId, required this.name, required this.isAvailable});
-
-  final String driverId;
-  final String name;
-  final bool isAvailable;
+/// Drivers an admin may reassign an order to: approved driver accounts only
+/// (the adminReassignDriver callable rejects anyone else), available
+/// drivers first. Reuses [buildDriverRows]'s drivers/users join; pending,
+/// rejected, and legacy drivers with no approvalStatus (which parse as
+/// pending) are left out.
+List<DriverRow> reassignmentCandidates(List<Driver> drivers, List<AppUser> users) {
+  return buildDriverRows(drivers, users)
+      .where((row) => row.approvalStatus == ApprovalStatus.approved)
+      .toList()
+    ..sort((a, b) => b.isAvailable == a.isAvailable ? 0 : (b.isAvailable ? 1 : -1));
 }
 
-/// Bottom sheet listing every driver account, joined from `drivers`
-/// (availability) and `users` (identity, filtered to `role == driver`) —
-/// see [FirestoreService.watchAllDrivers]'s doc comment for why the join is
-/// client-side rather than a new denormalized field. [currentDriverId] is
-/// accepted for future use (e.g. highlighting who's currently assigned) but
-/// doesn't filter the list — reassigning to the same driver is harmless.
+/// Bottom sheet listing the drivers an order can be reassigned to (see
+/// [reassignmentCandidates]), joined from `drivers` (availability/approval)
+/// and `users` (identity) — see [FirestoreService.watchAllDrivers]'s doc
+/// comment for why the join is client-side rather than a new denormalized
+/// field. [currentDriverId] is accepted for future use (e.g. highlighting
+/// who's currently assigned) but doesn't filter the list — reassigning to
+/// the same driver is harmless.
 class _DriverPickerSheet extends ConsumerWidget {
   const _DriverPickerSheet({this.currentDriverId});
 
@@ -381,16 +478,7 @@ class _DriverPickerSheet extends ConsumerWidget {
         child: Text(localizedErrorMessage(context, usersAsync.error!)),
       );
     } else {
-      final driversById = {for (final driver in driversAsync.value!) driver.id: driver};
-      final options = usersAsync.value!
-          .where((user) => user.role == UserRole.driver && driversById.containsKey(user.id))
-          .map((user) => _DriverOption(
-                driverId: user.id,
-                name: user.displayName,
-                isAvailable: driversById[user.id]!.isAvailable,
-              ))
-          .toList()
-        ..sort((a, b) => b.isAvailable == a.isAvailable ? 0 : (b.isAvailable ? 1 : -1));
+      final options = reassignmentCandidates(driversAsync.value!, usersAsync.value!);
 
       body = options.isEmpty
           ? Padding(
@@ -456,6 +544,27 @@ class _AvailabilityBadge extends StatelessWidget {
       child: Text(
         isAvailable ? l10n.driverAvailableStatusLabel : l10n.driverUnavailableStatusLabel,
         style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
+      ),
+    );
+  }
+}
+
+bool _hasText(String? value) => value != null && value.trim().isNotEmpty;
+
+/// Heading above one of the detail cards, with the spacing that separates
+/// the sections.
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.lg, bottom: AppSpacing.sm),
+      child: Semantics(
+        header: true,
+        child: Text(text, style: Theme.of(context).textTheme.titleSmall),
       ),
     );
   }

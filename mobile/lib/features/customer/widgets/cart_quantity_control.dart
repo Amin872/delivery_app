@@ -19,6 +19,7 @@ class CartQuantityControl extends ConsumerWidget {
     required this.item,
     required this.onAdd,
     this.direction = Axis.vertical,
+    this.compact,
     this.addButtonBuilder,
     super.key,
   });
@@ -32,6 +33,11 @@ class CartQuantityControl extends ConsumerWidget {
   /// line) suits `MostOrderedCard`'s compact carousel tile, where a fixed
   /// card height leaves no room for a tall stacked control.
   final Axis direction;
+
+  /// Whether the stepper drops IconButton's default 48x48 tap target.
+  /// Defaults to horizontal layouts (MostOrderedCard's tight tile); the
+  /// cart passes false to keep full-size targets in a horizontal row.
+  final bool? compact;
 
   /// Overrides just the zero-quantity ("add") visual — e.g. `MostOrderedCard`'s
   /// corner-flag badge, which looks nothing like the plain circular icon
@@ -75,7 +81,7 @@ class CartQuantityControl extends ConsumerWidget {
       ref.read(cartProvider.notifier).setQuantity(item.id, quantity - 1);
     }
 
-    final compact = direction == Axis.horizontal;
+    final compact = this.compact ?? direction == Axis.horizontal;
     final removeButton = IconButton(
       icon: const Icon(Icons.remove_circle_outline),
       padding: compact ? EdgeInsets.zero : const EdgeInsets.all(8),

@@ -35,4 +35,16 @@ class StorageService {
       return ref.getDownloadURL();
     });
   }
+
+  /// Uploads [file] to `promotions/{promotionId}/{fileName}` and returns its
+  /// download URL. Admin-only (see storage.rules) — [fileName] should be a
+  /// stable name per media kind (e.g. `media.jpg`/`media.mp4`) so re-uploading
+  /// replaces the previous file, same convention as [uploadVendorImage].
+  Future<String> uploadPromotionMedia(String promotionId, File file, String fileName) {
+    return guardFuture(() async {
+      final ref = _storage.ref('promotions/$promotionId/$fileName');
+      await ref.putFile(file);
+      return ref.getDownloadURL();
+    });
+  }
 }

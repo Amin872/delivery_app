@@ -7,22 +7,83 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    // Phase 31 (L5): the raster formats the app uploads. image_picker
+    // (imageQuality 85) produces JPEG; PNG/WebP are accepted too. SVG
+    // (image/svg+xml, which can carry script) and any other image/* type
+    // are rejected. The content type is client-declared, so this is an
+    // allowlist, not a pattern.
+    function isAllowedImageType() {
+      return request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp'];
+    }
+
+    function isAdmin() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // The order behind an orderProofs path, read from Firestore — never
+    // trusted from the path or upload metadata. A missing order (or an id
+    // Firestore can't address) makes every check below fail closed.
+    function orderData(orderId) {
+      return firestore.get(/databases/(default)/documents/orders/$(orderId)).data;
+    }
+
+    // Same participant set as firestore.rules' orders/{orderId} read:
+    // the customer, the assigned driver, or the vendor's owner — all read
+    // from the order alone (ONE Firestore lookup). The vendor owner comes
+    // from vendorOwnerId, which only the createOrder callable writes (from
+    // the vendor document) and no client can change. Production allows at
+    // most two Firestore lookups per request, so the admin check below
+    // (users/{uid}) plus this order read stays within budget.
+    function isOrderParticipant(orderId) {
+      let order = orderData(orderId);
+      return order.customerId == request.auth.uid ||
+        order.get('driverId', null) == request.auth.uid ||
+        order.get('vendorOwnerId', null) == request.auth.uid;
+    }
+
     // Vendor storefront & menu item images: /vendorImages/{vendorId}/{fileName}
     match /vendorImages/{vendorId}/{fileName} {
       allow read: if true;
       allow write: if isSignedIn()
         && firestore.get(/databases/(default)/documents/vendors/$(vendorId)).data.ownerId == request.auth.uid
         && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+        && isAllowedImageType();
     }
 
-    // Proof-of-delivery photos: /orderProofs/{orderId}/{fileName}
+    // Proof-of-delivery photos: /orderProofs/{orderId}/proof.jpg
+    //
+    // Phase 31 (H1): readable only by the order's participants or an
+    // admin — not by any signed-in user (order ids are discoverable, e.g.
+    // from public reviews). Phase 31 (M6): written only by the assigned
+    // driver, only while the delivery is under way (pickedUp/delivering),
+    // and only as the single file StorageService.uploadOrderProof writes —
+    // so a proof can't be replaced after delivery or accompanied by extra
+    // files. Nobody deletes proofs from the client.
     match /orderProofs/{orderId}/{fileName} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn()
-        && firestore.get(/databases/(default)/documents/orders/$(orderId)).data.driverId == request.auth.uid
+      allow read: if isSignedIn() && fileName == 'proof.jpg' &&
+        (isOrderParticipant(orderId) || isAdmin());
+      allow create, update: if isSignedIn()
+        && fileName == 'proof.jpg'
+        && orderData(orderId).get('driverId', null) == request.auth.uid
+        && orderData(orderId).status in ['pickedUp', 'delivering']
         && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+        && isAllowedImageType();
+      allow delete: if false;
+    }
+
+    // Admin-managed promotion media (image or video): /promotions/{promotionId}/{fileName}
+    // Public read (shown on the customer Home carousel); write restricted to
+    // admins. Images keep the same 5MB cap as vendorImages; video gets a
+    // larger, still-bounded cap since clips are naturally heavier than a
+    // single photo.
+    match /promotions/{promotionId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+        && isAdmin()
+        && (
+          (isAllowedImageType() && request.resource.size < 5 * 1024 * 1024) ||
+          (request.resource.contentType.matches('video/.*') && request.resource.size < 50 * 1024 * 1024)
+        );
     }
   }
 }

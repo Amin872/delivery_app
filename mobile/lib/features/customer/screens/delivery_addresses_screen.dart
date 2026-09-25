@@ -17,13 +17,13 @@ import 'customer_home_screen.dart' show firestoreServiceProvider;
 import 'edit_address_screen.dart';
 
 final addressesProvider =
-    StreamProvider.autoDispose.family<List<DeliveryAddress>, String>((ref, customerId) {
+    StreamProvider.autoDispose.family<List<SavedAddress>, String>((ref, customerId) {
   return ref.watch(firestoreServiceProvider).watchAddresses(customerId);
 });
 
 // Also watched by CartScreen to prefill the delivery-address field.
 final defaultAddressProvider =
-    StreamProvider.autoDispose.family<DeliveryAddress?, String>((ref, customerId) {
+    StreamProvider.autoDispose.family<SavedAddress?, String>((ref, customerId) {
   return ref.watch(firestoreServiceProvider).watchDefaultAddress(customerId);
 });
 
@@ -35,7 +35,7 @@ class DeliveryAddressesScreen extends ConsumerWidget {
 
   final String customerId;
 
-  Future<void> _deleteAddress(BuildContext context, WidgetRef ref, DeliveryAddress address) async {
+  Future<void> _deleteAddress(BuildContext context, WidgetRef ref, SavedAddress address) async {
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showConfirmDialog(
       context,
@@ -128,11 +128,14 @@ class _EmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.xl),
-            FilledButton.icon(
-              onPressed: () => Navigator.of(context)
-                  .push(fadeSlideRoute(EditAddressScreen(customerId: customerId))),
-              icon: const Icon(Icons.add),
-              label: Text(l10n.addAddressButton),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.of(context)
+                    .push(fadeSlideRoute(EditAddressScreen(customerId: customerId))),
+                icon: const Icon(Icons.add),
+                label: Text(l10n.addAddressButton),
+              ),
             ),
           ],
         ),
@@ -145,7 +148,7 @@ class _AddressCard extends ConsumerWidget {
   const _AddressCard({required this.customerId, required this.address, required this.onDelete});
 
   final String customerId;
-  final DeliveryAddress address;
+  final SavedAddress address;
   final VoidCallback onDelete;
 
   @override
@@ -194,11 +197,25 @@ class _AddressCard extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                address.address,
+                address.addressText,
                 style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
+              if (address.coordinates == null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.location_off_outlined, size: 14, color: colorScheme.error),
+                      const SizedBox(width: 4),
+                      Text(
+                        l10n.noLocationSetMessage,
+                        style: textTheme.labelSmall?.copyWith(color: colorScheme.error),
+                      ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: AppSpacing.sm),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,

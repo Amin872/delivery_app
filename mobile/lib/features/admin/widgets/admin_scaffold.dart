@@ -17,9 +17,9 @@ import '../screens/admin_promotions_screen.dart';
 import '../screens/admin_users_screen.dart';
 import '../screens/admin_vendors_screen.dart';
 
-/// Every destination the admin nav (sidebar/drawer) can reach. Dashboard,
-/// Vendors, Orders, and Promotions have a real screen behind them today —
-/// everything else opens [AdminScaffold] again with a "coming soon" body,
+/// Every destination the admin nav (sidebar/drawer) can reach. Categories,
+/// Notifications and Settings have no real screen yet — they open
+/// [AdminScaffold] again with a "coming soon" body,
 /// so later phases (see ADMIN_AUDIT_REPORT.md) can wire in a real screen one
 /// destination at a time without touching this enum's shape or the nav
 /// list itself.
@@ -78,7 +78,14 @@ extension AdminDestinationX on AdminDestination {
 
 const _wideBreakpoint = 840.0;
 
-void _navigateTo(BuildContext context, AdminDestination current, AdminDestination destination) {
+/// The one way to move between admin destinations — the nav list and the
+/// dashboard's quick-access cards both call it. Any destination other than
+/// the dashboard sits at most one route above it: leaving the dashboard
+/// pushes (so back returns to it), and moving between two non-dashboard
+/// destinations replaces the current one, so hopping around the admin
+/// never grows the route stack. Detail screens (order, driver) are pushed
+/// on top by their own lists and keep normal back behavior.
+void navigateToAdminDestination(BuildContext context, AdminDestination current, AdminDestination destination) {
   if (destination == current) return;
   if (destination == AdminDestination.dashboard) {
     // AdminDashboardScreen is rendered at the app's single go_router `/`
@@ -89,10 +96,8 @@ void _navigateTo(BuildContext context, AdminDestination current, AdminDestinatio
     return;
   }
   final l10n = AppLocalizations.of(context)!;
-  // Vendors/Orders/Promotions keep their own existing screen — Orders and
-  // Promotions in particular are untouched per the "don't rebuild them"
-  // requirement, so they open as their own full-screen route (own AppBar,
-  // own back button) rather than being squeezed into this shell's body.
+  // Every real destination screen renders inside AdminScaffold itself, so
+  // the nav stays visible wherever the admin goes.
   final Widget screen = switch (destination) {
     AdminDestination.users => const AdminUsersScreen(),
     AdminDestination.vendors => const AdminVendorsScreen(),
@@ -108,7 +113,12 @@ void _navigateTo(BuildContext context, AdminDestination current, AdminDestinatio
         body: _AdminComingSoonBody(destination: destination),
       ),
   };
-  Navigator.of(context).push(fadeSlideRoute(screen));
+  final route = fadeSlideRoute(screen);
+  if (current == AdminDestination.dashboard) {
+    Navigator.of(context).push(route);
+  } else {
+    Navigator.of(context).pushReplacement(route);
+  }
 }
 
 /// Shared shell for every admin page: an AppBar (page title, language
@@ -166,7 +176,7 @@ class AdminScaffold extends ConsumerWidget {
                     selected: selected,
                     onTap: (destination) {
                       Navigator.of(context).pop();
-                      _navigateTo(context, selected, destination);
+                      navigateToAdminDestination(context, selected, destination);
                     },
                   ),
                 ),
@@ -180,7 +190,7 @@ class AdminScaffold extends ConsumerWidget {
                       color: VendorPalette.surface,
                       child: _AdminNavList(
                         selected: selected,
-                        onTap: (destination) => _navigateTo(context, selected, destination),
+                        onTap: (destination) => navigateToAdminDestination(context, selected, destination),
                       ),
                     ),
                   ),

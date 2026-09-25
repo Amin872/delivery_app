@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../models/order.dart';
 import '../../../services/location_service.dart';
 import '../screens/driver_home_screen.dart' show activeDriverOrderProvider;
 
@@ -16,15 +17,30 @@ bool shouldThrottlePublish({required DateTime now, required DateTime? lastPublis
   return lastPublishedAt != null && now.difference(lastPublishedAt) < minPublishInterval;
 }
 
-/// Side-effect provider: while [driverId] has a delivery in flight
-/// (`activeDriverOrderProvider` resolves non-null), streams the device's
-/// position and publishes it to `orders/{orderId}/driverLocation/current` —
-/// what the customer's order-tracking map reads — for that specific active
-/// order. Publishes nothing once the driver has no active delivery, so idle
-/// drivers don't broadcast location.
+// The only statuses firestore.rules' orders/{orderId}/driverLocation
+// create/update rule actually accepts a write for (see firestore.rules'
+// own `status in ['pickedUp', 'delivering']` condition). driverAssigned is
+// deliberately excluded here even though it's a valid "active order" state
+// for activeDriverOrderProvider (which also drives the driver home
+// screen's active-delivery card, and must keep including driverAssigned
+// for that) — starting GPS streaming that early would only produce
+// permission-denied writes rejected by the rules, wasting battery/network
+// for no effect (D.3 fix). Publishing starts once the driver has actually
+// collected the order, not merely been assigned it.
+const _gpsPublishableStatuses = {OrderStatus.pickedUp, OrderStatus.delivering};
+
+/// Side-effect provider: while [driverId] has a delivery in flight AND that
+/// delivery is in a status `firestore.rules` actually allows publishing
+/// for (`_gpsPublishableStatuses`), streams the device's position and
+/// publishes it to `orders/{orderId}/driverLocation/current` — what the
+/// customer's order-tracking map reads — for that specific active order.
+/// Publishes nothing once the driver has no active delivery, or while it's
+/// merely `driverAssigned` (not yet physically picked up), so idle/not-yet-
+/// dispatched drivers don't broadcast location or attempt writes the rules
+/// would reject anyway.
 final driverLocationSyncProvider = Provider.autoDispose.family<void, String>((ref, driverId) {
   final activeOrder = ref.watch(activeDriverOrderProvider(driverId)).valueOrNull;
-  if (activeOrder == null) return;
+  if (activeOrder == null || !_gpsPublishableStatuses.contains(activeOrder.status)) return;
 
   final locationService = ref.watch(locationServiceProvider);
   DateTime? lastPublishedAt;

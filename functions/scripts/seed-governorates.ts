@@ -29,7 +29,7 @@
  * project, since that's the only way to verify the actual writes succeed.
  * The Admin SDK automatically redirects to the emulator when
  * FIRESTORE_EMULATOR_HOST is set; when it's unset, this runs against the
- * real orient-food-9c1e0 project, gated by --yes same as seed-cities.ts.
+ * real delivery-app-syria-2026 project, gated by --yes same as seed-cities.ts.
  *
  * Usage (real project):
  *   GOOGLE_APPLICATION_CREDENTIALS="$env:APPDATA\firebase\<you>_application_default_credentials.json" \
@@ -40,7 +40,7 @@
  */
 import * as admin from "firebase-admin";
 
-const PROJECT_ID = "orient-food-9c1e0";
+const PROJECT_ID = "delivery-app-syria-2026";
 
 interface GovernorateSeed {
   id: string;
@@ -73,7 +73,7 @@ const CITY_GOVERNORATE_IDS = ["damascus", "aleppo", "homs", "latakia", "tartus"]
 async function main() {
   if (!process.argv.includes("--yes")) {
     throw new Error(
-      "Refusing to run without --yes — this writes to the LIVE orient-food-9c1e0 project " +
+      "Refusing to run without --yes — this writes to the LIVE delivery-app-syria-2026 project " +
         "unless FIRESTORE_EMULATOR_HOST is set."
     );
   }

@@ -20,9 +20,11 @@ class DeliveryApp extends ConsumerWidget {
     final locale = ref.watch(localeProvider);
     final themeMode = ref.watch(themeModeProvider);
 
-    // Keeps the signed-in user's FCM token registered for the app's
-    // lifetime — see push_notification_provider.dart.
+    // Keeps the signed-in user's FCM token (and app language) registered
+    // for the app's lifetime, and captures notification taps — see
+    // push_notification_provider.dart.
     ref.watch(pushNotificationSyncProvider);
+    ref.watch(pushNotificationTapProvider);
     ref.listen(pushForegroundMessageProvider, (previous, next) {
       next.whenData((message) {
         final title = message.notification?.title;
@@ -43,6 +45,7 @@ class DeliveryApp extends ConsumerWidget {
 
     return MaterialApp.router(
       title: 'Delivery App',
+      debugShowCheckedModeBanner: false,
       onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
       scaffoldMessengerKey: _scaffoldMessengerKey,
       theme: AppTheme.light,

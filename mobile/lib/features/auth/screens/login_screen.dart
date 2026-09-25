@@ -78,6 +78,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     TextFormField(
+                      key: const ValueKey('login_email_field'),
                       controller: _emailController,
                       decoration: InputDecoration(labelText: l10n.emailLabel),
                       keyboardType: TextInputType.emailAddress,
@@ -90,6 +91,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
+                      key: const ValueKey('login_password_field'),
                       controller: _passwordController,
                       decoration: InputDecoration(labelText: l10n.passwordLabel),
                       obscureText: true,
@@ -110,12 +112,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         style: TextStyle(color: colorScheme.error),
                       ),
                     GradientButton(
+                      key: const ValueKey('login_submit_button'),
                       onPressed: _isSubmitting ? null : _submit,
                       child: _isSubmitting
                           ? buttonSpinner(colorScheme.onPrimary)
                           : Text(l10n.signInTitle),
                     ),
                     TextButton(
+                      key: const ValueKey('login_create_account_button'),
                       onPressed: () => context.go('/signup'),
                       child: Text(l10n.createAccountNavButton),
                     ),

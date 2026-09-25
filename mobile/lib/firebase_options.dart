@@ -47,28 +47,28 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBFTmB9a-JKR-6r9PmKV_uQLgS3MD6IOOs',
-    appId: '1:837061684401:web:5cab1127cea89d910a0690',
-    messagingSenderId: '837061684401',
-    projectId: 'orient-food-9c1e0',
-    authDomain: 'orient-food-9c1e0.firebaseapp.com',
-    storageBucket: 'orient-food-9c1e0.firebasestorage.app',
+    apiKey: 'AIzaSyCaBAtzFjz5duGjoOFxdGdWlOefSrGhoHI',
+    appId: '1:637107525940:web:69e898d8103a8c8e58ad61',
+    messagingSenderId: '637107525940',
+    projectId: 'delivery-app-syria-2026',
+    authDomain: 'delivery-app-syria-2026.firebaseapp.com',
+    storageBucket: 'delivery-app-syria-2026.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyC_yk-KNIVKIIlgTYdRZnKrbjouddzWvR8',
-    appId: '1:837061684401:android:ca167e9674055c6f0a0690',
-    messagingSenderId: '837061684401',
-    projectId: 'orient-food-9c1e0',
-    storageBucket: 'orient-food-9c1e0.firebasestorage.app',
+    apiKey: 'AIzaSyAO0P8zt9jbWg47aGZJEFQk-v5No6CSXX8',
+    appId: '1:637107525940:android:58654e30de67123d58ad61',
+    messagingSenderId: '637107525940',
+    projectId: 'delivery-app-syria-2026',
+    storageBucket: 'delivery-app-syria-2026.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyBAaRWb3JU6rp7YJwsZzKUDF2TCOuma-Yo',
-    appId: '1:837061684401:ios:6d2079aa341594fb0a0690',
-    messagingSenderId: '837061684401',
-    projectId: 'orient-food-9c1e0',
-    storageBucket: 'orient-food-9c1e0.firebasestorage.app',
+    apiKey: 'AIzaSyAZTapOOZ8lQnoT2dUisv6DJ63GaSMMULs',
+    appId: '1:637107525940:ios:79b030df1fb9d36458ad61',
+    messagingSenderId: '637107525940',
+    projectId: 'delivery-app-syria-2026',
+    storageBucket: 'delivery-app-syria-2026.firebasestorage.app',
     iosBundleId: 'com.deliveryapp.deliveryApp',
   );
 }

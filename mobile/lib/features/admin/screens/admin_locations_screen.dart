@@ -16,15 +16,12 @@ import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/city.dart';
 import '../../../models/governorate.dart';
+import '../../../models/neighborhood.dart';
 import '../../../models/vendor.dart';
 import '../../customer/screens/customer_home_screen.dart'
-    show allCitiesProvider, firestoreServiceProvider;
+    show allCitiesProvider, allGovernoratesProvider, allNeighborhoodsProvider, firestoreServiceProvider;
 import '../widgets/admin_scaffold.dart';
 import 'admin_vendors_screen.dart' show allVendorsProvider;
-
-final allGovernoratesProvider = StreamProvider<List<GovernorateOption>>((ref) {
-  return ref.watch(firestoreServiceProvider).watchGovernorates();
-});
 
 /// One city joined with its resolved governorate (or null — "unassigned",
 /// covering both a genuinely-null `governorateId` and a `governorateId`
@@ -107,12 +104,16 @@ LocationIdValidationError? validateLocationId(
   return null;
 }
 
-/// Admin Locations — Governorates and Cities administration (Locations
-/// Phase 4 UI, on top of the Phase 1–3 data foundation). Two tabs inside
-/// one AdminScaffold-hosted screen, since `AdminDestination` has a single
-/// `locations` entry (see admin_scaffold.dart) and the Cities tab's forms
-/// need live governorate data anyway. No Districts/Service Areas/Maps/GPS/
-/// routing/ETA/delivery-fee here — out of scope for this phase.
+/// Admin Locations — Governorates, Cities, and Neighborhoods administration
+/// (Locations Phase 4 UI, on top of the Phase 1–3 data foundation and
+/// Phase 4's location-first architecture). Three tabs inside one
+/// AdminScaffold-hosted screen, since `AdminDestination` has a single
+/// `locations` entry (see admin_scaffold.dart) and the Cities/Neighborhoods
+/// tabs' forms need live governorate/city data anyway. No Service
+/// Areas/Maps/GPS/routing/ETA/delivery-fee admin UI here — Phase 4's
+/// `ServiceArea` model is a standalone future layer with no consumer yet
+/// (see models/service_area.dart), out of scope for an admin screen until
+/// something actually reads it.
 class AdminLocationsScreen extends StatelessWidget {
   const AdminLocationsScreen({super.key});
 
@@ -120,7 +121,7 @@ class AdminLocationsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: AdminScaffold(
         title: l10n.adminLocationsTitle,
         selected: AdminDestination.locations,
@@ -134,12 +135,13 @@ class AdminLocationsScreen extends StatelessWidget {
               tabs: [
                 Tab(text: l10n.governoratesTabLabel),
                 Tab(text: l10n.citiesTabLabel),
+                Tab(text: l10n.neighborhoodsTabLabel),
               ],
             ),
             const SizedBox(height: AppSpacing.md),
             const Expanded(
               child: TabBarView(
-                children: [_GovernoratesTab(), _CitiesTab()],
+                children: [_GovernoratesTab(), _CitiesTab(), _NeighborhoodsTab()],
               ),
             ),
           ],
@@ -784,6 +786,335 @@ class _CityFormState extends ConsumerState<_CityForm> {
                     ),
                 ],
                 onChanged: (value) => setState(() => _governorateId = value),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _orderController,
+                decoration: InputDecoration(labelText: l10n.locationOrderFieldLabel),
+                keyboardType: TextInputType.number,
+                validator: _validateOrder,
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(l10n.locationEnabledLabel),
+                value: _enabled,
+                onChanged: (value) => setState(() => _enabled = value),
+              ),
+              const SizedBox(height: 12),
+              if (_errorMessage != null)
+                Text(_errorMessage!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              GradientButton(
+                onPressed: _isSubmitting ? null : _save,
+                child: _isSubmitting
+                    ? buttonSpinner(Theme.of(context).colorScheme.onPrimary)
+                    : Text(l10n.saveButton),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NeighborhoodsTab extends ConsumerStatefulWidget {
+  const _NeighborhoodsTab();
+
+  @override
+  ConsumerState<_NeighborhoodsTab> createState() => _NeighborhoodsTabState();
+}
+
+class _NeighborhoodsTabState extends ConsumerState<_NeighborhoodsTab>
+    with AutomaticKeepAliveClientMixin {
+  String _query = '';
+  String? _cityFilter;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  Future<void> _openForm({NeighborhoodOption? existing}) {
+    final existingIds =
+        (ref.read(allNeighborhoodsProvider).valueOrNull ?? const []).map((n) => n.id).toSet();
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: _NeighborhoodForm(existing: existing, existingIds: existingIds),
+      ),
+    );
+  }
+
+  Future<void> _setEnabled(NeighborhoodOption neighborhood, bool enabled) async {
+    HapticFeedback.selectionClick();
+    await ref.read(firestoreServiceProvider).setNeighborhoodEnabled(neighborhood.id, enabled);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final l10n = AppLocalizations.of(context)!;
+    final neighborhoodsAsync = ref.watch(allNeighborhoodsProvider);
+    final cities = ref.watch(allCitiesProvider).valueOrNull ?? const <CityOption>[];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SearchRow(
+          hintText: l10n.searchNeighborhoodsHint,
+          addTooltip: l10n.addNeighborhoodTitle,
+          onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
+          onAdd: cities.isEmpty ? () {} : () => _openForm(),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SizedBox(
+          height: 40,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(l10n.allStatusesLabel),
+                  selected: _cityFilter == null,
+                  onSelected: (_) => setState(() => _cityFilter = null),
+                ),
+              ),
+              for (final city in cities)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(cityLabel(context, city.id, cities)),
+                    selected: _cityFilter == city.id,
+                    onSelected: (_) => setState(() => _cityFilter = city.id),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Expanded(
+          child: neighborhoodsAsync.animatedWhen(
+            data: (neighborhoods) {
+              final filtered = neighborhoods.where((n) {
+                final matchesQuery = _query.isEmpty ||
+                    n.nameEn.toLowerCase().contains(_query) ||
+                    n.nameAr.contains(_query);
+                final matchesCity = _cityFilter == null || n.cityId == _cityFilter;
+                return matchesQuery && matchesCity;
+              }).toList();
+              if (filtered.isEmpty) {
+                return Center(child: Text(l10n.noNeighborhoodsFoundMessage));
+              }
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final neighborhood = filtered[index];
+                  return Card(
+                    child: ListTile(
+                      title: Text(
+                        neighborhoodLabel(context, neighborhood),
+                        style: neighborhood.enabled
+                            ? null
+                            : TextStyle(color: Theme.of(context).disabledColor),
+                      ),
+                      subtitle: Text(
+                        '${cityLabel(context, neighborhood.cityId, cities)} · #${neighborhood.order}'
+                        '${neighborhood.ochaPcode != null ? ' · ${neighborhood.ochaPcode}' : ''}',
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Switch(
+                            value: neighborhood.enabled,
+                            onChanged: (value) => _setEnabled(neighborhood, value),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined),
+                            tooltip: l10n.editTooltip,
+                            onPressed: () => _openForm(existing: neighborhood),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ).staggeredEntrance(index);
+                },
+              );
+            },
+            loading: () => const ListSkeletonLoader(),
+            error: (error, _) => Center(child: Text(localizedErrorMessage(context, error))),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _NeighborhoodForm extends ConsumerStatefulWidget {
+  const _NeighborhoodForm({this.existing, required this.existingIds});
+
+  final NeighborhoodOption? existing;
+  final Set<String> existingIds;
+
+  @override
+  ConsumerState<_NeighborhoodForm> createState() => _NeighborhoodFormState();
+}
+
+class _NeighborhoodFormState extends ConsumerState<_NeighborhoodForm> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _idController;
+  late final TextEditingController _nameEnController;
+  late final TextEditingController _nameArController;
+  late final TextEditingController _orderController;
+  late bool _enabled;
+  String? _cityId;
+  bool _isSubmitting = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existing;
+    _idController = TextEditingController(text: existing?.id ?? '');
+    _nameEnController = TextEditingController(text: existing?.nameEn ?? '');
+    _nameArController = TextEditingController(text: existing?.nameAr ?? '');
+    _orderController = TextEditingController(text: (existing?.order ?? 0).toString());
+    _enabled = existing?.enabled ?? true;
+    _cityId = existing?.cityId;
+  }
+
+  @override
+  void dispose() {
+    _idController.dispose();
+    _nameEnController.dispose();
+    _nameArController.dispose();
+    _orderController.dispose();
+    super.dispose();
+  }
+
+  String? _validateId(String? value) {
+    final l10n = AppLocalizations.of(context)!;
+    final error = validateLocationId(
+      value,
+      isNew: widget.existing == null,
+      existingIds: widget.existingIds,
+    );
+    return switch (error) {
+      null => null,
+      LocationIdValidationError.required => l10n.requiredFieldError,
+      LocationIdValidationError.invalidFormat => l10n.invalidIdError,
+      LocationIdValidationError.duplicate => l10n.duplicateIdError,
+    };
+  }
+
+  String? _validateRequired(String? value) {
+    final l10n = AppLocalizations.of(context)!;
+    return (value?.trim().isEmpty ?? true) ? l10n.requiredFieldError : null;
+  }
+
+  String? _validateOrder(String? value) {
+    final l10n = AppLocalizations.of(context)!;
+    final parsed = int.tryParse(value?.trim() ?? '');
+    return (parsed == null || parsed < 0) ? l10n.invalidOrderError : null;
+  }
+
+  Future<void> _save() async {
+    // cityId is required (unlike CityOption.governorateId) — see
+    // models/neighborhood.dart; the dropdown below always has a value once
+    // any city exists, but this guards the degenerate empty-cities case.
+    if (!_formKey.currentState!.validate() || _cityId == null) return;
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+    try {
+      final neighborhood = NeighborhoodOption(
+        id: widget.existing?.id ?? _idController.text.trim(),
+        nameEn: _nameEnController.text.trim(),
+        nameAr: _nameArController.text.trim(),
+        cityId: _cityId!,
+        enabled: _enabled,
+        order: int.parse(_orderController.text.trim()),
+        ochaPcode: widget.existing?.ochaPcode,
+      );
+      final firestore = ref.read(firestoreServiceProvider);
+      if (widget.existing == null) {
+        await firestore.addNeighborhood(neighborhood);
+      } else {
+        await firestore.updateNeighborhood(neighborhood);
+      }
+      if (mounted) Navigator.of(context).pop();
+    } catch (error) {
+      if (mounted) setState(() => _errorMessage = localizedErrorMessage(context, error));
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final isNew = widget.existing == null;
+    final liveCities = ref.watch(allCitiesProvider).valueOrNull ?? const <CityOption>[];
+    // Same "never silently reassign" rule as _CityForm's own governorate
+    // dropdown (see above): only enabled cities are selectable, plus the
+    // record's current cityId forced in even if it's since been disabled —
+    // so editing an existing neighborhood never silently moves it off a
+    // disabled city, while a brand-new neighborhood can never be assigned
+    // to a disabled city in the first place (D.2 fix).
+    final selectableIds = visibleCities(liveCities).map((c) => c.id).toList();
+    if (_cityId != null && !selectableIds.contains(_cityId)) {
+      selectableIds.add(_cityId!);
+    }
+    // Default a brand-new record to the first ENABLED city, never just the
+    // first city in the raw list (which could be disabled).
+    _cityId ??= selectableIds.isNotEmpty ? selectableIds.first : null;
+
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                isNew ? l10n.addNeighborhoodTitle : l10n.editNeighborhoodTitle,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _idController,
+                enabled: isNew,
+                decoration: InputDecoration(labelText: l10n.locationIdFieldLabel),
+                validator: _validateId,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _nameEnController,
+                decoration: InputDecoration(labelText: l10n.nameEnFieldLabel),
+                validator: _validateRequired,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _nameArController,
+                decoration: InputDecoration(labelText: l10n.nameArFieldLabel),
+                validator: _validateRequired,
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _cityId,
+                decoration: InputDecoration(labelText: l10n.neighborhoodCityFieldLabel),
+                items: [
+                  for (final id in selectableIds)
+                    DropdownMenuItem<String>(
+                      value: id,
+                      child: Text(cityLabel(context, id, liveCities)),
+                    ),
+                ],
+                onChanged: (value) => setState(() => _cityId = value),
               ),
               const SizedBox(height: 12),
               TextFormField(

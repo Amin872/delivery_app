@@ -1,10 +1,7 @@
 import 'dart:io';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,24 +11,19 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:delivery_app/app.dart';
+import 'package:delivery_app/core/firebase/firebase_emulators.dart';
 import 'package:delivery_app/core/providers/preferences_provider.dart';
 import 'package:delivery_app/firebase_options.dart';
 import 'package:delivery_app/models/app_user.dart';
 
-/// The Android emulator's alias for the host machine's own localhost — where
-/// `firebase emulators:start` actually runs. Real devices/iOS would need a
-/// different host; this suite targets the Android emulator only (see plan).
-const _emulatorHost = '10.0.2.2';
-
 /// Points every Firebase client SDK the app uses at the local emulator
-/// suite instead of the live `orient-food-9c1e0` project, so this suite
-/// never touches production data. Call once, before pumping the app.
+/// suite instead of the live `delivery-app-syria-2026` project, so this suite
+/// never touches production data. Call once, before pumping the app. This
+/// suite targets the Android emulator only (host 10.0.2.2, see
+/// connectFirebaseEmulators).
 Future<void> connectToEmulators() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await FirebaseAuth.instance.useAuthEmulator(_emulatorHost, 9099);
-  FirebaseFirestore.instance.useFirestoreEmulator(_emulatorHost, 8080);
-  FirebaseFunctions.instance.useFunctionsEmulator(_emulatorHost, 5001);
-  await FirebaseStorage.instance.useStorageEmulator(_emulatorHost, 9199);
+  await connectFirebaseEmulators(host: '10.0.2.2');
 
   // The Android emulator's app storage (and Firebase Auth's cached session
   // within it) survives a plain emulator relaunch — only a full wipe clears

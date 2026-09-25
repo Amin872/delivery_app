@@ -1,6 +1,7 @@
 import '../../models/city.dart';
 import '../../models/district.dart';
 import '../../models/governorate.dart';
+import '../../models/neighborhood.dart';
 import '../../services/geocoding_service.dart' show GeocodeResult;
 
 // Pure, Firebase/Mapbox-independent reconciliation layer between an
@@ -11,7 +12,7 @@ import '../../services/geocoding_service.dart' show GeocodeResult;
 // city/district/neighborhood strings are external signal used purely to
 // find which existing Firestore document (if any) a coordinate/address
 // corresponds to. Nothing in this file writes to Firestore, calls Mapbox,
-// or mutates a Vendor/DeliveryAddress/user profile — matching is the only
+// or mutates a Vendor/SavedAddress/user profile — matching is the only
 // concern here; deciding what to do with a match (e.g. writing a
 // districtId somewhere) is a separate, later, caller-side concern.
 //
@@ -281,11 +282,117 @@ T? _matchByName<T>({
   return matched;
 }
 
+// ---------------------------------------------------------------------------
+// Neighbourhood matching (Phase 4)
+// ---------------------------------------------------------------------------
+
+/// Neighbourhood-based counterpart of [LocationMatchResult] — same shape and
+/// same confidence semantics, just resolving a [NeighborhoodOption] instead
+/// of a [DistrictOption]. Kept as its own type (rather than adding a
+/// `neighborhood` field to [LocationMatchResult]) so both matching paths
+/// stay simple and independently testable; [matchLocation] itself is left
+/// completely unmodified by this addition.
+class NeighborhoodLocationMatchResult {
+  final GovernorateOption? governorate;
+  final CityOption? city;
+  final NeighborhoodOption? neighborhood;
+  final MatchConfidence confidence;
+  final List<String> reasons;
+
+  const NeighborhoodLocationMatchResult({
+    this.governorate,
+    this.city,
+    this.neighborhood,
+    required this.confidence,
+    required this.reasons,
+  });
+
+  static const none =
+      NeighborhoodLocationMatchResult(confidence: MatchConfidence.none, reasons: []);
+}
+
+/// Neighbourhood-based counterpart of [matchLocation] — identical matching
+/// priority/hierarchy rules (see [matchLocation]'s own documentation),
+/// reconciling [geocodeResult] against [governorates]/[cities]/
+/// [neighborhoods] instead of [DistrictOption]s. A [NeighborhoodOption] is
+/// only ever matched against neighbourhoods whose `cityId` equals the
+/// already-matched city's id — never independently, same rule
+/// [matchLocation] enforces for [DistrictOption].
+NeighborhoodLocationMatchResult matchNeighborhoodLocation({
+  required GeocodeResult geocodeResult,
+  required List<GovernorateOption> governorates,
+  required List<CityOption> cities,
+  required List<NeighborhoodOption> neighborhoods,
+}) {
+  final reasons = <String>[];
+
+  final governorateMatch = _matchByName<GovernorateOption>(
+    text: geocodeResult.region,
+    candidates: governorates,
+    nameAr: (g) => g.nameAr,
+    nameEn: (g) => g.nameEn,
+    levelLabel: 'governorate',
+    reasons: reasons,
+  );
+
+  final cityCandidates = governorateMatch == null
+      ? cities
+      : cities
+          .where((city) => city.governorateId == null || city.governorateId == governorateMatch.id)
+          .toList();
+
+  final cityMatch = _matchByName<CityOption>(
+    text: geocodeResult.city,
+    candidates: cityCandidates,
+    nameAr: (c) => c.nameAr,
+    nameEn: (c) => c.nameEn,
+    levelLabel: 'city',
+    reasons: reasons,
+  );
+
+  NeighborhoodOption? neighborhoodMatch;
+  if (cityMatch != null) {
+    final neighborhoodCandidates = neighborhoods.where((n) => n.cityId == cityMatch.id).toList();
+    neighborhoodMatch = _matchByName<NeighborhoodOption>(
+      text: geocodeResult.neighborhood,
+      candidates: neighborhoodCandidates,
+      nameAr: (n) => n.nameAr,
+      nameEn: (n) => n.nameEn,
+      levelLabel: 'neighborhood',
+      reasons: reasons,
+    );
+  } else if (geocodeResult.neighborhood != null && geocodeResult.neighborhood!.trim().isNotEmpty) {
+    reasons.add(
+        'neighborhood: skipped — no matched city to validate "${geocodeResult.neighborhood}" against');
+  }
+
+  final confidence = _confidenceFor(
+    cityMatch: cityMatch,
+    governorateMatch: governorateMatch,
+    districtInputPresent:
+        geocodeResult.neighborhood != null && geocodeResult.neighborhood!.trim().isNotEmpty,
+    districtMatch: neighborhoodMatch,
+    reasons: reasons,
+  );
+
+  return NeighborhoodLocationMatchResult(
+    governorate: governorateMatch,
+    city: cityMatch,
+    neighborhood: neighborhoodMatch,
+    confidence: confidence,
+    reasons: List.unmodifiable(reasons),
+  );
+}
+
+// districtMatch is untyped (Object?) rather than DistrictOption? — this
+// helper only ever checks it for null, never reads a field off it, so it's
+// shared as-is by both matchLocation (passes a DistrictOption?) and
+// matchNeighborhoodLocation (passes a NeighborhoodOption?) above.
 MatchConfidence _confidenceFor({
   required CityOption? cityMatch,
   required GovernorateOption? governorateMatch,
   required bool districtInputPresent,
-  required DistrictOption? districtMatch,
+  required Object? districtMatch,
   required List<String> reasons,
 }) {
   if (cityMatch == null) {

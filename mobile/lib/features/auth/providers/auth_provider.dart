@@ -12,8 +12,8 @@ final authStateChangesProvider = StreamProvider<fb_auth.User?>((ref) {
 
 /// Resolves the signed-in Firebase [User] to the app's Firestore user
 /// document, which carries the [UserRole] used for role-based routing.
-final currentAppUserProvider = FutureProvider<AppUser?>((ref) async {
+final currentAppUserProvider = StreamProvider<AppUser?>((ref) {
   final firebaseUser = ref.watch(authStateChangesProvider).valueOrNull;
-  if (firebaseUser == null) return null;
-  return ref.watch(authServiceProvider).fetchAppUser(firebaseUser.uid);
+  if (firebaseUser == null) return Stream.value(null);
+  return ref.watch(authServiceProvider).watchAppUser(firebaseUser.uid);
 });

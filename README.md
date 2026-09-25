@@ -11,13 +11,13 @@ built with Flutter and Firebase.
 
 ## Setup
 
-This app is wired up to the Firebase project `orient-food-9c1e0` (see `.firebaserc`). Firestore
+This app is wired up to the Firebase project `delivery-app-syria-2026` (see `.firebaserc`). Firestore
 (Native mode), Auth, and Storage are already provisioned on that project.
 
 1. ✅ `flutterfire configure` has been run for `android`, `ios`, and `web`, generating
    `mobile/lib/firebase_options.dart` and `mobile/android/app/google-services.json`.
    `ios/Runner/GoogleService-Info.plist` was **not** generated — FlutterFire CLI can only embed it into
-   the Xcode project from macOS. On a Mac, run `flutterfire configure -p orient-food-9c1e0 -y` from
+   the Xcode project from macOS. On a Mac, run `flutterfire configure -p delivery-app-syria-2026 -y` from
    `mobile/` to fill it in before building for iOS.
 2. Install Cloud Functions dependencies: `cd functions && npm install`.
 3. Add a Maps API key for `google_maps_flutter` (Android: `mobile/android/app/src/main/AndroidManifest.xml`,

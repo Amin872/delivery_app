@@ -7,14 +7,18 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/animated_async.dart';
+import '../../../core/widgets/app_snackbar.dart';
+import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/star_rating.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/app_user.dart';
+import '../../../models/approval_status.dart';
 import '../../../models/driver.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
+import 'admin_drivers_screen.dart' show DriverApprovalBadge;
 
 final _driverUserProvider = StreamProvider.autoDispose.family<AppUser, String>((ref, userId) {
   return ref.watch(firestoreServiceProvider).watchUser(userId);
@@ -28,12 +32,13 @@ final _driverDeliveryCountProvider = FutureProvider.autoDispose.family<int, Stri
   return ref.watch(firestoreServiceProvider).countDriverDeliveries(driverId);
 });
 
-/// Read-only admin driver detail — identity (from `users/{uid}`),
-/// availability/rating/location (from `drivers/{uid}`), and delivery count
-/// (existing `countDriverDeliveries` aggregation, same one
-/// `DriverStatsScreen` already uses for the driver's own view of it).
-/// No enable/disable/approval/suspension — Phase 4 Drivers is read-only,
-/// and no new driver state is introduced.
+/// Admin driver detail — identity (from `users/{uid}`),
+/// availability/rating/location/approval (from `drivers/{uid}`), and
+/// delivery count (existing `countDriverDeliveries` aggregation, same one
+/// `DriverStatsScreen` already uses for the driver's own view of it). The
+/// one admin action here is approving or rejecting the driver
+/// ([FirestoreService.setDriverApprovalStatus]); no enable/disable or
+/// suspension.
 class AdminDriverDetailScreen extends ConsumerWidget {
   const AdminDriverDetailScreen({required this.driverId, super.key});
 
@@ -103,6 +108,21 @@ class _DriverDetailBody extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
             _InfoCard(children: [
+              Row(
+                children: [
+                  Text(
+                    l10n.approvalStatusFieldLabel,
+                    style: const TextStyle(color: VendorPalette.textSecondary),
+                  ),
+                  const Spacer(),
+                  DriverApprovalBadge(status: driver.approvalStatus),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _DriverApprovalActions(driverId: driverId, status: driver.approvalStatus),
+            ]),
+            const SizedBox(height: AppSpacing.md),
+            _InfoCard(children: [
               _InfoRow(label: l10n.emailLabel, value: user.email),
               _InfoRow(
                 label: l10n.phoneNumberLabel,
@@ -149,6 +169,81 @@ class _DriverDetailBody extends ConsumerWidget {
           style: const TextStyle(color: VendorPalette.textSecondary),
         ),
       ),
+    );
+  }
+}
+
+/// Approve / Reject for one driver. Offers only the transitions that change
+/// something (no "Approve" on an approved driver). While a write is in
+/// flight both buttons are disabled, so a double tap can't send twice.
+class _DriverApprovalActions extends ConsumerStatefulWidget {
+  const _DriverApprovalActions({required this.driverId, required this.status});
+
+  final String driverId;
+  final ApprovalStatus status;
+
+  @override
+  ConsumerState<_DriverApprovalActions> createState() => _DriverApprovalActionsState();
+}
+
+class _DriverApprovalActionsState extends ConsumerState<_DriverApprovalActions> {
+  ApprovalStatus? _submitting;
+
+  Future<void> _set(ApprovalStatus status) async {
+    if (_submitting != null) return;
+    setState(() => _submitting = status);
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    try {
+      await ref.read(firestoreServiceProvider).setDriverApprovalStatus(widget.driverId, status);
+      messenger.showSnackBar(buildAppSnackBar(
+        colorScheme,
+        status == ApprovalStatus.approved
+            ? l10n.driverApprovedMessage
+            : l10n.driverRejectedByAdminMessage,
+      ));
+    } catch (_) {
+      messenger.showSnackBar(
+        buildAppSnackBar(colorScheme, l10n.driverApprovalFailedMessage, isError: true),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final busy = _submitting != null;
+    return Row(
+      children: [
+        if (widget.status != ApprovalStatus.approved)
+          Expanded(
+            child: FilledButton.icon(
+              key: const ValueKey('driver_approve_button'),
+              onPressed: busy ? null : () => _set(ApprovalStatus.approved),
+              icon: _submitting == ApprovalStatus.approved
+                  ? buttonSpinner(colorScheme.onPrimary, size: 16)
+                  : const Icon(Icons.check_circle_outline),
+              label: Text(l10n.approveTooltip),
+            ),
+          ),
+        if (widget.status == ApprovalStatus.pending) const SizedBox(width: AppSpacing.sm),
+        if (widget.status != ApprovalStatus.rejected)
+          Expanded(
+            child: OutlinedButton.icon(
+              key: const ValueKey('driver_reject_button'),
+              onPressed: busy ? null : () => _set(ApprovalStatus.rejected),
+              style: OutlinedButton.styleFrom(foregroundColor: colorScheme.error),
+              icon: _submitting == ApprovalStatus.rejected
+                  ? buttonSpinner(colorScheme.error, size: 16)
+                  : const Icon(Icons.cancel_outlined),
+              label: Text(l10n.rejectTooltip),
+            ),
+          ),
+      ],
     );
   }
 }
