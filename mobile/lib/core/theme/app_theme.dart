@@ -1,82 +1,176 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import 'app_palette.dart';
+import 'app_radius.dart';
+import 'app_sizes.dart';
+import 'app_spacing.dart';
+
+/// The one app theme. Every role (customer, vendor, driver, admin) renders
+/// from this; all colours come from [AppPalette], all shapes from
+/// [AppRadius], control sizes from [AppSizes].
 class AppTheme {
   AppTheme._();
 
-  static const brandColor = Color(0xFF7A1F3D);
+  /// Bundled variable font (weights 100–900, Arabic + Latin + both digit
+  /// sets — see pubspec.yaml). Flutter drives its `wght` axis from
+  /// `FontWeight`, so every weight below is a real weight, not synthetic bold.
+  static const fontFamily = 'Noto Sans Arabic';
 
-  static ThemeData get light => _themeFrom(
-        ColorScheme.fromSeed(seedColor: brandColor, brightness: Brightness.light),
-      );
+  /// Kept for existing references; the brand primary token.
+  static const brandColor = AppPalette.primary;
 
-  static ThemeData get dark => _themeFrom(
-        ColorScheme.fromSeed(seedColor: brandColor, brightness: Brightness.dark),
-      );
+  static ThemeData get light => _themeFrom(_lightScheme);
+
+  /// False until a real dark token set exists. While false, the effective
+  /// theme mode is always light (see `app.dart`) and Settings offers no
+  /// Dark/System choice — no fake dark theme is exposed.
+  static const supportsDarkMode = false;
+
+  /// Dark mode is not a separate identity yet (Phase 2A decision): this
+  /// returns the light theme so `themeMode` stays wired through
+  /// `MaterialApp` without producing a half-designed dark UI. When a dark
+  /// token set exists, build its scheme and pass it to [_themeFrom] here.
+  static ThemeData get dark => light;
+
+  static final ColorScheme _lightScheme = ColorScheme.fromSeed(
+    seedColor: AppPalette.primary,
+    brightness: Brightness.light,
+  ).copyWith(
+    primary: AppPalette.primary,
+    onPrimary: AppPalette.onPrimary,
+    primaryContainer: AppPalette.primaryContainer,
+    onPrimaryContainer: AppPalette.onPrimaryContainer,
+    secondary: AppPalette.accent,
+    onSecondary: AppPalette.onAccent,
+    error: AppPalette.error,
+    onError: AppPalette.onPrimary,
+    surface: AppPalette.surface,
+    onSurface: AppPalette.textPrimary,
+    onSurfaceVariant: AppPalette.textSecondary,
+    outline: AppPalette.textMuted,
+    outlineVariant: AppPalette.border,
+    surfaceContainerLowest: AppPalette.surface,
+    surfaceContainerLow: AppPalette.background,
+    surfaceContainer: AppPalette.surfaceContainer,
+    surfaceContainerHigh: AppPalette.surfaceElevated,
+    surfaceContainerHighest: AppPalette.surfaceElevated,
+    shadow: AppPalette.shadow,
+    surfaceTint: Colors.transparent,
+  );
 
   static ThemeData _themeFrom(ColorScheme colorScheme) {
     final textTheme = _textTheme(colorScheme);
+    // Finite minimum widths only — see AppSizes.buttonMinWidth.
+    const buttonSize = Size(AppSizes.buttonMinWidth, AppSizes.buttonHeight);
+    const buttonShape = RoundedRectangleBorder(borderRadius: AppRadius.medium);
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: colorScheme.surface,
-      // Applied last, over every style in `textTheme` below (including the
-      // ones that already set an explicit `fontWeight`) — `ThemeData` layers
-      // `fontFamily` on top of the merged text theme rather than only
-      // filling in styles that omit it, so this alone is enough to cover
-      // the whole scale without repeating the family per style.
-      fontFamily: 'Noto Sans Arabic',
+      scaffoldBackgroundColor: AppPalette.background,
+      canvasColor: AppPalette.background,
+      dividerColor: AppPalette.border,
+      // Applied over every style in `textTheme` — see [fontFamily].
+      fontFamily: fontFamily,
       textTheme: textTheme,
       appBarTheme: AppBarTheme(
-        backgroundColor: colorScheme.surface,
-        foregroundColor: colorScheme.onSurface,
+        backgroundColor: AppPalette.background,
+        foregroundColor: AppPalette.textPrimary,
+        surfaceTintColor: Colors.transparent,
+        // Dark status-bar icons on the light background.
+        systemOverlayStyle: SystemUiOverlayStyle.dark,
         elevation: 0,
-        scrolledUnderElevation: 2,
+        scrolledUnderElevation: 1,
         centerTitle: false,
         titleTextStyle: textTheme.titleLarge,
       ),
-      // Minimum sizes set a height but keep a finite minimum width (64 is
-      // Material's own default): `Size.fromHeight` means a minimum width of
-      // infinity, which throws "BoxConstraints forces an infinite width" for
-      // any button laid out with unbounded width — directly in a Row, a
-      // ListTile trailing, or a dialog's actions. Buttons that should span
-      // their parent get that from the parent (a stretch Column, Expanded,
-      // or an explicit full-width SizedBox), not from the theme.
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size(64, 48),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          minimumSize: buttonSize,
+          shape: buttonShape,
+          textStyle: textTheme.labelLarge,
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          minimumSize: buttonSize,
+          shape: buttonShape,
+          textStyle: textTheme.labelLarge,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: buttonSize,
+          shape: buttonShape,
+          side: const BorderSide(color: AppPalette.border),
           textStyle: textTheme.labelLarge,
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          minimumSize: const Size(64, 44),
+          minimumSize: const Size(AppSizes.buttonMinWidth, AppSizes.compactButtonHeight),
         ),
       ),
-      inputDecorationTheme: InputDecorationTheme(
+      inputDecorationTheme: const InputDecorationTheme(
         filled: true,
-        fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+        fillColor: AppPalette.surfaceElevated,
+        border: OutlineInputBorder(borderRadius: AppRadius.medium, borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: AppRadius.medium, borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: AppRadius.medium,
+          borderSide: BorderSide(color: AppPalette.primary, width: 1.5),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        errorBorder: OutlineInputBorder(
+          borderRadius: AppRadius.medium,
+          borderSide: BorderSide(color: AppPalette.error),
+        ),
+        contentPadding: EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 14),
       ),
-      cardTheme: CardThemeData(
-        elevation: 2,
-        shadowColor: colorScheme.shadow.withValues(alpha: 0.25),
-        color: colorScheme.surfaceContainer,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      cardTheme: const CardThemeData(
+        elevation: 0,
+        color: AppPalette.surfaceContainer,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.large,
+          side: BorderSide(color: AppPalette.border),
+        ),
+        margin: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
       ),
-      listTileTheme: ListTileThemeData(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      listTileTheme: const ListTileThemeData(
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.medium),
+        contentPadding: EdgeInsetsDirectional.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.xs),
+        iconColor: AppPalette.textSecondary,
       ),
-      snackBarTheme: SnackBarThemeData(
+      chipTheme: ChipThemeData(
+        backgroundColor: AppPalette.surfaceElevated,
+        selectedColor: AppPalette.primaryContainer,
+        checkmarkColor: AppPalette.onPrimaryContainer,
+        side: BorderSide.none,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.pill),
+        labelStyle: textTheme.labelLarge,
+      ),
+      dividerTheme: const DividerThemeData(color: AppPalette.border, thickness: 1),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: AppPalette.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.extraLarge),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: AppPalette.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.extraLargeValue)),
+        ),
+      ),
+      drawerTheme: const DrawerThemeData(
+        backgroundColor: AppPalette.surface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      navigationRailTheme: const NavigationRailThemeData(backgroundColor: AppPalette.surface),
+      snackBarTheme: const SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.medium),
       ),
     );
   }
@@ -129,33 +223,20 @@ class AppTheme {
 class AppGradients {
   AppGradients._();
 
-  /// Diagonal brand gradient for primary CTAs and accent surfaces. Built by
-  /// hue-shifting/lightening the theme's seed color itself — deliberately
-  /// *not* `colorScheme.primary`: Material 3 inverts that role's emphasis
-  /// between brightnesses (it's the vivid, high-contrast tone in light mode
-  /// but a light pastel tone in dark mode, meant for small accents, not a
-  /// big filled surface — confirmed by inspecting `ColorScheme.fromSeed`
-  /// directly: dark mode's `primary` for this seed renders as pale pink).
-  /// Anchoring to the seed keeps this brand gradient the same rich burgundy
-  /// in both modes, paired with [onPrimary] (always white) rather than
-  /// `colorScheme.onPrimary`, which would flip to dark text in dark mode.
+  /// Primary CTA gradient: burgundy to its lighter step, direction-aware
+  /// (starts at the reading-start corner in both LTR and RTL).
   static LinearGradient primary(ColorScheme colorScheme) {
-    final hsl = HSLColor.fromColor(AppTheme.brandColor);
-    final shifted = hsl
-        .withHue((hsl.hue + 25) % 360)
-        .withLightness((hsl.lightness + 0.10).clamp(0.0, 1.0))
-        .withSaturation((hsl.saturation + 0.05).clamp(0.0, 1.0));
-    return LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [AppTheme.brandColor, shifted.toColor()],
+    return const LinearGradient(
+      begin: AlignmentDirectional.topStart,
+      end: AlignmentDirectional.bottomEnd,
+      colors: [AppPalette.primary, AppPalette.primaryLight],
     );
   }
 
   /// Foreground color for content painted on [primary] — always white,
   /// since [primary] is a fixed brand color rather than a brightness-aware
   /// `ColorScheme` role (see the note on [primary]).
-  static const onPrimary = Colors.white;
+  static const onPrimary = AppPalette.onPrimary;
 
   /// Very subtle background wash for auth/onboarding screens.
   static LinearGradient surface(ColorScheme colorScheme) {

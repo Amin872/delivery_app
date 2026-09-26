@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../core/theme/app_shadows.dart';
 
 /// Tappable pill styled like a search field, centered in VendorMenuScreen's
 /// header between the back button and the favorite heart — opens the same
@@ -29,7 +30,7 @@ class StoreSearchBar extends StatelessWidget {
         color: VendorPalette.surfaceElevated.withValues(alpha: 0.72),
         borderRadius: AppRadius.pill,
         elevation: 1,
-        shadowColor: Colors.black.withValues(alpha: 0.35),
+        shadowColor: AppShadows.floatingShadowColor,
         child: InkWell(
           borderRadius: AppRadius.pill,
           onTap: onTap,

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/providers/formatters_provider.dart';
 import '../../../core/widgets/animated_async.dart';
@@ -13,6 +12,7 @@ import '../../../routing/page_transitions.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
 import '../widgets/admin_scaffold.dart';
 import 'admin_order_detail_screen.dart';
+import '../../../core/widgets/state_views.dart';
 
 final adminOrdersProvider = StreamProvider.autoDispose.family<List<DeliveryOrder>, OrderStatus?>((ref, status) {
   return ref.watch(firestoreServiceProvider).watchAllOrders(status: status);
@@ -74,7 +74,7 @@ class _AdminOrdersScreenState extends ConsumerState<AdminOrdersScreen> {
             child: ordersAsync.animatedWhen(
               data: (orders) {
                 if (orders.isEmpty) {
-                  return Center(child: Text(l10n.noOrdersMessage));
+                  return EmptyState(message: l10n.noOrdersMessage);
                 }
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(vertical: 8),
@@ -96,7 +96,7 @@ class _AdminOrdersScreenState extends ConsumerState<AdminOrdersScreen> {
                 );
               },
               loading: () => const ListSkeletonLoader(),
-              error: (error, _) => Center(child: Text(localizedErrorMessage(context, error))),
+              error: (error, _) => ErrorState(error: error),
             ),
           ),
         ],

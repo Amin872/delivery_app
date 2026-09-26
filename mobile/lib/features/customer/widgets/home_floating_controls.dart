@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../core/theme/app_shadows.dart';
 
 /// Floating white/off-white search pill for the redesigned
 /// CustomerHomeScreen — replaces the previous bottom-right
@@ -23,10 +24,10 @@ class HomeFloatingSearchBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Material(
-      color: Colors.white,
+      color: AppPalette.surface,
       borderRadius: AppRadius.pill,
       elevation: 6,
-      shadowColor: Colors.black.withValues(alpha: 0.35),
+      shadowColor: AppShadows.floatingShadowColor,
       child: InkWell(
         borderRadius: AppRadius.pill,
         onTap: onTap,
@@ -39,18 +40,18 @@ class HomeFloatingSearchBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
           child: Row(
             children: [
-              const Icon(Icons.search, color: Colors.black87, size: 20),
+              const Icon(Icons.search, color: AppPalette.textPrimary, size: 20),
               const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
                   l10n.searchFieldHint,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600),
+                  style: const TextStyle(color: AppPalette.textPrimary, fontWeight: FontWeight.w600),
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
-              const Icon(Icons.tune, color: Colors.black45, size: 20),
+              const Icon(Icons.tune, color: AppPalette.textMuted, size: 20),
             ],
           ),
         ),
@@ -77,10 +78,10 @@ class HomeFloatingBagButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Material(
-      color: Colors.white,
+      color: AppPalette.surface,
       shape: const CircleBorder(),
       elevation: 6,
-      shadowColor: Colors.black.withValues(alpha: 0.35),
+      shadowColor: AppShadows.floatingShadowColor,
       child: SizedBox(
         width: diameter,
         height: diameter,
@@ -89,7 +90,7 @@ class HomeFloatingBagButton extends StatelessWidget {
           children: [
             Center(
               child: IconButton(
-                icon: const Icon(Icons.shopping_bag_outlined, color: Colors.black87),
+                icon: const Icon(Icons.shopping_bag_outlined, color: AppPalette.textPrimary),
                 tooltip: l10n.cartTitle,
                 onPressed: onTap,
               ),

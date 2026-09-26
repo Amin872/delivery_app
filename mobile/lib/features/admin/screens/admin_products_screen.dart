@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/errors/error_messages.dart';
 import '../../../core/providers/formatters_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/status_badge.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
@@ -13,6 +13,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
 import '../widgets/admin_scaffold.dart';
+import '../../../core/widgets/state_views.dart';
 
 final allMenuItemsProvider = StreamProvider.autoDispose<List<MenuItem>>((ref) {
   return ref.watch(firestoreServiceProvider).watchAllMenuItems();
@@ -172,10 +173,10 @@ class _ProductList extends ConsumerWidget {
       return const ListSkeletonLoader();
     }
     if (itemsAsync.hasError) {
-      return Center(child: Text(localizedErrorMessage(context, itemsAsync.error!)));
+      return ErrorState(error: itemsAsync.error!);
     }
     if (vendorsAsync.hasError) {
-      return Center(child: Text(localizedErrorMessage(context, vendorsAsync.error!)));
+      return ErrorState(error: vendorsAsync.error!);
     }
 
     var rows = buildProductRows(itemsAsync.value!, vendorsAsync.value!);
@@ -194,7 +195,7 @@ class _ProductList extends ConsumerWidget {
     };
 
     if (rows.isEmpty) {
-      return Center(child: Text(l10n.noProductsFoundMessage));
+      return EmptyState(message: l10n.noProductsFoundMessage);
     }
 
     return ListView.builder(
@@ -238,15 +239,9 @@ class _AvailabilityBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
-    final color = available ? AppColors.success(colorScheme) : VendorPalette.textMuted;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: AppRadius.pill),
-      child: Text(
-        available ? l10n.availableLabel : l10n.unavailableLabel,
-        style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
-      ),
+    return StatusBadge(
+      label: available ? l10n.availableLabel : l10n.unavailableLabel,
+      tone: available ? StatusTone.success : StatusTone.neutral,
     );
   }
 }

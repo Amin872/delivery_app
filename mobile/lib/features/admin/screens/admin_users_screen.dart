@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/status_badge.dart';
 import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
@@ -13,6 +13,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/app_user.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
 import '../widgets/admin_scaffold.dart';
+import '../../../core/widgets/state_views.dart';
 
 final allUsersProvider = StreamProvider<List<AppUser>>((ref) {
   return ref.watch(firestoreServiceProvider).watchAllUsers();
@@ -69,7 +70,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                             user.email.toLowerCase().contains(_query))
                         .toList();
                 if (filtered.isEmpty) {
-                  return Center(child: Text(l10n.noUsersFoundMessage));
+                  return EmptyState(message: l10n.noUsersFoundMessage);
                 }
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(vertical: 8),
@@ -96,7 +97,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                 );
               },
               loading: () => const ListSkeletonLoader(),
-              error: (error, _) => Center(child: Text(localizedErrorMessage(context, error))),
+              error: (error, _) => ErrorState(error: error),
             ),
           ),
         ],
@@ -111,18 +112,5 @@ class _RoleBadge extends StatelessWidget {
   final UserRole role;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-      decoration: BoxDecoration(color: VendorPalette.surfaceElevated, borderRadius: AppRadius.pill),
-      child: Text(
-        userRoleLabel(context, role),
-        style: const TextStyle(
-          color: VendorPalette.primaryCyan,
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => StatusBadge(label: userRoleLabel(context, role), tone: StatusTone.primary);
 }

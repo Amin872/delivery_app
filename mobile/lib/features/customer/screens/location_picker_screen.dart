@@ -276,7 +276,7 @@ class _SearchBar extends StatelessWidget {
           decoration: BoxDecoration(
             color: VendorPalette.surfaceContainer,
             borderRadius: AppRadius.medium,
-            boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8)],
+            boxShadow: [BoxShadow(color: AppPalette.shadow.withValues(alpha: 0.26), blurRadius: 8)],
           ),
           child: TextField(
             controller: controller,
@@ -309,7 +309,7 @@ class _SearchBar extends StatelessWidget {
             decoration: BoxDecoration(
               color: VendorPalette.surfaceContainer,
               borderRadius: AppRadius.medium,
-              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8)],
+              boxShadow: [BoxShadow(color: AppPalette.shadow.withValues(alpha: 0.26), blurRadius: 8)],
             ),
             child: ListView.builder(
               shrinkWrap: true,
@@ -363,7 +363,7 @@ class _ConfirmBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: VendorPalette.surfaceContainer,
         borderRadius: AppRadius.large,
-        boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 12)],
+        boxShadow: [BoxShadow(color: AppPalette.shadow.withValues(alpha: 0.38), blurRadius: 12)],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

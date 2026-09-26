@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/contact/phone_launcher.dart';
-import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/providers/formatters_provider.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -16,6 +15,7 @@ import '../../../services/functions_service.dart' show ContactTarget;
 import '../../driver/screens/driver_home_screen.dart' show functionsServiceProvider;
 import '../widgets/vendor_order_actions.dart';
 import 'vendor_dashboard_screen.dart' show vendorOrdersProvider;
+import '../../../core/widgets/state_views.dart';
 
 /// Everything a vendor needs to prepare one order: its items, the price
 /// breakdown, and where it's going. Reads the order out of the same live
@@ -53,7 +53,7 @@ class VendorOrderDetailScreen extends ConsumerWidget {
           },
           loading: () => const ListSkeletonLoader(),
           error: (error, _) =>
-              Center(child: Text(localizedErrorMessage(context, error))),
+              ErrorState(error: error),
         ),
       ),
     );

@@ -37,7 +37,7 @@ class CustomerHomeHeader extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: SystemUiOverlayStyle.dark, // dark status-bar icons on the light background
       child: ColoredBox(
         color: VendorPalette.background,
         child: SafeArea(

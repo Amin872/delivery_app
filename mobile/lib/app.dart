@@ -50,7 +50,8 @@ class DeliveryApp extends ConsumerWidget {
       scaffoldMessengerKey: _scaffoldMessengerKey,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      themeMode: themeMode,
+      // Always light until AppTheme.supportsDarkMode (a real dark palette).
+      themeMode: AppTheme.supportsDarkMode ? themeMode : ThemeMode.light,
       locale: locale,
       supportedLocales: supportedLocales,
       localizationsDelegates: const [

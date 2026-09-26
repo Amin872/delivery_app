@@ -15,3 +15,10 @@ final dateTimeFormatProvider = Provider<DateFormat>((ref) {
   final locale = ref.watch(localeProvider);
   return DateFormat.yMd(locale.toString()).add_Hm();
 });
+
+/// Plain counts (items, orders, users) in the same numeral system and
+/// grouping as [currencyFormatProvider], instead of raw `'$count'`.
+final countFormatProvider = Provider<NumberFormat>((ref) {
+  final locale = ref.watch(localeProvider);
+  return NumberFormat.decimalPattern(locale.toString());
+});

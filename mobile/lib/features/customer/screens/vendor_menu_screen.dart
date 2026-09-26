@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/discovery/menu_sections.dart';
-import '../../../core/errors/error_messages.dart';
 import '../../../core/providers/formatters_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -32,6 +31,7 @@ import 'cart_screen.dart';
 import 'customer_home_screen.dart' show allCitiesProvider, firestoreServiceProvider;
 import 'most_ordered_screen.dart';
 import 'search_screen.dart';
+import '../../../core/widgets/state_views.dart';
 
 final vendorMenuProvider =
     StreamProvider.autoDispose.family<List<MenuItem>, String>((ref, vendorId) {
@@ -396,7 +396,7 @@ class _VendorMenuScreenState extends ConsumerState<VendorMenuScreen> {
             );
           },
           loading: () => const ListSkeletonLoader(),
-          error: (error, _) => Center(child: Text(localizedErrorMessage(context, error))),
+          error: (error, _) => ErrorState(error: error),
         ),
         ),
           ),

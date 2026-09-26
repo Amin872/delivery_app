@@ -18,6 +18,7 @@ import '../../../models/promotion.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
 import '../../vendor/screens/menu_management_screen.dart' show storageServiceProvider;
 import '../widgets/admin_scaffold.dart';
+import '../../../core/widgets/state_views.dart';
 
 final allPromotionsProvider = StreamProvider<List<Promotion>>((ref) {
   return ref.watch(firestoreServiceProvider).watchAllPromotions();
@@ -82,7 +83,7 @@ class AdminPromotionsScreen extends ConsumerWidget {
             child: promotionsAsync.animatedWhen(
               data: (promotions) {
                 if (promotions.isEmpty) {
-                  return Center(child: Text(l10n.noPromotionsMessage));
+                  return EmptyState(message: l10n.noPromotionsMessage);
                 }
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(vertical: 8),
@@ -132,7 +133,7 @@ class AdminPromotionsScreen extends ConsumerWidget {
                 );
               },
               loading: () => const ListSkeletonLoader(),
-              error: (error, _) => Center(child: Text(localizedErrorMessage(context, error))),
+              error: (error, _) => ErrorState(error: error),
             ),
           ),
         ],

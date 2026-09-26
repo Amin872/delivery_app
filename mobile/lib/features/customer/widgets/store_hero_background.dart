@@ -51,7 +51,7 @@ class StoreHeroBackground extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Color(0x66000000), // black @ 0.4 — button-contrast scrim
+                  AppPalette.imageScrim, // button-contrast scrim
                   Colors.transparent,
                 ],
                 stops: [0.0, 0.35],

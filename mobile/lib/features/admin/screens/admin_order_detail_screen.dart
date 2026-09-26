@@ -3,11 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_messages.dart';
-import '../../../core/l10n/enum_labels.dart';
 import '../../../core/providers/formatters_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/info_card.dart';
+import '../../../core/widgets/status_badge.dart';
 import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_snackbar.dart';
@@ -193,7 +194,7 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
                     ],
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  _InfoCard(children: [
+                  InfoCard(children: [
                     ref.watch(_userProvider(order.customerId)).animatedWhen(
                           data: (customer) =>
                               _InfoRow(label: l10n.customerLabel, value: customer.displayName),
@@ -218,7 +219,7 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
                             ),
                   ]),
                   _SectionTitle(l10n.itemsLabel),
-                  _InfoCard(
+                  InfoCard(
                     key: const ValueKey('admin_order_items'),
                     children: [
                       // Same line layout as VendorOrderDetailScreen: name,
@@ -284,7 +285,7 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
                     // The pickup snapshot taken when the order was placed —
                     // only the store name and address, nothing about the owner.
                     _SectionTitle(l10n.pickupLocationTitle),
-                    _InfoCard(key: const ValueKey('admin_order_pickup'), children: [
+                    InfoCard(key: const ValueKey('admin_order_pickup'), children: [
                       if (_hasText(order.vendorName))
                         _InfoRow(label: l10n.vendorLabel, value: order.vendorName!.trim()),
                       if (_hasText(order.pickupAddress))
@@ -292,7 +293,7 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
                     ]),
                   ],
                   _SectionTitle(l10n.deliveryTitle),
-                  _InfoCard(key: const ValueKey('admin_order_delivery'), children: [
+                  InfoCard(key: const ValueKey('admin_order_delivery'), children: [
                     _InfoRow(label: l10n.deliveryAddressLabel, value: order.deliveryAddress),
                     // Coordinates as data only — the admin area has no map.
                     if (order.deliveryCoordinates != null)
@@ -364,41 +365,7 @@ class _StatusChip extends StatelessWidget {
   final OrderStatus status;
 
   @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final color = switch (status) {
-      OrderStatus.delivered => AppColors.success(colorScheme),
-      OrderStatus.cancelled => colorScheme.error,
-      _ => VendorPalette.primaryCyan,
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: AppRadius.pill),
-      child: Text(
-        orderStatusLabel(context, status),
-        style: TextStyle(color: color, fontWeight: FontWeight.w700),
-      ),
-    );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.children, super.key});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: VendorPalette.surfaceContainer,
-        borderRadius: AppRadius.large,
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
-    );
-  }
+  Widget build(BuildContext context) => OrderStatusChip(status: status);
 }
 
 class _InfoRow extends StatelessWidget {
@@ -536,15 +503,9 @@ class _AvailabilityBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
-    final color = isAvailable ? AppColors.success(colorScheme) : VendorPalette.textMuted;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: AppRadius.pill),
-      child: Text(
-        isAvailable ? l10n.driverAvailableStatusLabel : l10n.driverUnavailableStatusLabel,
-        style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
-      ),
+    return StatusBadge(
+      label: isAvailable ? l10n.driverAvailableStatusLabel : l10n.driverUnavailableStatusLabel,
+      tone: isAvailable ? StatusTone.success : StatusTone.neutral,
     );
   }
 }

@@ -4,8 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errors/error_messages.dart';
 import '../../../core/providers/formatters_provider.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/info_card.dart';
+import '../../../core/widgets/status_badge.dart';
 import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_spinner.dart';
@@ -107,7 +108,7 @@ class _DriverDetailBody extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: AppSpacing.lg),
-            _InfoCard(children: [
+            InfoCard(children: [
               Row(
                 children: [
                   Text(
@@ -122,7 +123,7 @@ class _DriverDetailBody extends ConsumerWidget {
               _DriverApprovalActions(driverId: driverId, status: driver.approvalStatus),
             ]),
             const SizedBox(height: AppSpacing.md),
-            _InfoCard(children: [
+            InfoCard(children: [
               _InfoRow(label: l10n.emailLabel, value: user.email),
               _InfoRow(
                 label: l10n.phoneNumberLabel,
@@ -130,7 +131,7 @@ class _DriverDetailBody extends ConsumerWidget {
               ),
             ]),
             const SizedBox(height: AppSpacing.md),
-            _InfoCard(children: [
+            InfoCard(children: [
               deliveryCountAsync.when(
                 data: (count) => _InfoRow(label: l10n.deliveredOrdersLabel, value: '$count'),
                 loading: () => _InfoRow(label: l10n.deliveredOrdersLabel, value: l10n.loadingLabel),
@@ -144,7 +145,7 @@ class _DriverDetailBody extends ConsumerWidget {
               ),
             ]),
             const SizedBox(height: AppSpacing.md),
-            _InfoCard(children: [
+            InfoCard(children: [
               if (driver.lastKnownLocation == null)
                 _InfoRow(label: l10n.lastKnownLocationLabel, value: l10n.noLocationDataMessage)
               else ...[
@@ -256,34 +257,9 @@ class _AvailabilityBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
-    final color = isAvailable ? AppColors.success(colorScheme) : VendorPalette.textMuted;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: AppRadius.pill),
-      child: Text(
-        isAvailable ? l10n.driverAvailableStatusLabel : l10n.driverUnavailableStatusLabel,
-        style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
-      ),
-    );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: VendorPalette.surfaceContainer,
-        borderRadius: AppRadius.large,
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+    return StatusBadge(
+      label: isAvailable ? l10n.driverAvailableStatusLabel : l10n.driverUnavailableStatusLabel,
+      tone: isAvailable ? StatusTone.success : StatusTone.neutral,
     );
   }
 }

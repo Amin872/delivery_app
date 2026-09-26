@@ -20,6 +20,7 @@ import '../../../models/vendor.dart';
 import '../../../services/storage_service.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
 import '../../customer/screens/vendor_menu_screen.dart' show vendorMenuProvider;
+import '../../../core/widgets/state_views.dart';
 
 final storageServiceProvider = Provider<StorageService>((ref) => StorageService());
 
@@ -69,7 +70,7 @@ class MenuManagementScreen extends ConsumerWidget {
         child: menuAsync.animatedWhen(
           data: (items) {
           if (items.isEmpty) {
-            return Center(child: Text(l10n.noMenuItemsMessage));
+            return EmptyState(message: l10n.noMenuItemsMessage);
           }
           return ListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -138,7 +139,7 @@ class MenuManagementScreen extends ConsumerWidget {
         },
         loading: () => const ListSkeletonLoader(),
         error: (error, _) =>
-            Center(child: Text(localizedErrorMessage(context, error))),
+            ErrorState(error: error),
         ),
       ),
     );

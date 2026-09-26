@@ -34,6 +34,7 @@ import '../widgets/vendor_order_actions.dart';
 import 'menu_management_screen.dart' show MenuManagementScreen, storageServiceProvider;
 import 'vendor_order_detail_screen.dart';
 import 'vendor_stats_screen.dart';
+import '../../../core/widgets/state_views.dart';
 
 final vendorOrdersProvider =
     StreamProvider.autoDispose.family<List<DeliveryOrder>, String>((ref, vendorId) {
@@ -169,7 +170,7 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
               ? _VendorOrderList(vendorId: vendorId)
               : _ApprovalStatusView(status: vendor.approvalStatus),
           loading: () => const ListSkeletonLoader(),
-          error: (error, _) => Center(child: Text(localizedErrorMessage(context, error))),
+          error: (error, _) => ErrorState(error: error),
         ),
       ),
     );
@@ -191,7 +192,7 @@ class _VendorOrderList extends ConsumerWidget {
     return ref.watch(vendorOrdersProvider(vendorId)).animatedWhen(
           data: (orders) {
             if (orders.isEmpty) {
-              return Center(child: Text(l10n.noOrdersMessage));
+              return EmptyState(message: l10n.noOrdersMessage);
             }
             return ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -217,7 +218,7 @@ class _VendorOrderList extends ConsumerWidget {
             );
           },
           loading: () => const ListSkeletonLoader(),
-          error: (error, _) => Center(child: Text(localizedErrorMessage(context, error))),
+          error: (error, _) => ErrorState(error: error),
         );
   }
 }

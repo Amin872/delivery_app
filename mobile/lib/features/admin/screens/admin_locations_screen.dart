@@ -22,6 +22,7 @@ import '../../customer/screens/customer_home_screen.dart'
     show allCitiesProvider, allGovernoratesProvider, allNeighborhoodsProvider, firestoreServiceProvider;
 import '../widgets/admin_scaffold.dart';
 import 'admin_vendors_screen.dart' show allVendorsProvider;
+import '../../../core/widgets/state_views.dart';
 
 /// One city joined with its resolved governorate (or null — "unassigned",
 /// covering both a genuinely-null `governorateId` and a `governorateId`
@@ -272,7 +273,7 @@ class _GovernoratesTabState extends ConsumerState<_GovernoratesTab>
                           g.nameEn.toLowerCase().contains(_query) || g.nameAr.contains(_query))
                       .toList();
               if (filtered.isEmpty) {
-                return Center(child: Text(l10n.noGovernoratesFoundMessage));
+                return EmptyState(message: l10n.noGovernoratesFoundMessage);
               }
               return ListView.builder(
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -308,7 +309,7 @@ class _GovernoratesTabState extends ConsumerState<_GovernoratesTab>
               );
             },
             loading: () => const ListSkeletonLoader(),
-            error: (error, _) => Center(child: Text(localizedErrorMessage(context, error))),
+            error: (error, _) => ErrorState(error: error),
           ),
         ),
       ],
@@ -419,7 +420,7 @@ class _CitiesTabState extends ConsumerState<_CitiesTab> with AutomaticKeepAliveC
                 return matchesQuery && matchesGovernorate;
               }).toList();
               if (filtered.isEmpty) {
-                return Center(child: Text(l10n.noCitiesFoundMessage));
+                return EmptyState(message: l10n.noCitiesFoundMessage);
               }
               return ListView.builder(
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -457,7 +458,7 @@ class _CitiesTabState extends ConsumerState<_CitiesTab> with AutomaticKeepAliveC
               );
             },
             loading: () => const ListSkeletonLoader(),
-            error: (error, _) => Center(child: Text(localizedErrorMessage(context, error))),
+            error: (error, _) => ErrorState(error: error),
           ),
         ),
       ],
@@ -904,7 +905,7 @@ class _NeighborhoodsTabState extends ConsumerState<_NeighborhoodsTab>
                 return matchesQuery && matchesCity;
               }).toList();
               if (filtered.isEmpty) {
-                return Center(child: Text(l10n.noNeighborhoodsFoundMessage));
+                return EmptyState(message: l10n.noNeighborhoodsFoundMessage);
               }
               return ListView.builder(
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -943,7 +944,7 @@ class _NeighborhoodsTabState extends ConsumerState<_NeighborhoodsTab>
               );
             },
             loading: () => const ListSkeletonLoader(),
-            error: (error, _) => Center(child: Text(localizedErrorMessage(context, error))),
+            error: (error, _) => ErrorState(error: error),
           ),
         ),
       ],

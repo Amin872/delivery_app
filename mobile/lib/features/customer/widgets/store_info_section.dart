@@ -260,16 +260,16 @@ class _VendorLogo extends StatelessWidget {
       height: diameter,
       padding: const EdgeInsets.all(_logoBorderWidth),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppPalette.surface,
         borderRadius: radius,
         boxShadow: AppShadows.large(colorScheme),
       ),
       child: DecoratedBox(
-        decoration: BoxDecoration(color: Colors.white, borderRadius: radius),
+        decoration: BoxDecoration(color: AppPalette.surface, borderRadius: radius),
         child: Padding(
           padding: const EdgeInsets.all(_logoInnerPadding),
           child: switch (logoUrl) {
-            null => const Icon(Icons.storefront_outlined, color: Colors.black45),
+            null => const Icon(Icons.storefront_outlined, color: AppPalette.textMuted),
             _ when _isBundledAsset => Image.asset(logoUrl!, fit: BoxFit.contain),
             _ => AppNetworkImage(imageUrl: logoUrl!, fit: BoxFit.contain),
           },

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/discovery/vendor_carousels.dart';
-import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/providers/formatters_provider.dart';
 import '../../../core/providers/preferences_provider.dart';
@@ -31,6 +30,7 @@ import 'cart_screen.dart';
 import 'search_screen.dart';
 import 'store_list_screen.dart';
 import 'vendor_menu_screen.dart';
+import '../../../core/widgets/state_views.dart';
 
 final firestoreServiceProvider =
     Provider<FirestoreService>((ref) => FirestoreService());
@@ -306,7 +306,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
       child = const ListSkeletonLoader();
       stateKey = 'loading';
     } else if (vendorsAsync.hasError) {
-      child = Center(child: Text(localizedErrorMessage(context, vendorsAsync.error!)));
+      child = ErrorState(error: vendorsAsync.error!);
       stateKey = 'error';
     } else {
       final vendors = vendorsAsync.value!;

@@ -11,6 +11,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
 import 'store_card.dart';
+import '../../../core/theme/app_shadows.dart';
 
 /// One row of CustomerHomeScreen's dynamic, extensible, **store-first**
 /// feed — see `core/discovery/vendor_carousels.dart` for how [vendors] is
@@ -227,7 +228,7 @@ class _CarouselNavArrow extends StatelessWidget {
       color: VendorPalette.surfaceElevated.withValues(alpha: 0.85),
       shape: const CircleBorder(),
       elevation: 2,
-      shadowColor: Colors.black.withValues(alpha: 0.35),
+      shadowColor: AppShadows.floatingShadowColor,
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),

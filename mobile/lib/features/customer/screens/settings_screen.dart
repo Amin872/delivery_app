@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/preferences_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// Real app-wide setting exposed here — theme mode — backed by the existing
@@ -20,7 +21,10 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final themeMode = ref.watch(themeModeProvider);
+    // Only Light is offered until AppTheme.supportsDarkMode — Dark/System
+    // had no real dark palette behind them. A previously saved dark/system
+    // choice reads as Light here, matching what the app actually renders.
+    final themeMode = AppTheme.supportsDarkMode ? ref.watch(themeModeProvider) : ThemeMode.light;
     final vendorTheme = VendorPalette.themeFrom(Theme.of(context));
 
     return Theme(
@@ -54,16 +58,18 @@ class SettingsScreen extends ConsumerWidget {
                     title: Text(l10n.themeModeLight),
                     secondary: const Icon(Icons.light_mode_outlined),
                   ),
-                  RadioListTile<ThemeMode>(
-                    value: ThemeMode.dark,
-                    title: Text(l10n.themeModeDark),
-                    secondary: const Icon(Icons.dark_mode_outlined),
-                  ),
-                  RadioListTile<ThemeMode>(
-                    value: ThemeMode.system,
-                    title: Text(l10n.themeModeSystem),
-                    secondary: const Icon(Icons.brightness_auto_outlined),
-                  ),
+                  if (AppTheme.supportsDarkMode) ...[
+                    RadioListTile<ThemeMode>(
+                      value: ThemeMode.dark,
+                      title: Text(l10n.themeModeDark),
+                      secondary: const Icon(Icons.dark_mode_outlined),
+                    ),
+                    RadioListTile<ThemeMode>(
+                      value: ThemeMode.system,
+                      title: Text(l10n.themeModeSystem),
+                      secondary: const Icon(Icons.brightness_auto_outlined),
+                    ),
+                  ],
                 ],
               ),
             ),

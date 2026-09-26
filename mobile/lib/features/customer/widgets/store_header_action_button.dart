@@ -41,7 +41,7 @@ class StoreHeaderActionButton extends StatelessWidget {
         color: VendorPalette.surfaceElevated.withValues(alpha: 0.55),
         shape: const CircleBorder(),
         elevation: 1,
-        shadowColor: Colors.black.withValues(alpha: 0.4),
+        shadowColor: AppPalette.shadow.withValues(alpha: 0.4),
         child: SizedBox(
           width: _diameter,
           height: _diameter,

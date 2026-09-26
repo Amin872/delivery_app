@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/status_badge.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../core/widgets/star_rating.dart';
@@ -18,6 +18,7 @@ import '../../customer/screens/customer_home_screen.dart' show firestoreServiceP
 import '../widgets/admin_scaffold.dart';
 import 'admin_driver_detail_screen.dart';
 import 'admin_users_screen.dart' show allUsersProvider;
+import '../../../core/widgets/state_views.dart';
 
 final allDriversProvider = StreamProvider.autoDispose<List<Driver>>((ref) {
   return ref.watch(firestoreServiceProvider).watchAllDrivers();
@@ -173,10 +174,10 @@ class _DriverList extends ConsumerWidget {
       return const ListSkeletonLoader();
     }
     if (driversAsync.hasError) {
-      return Center(child: Text(localizedErrorMessage(context, driversAsync.error!)));
+      return ErrorState(error: driversAsync.error!);
     }
     if (usersAsync.hasError) {
-      return Center(child: Text(localizedErrorMessage(context, usersAsync.error!)));
+      return ErrorState(error: usersAsync.error!);
     }
 
     final filtered = filterDriverRows(
@@ -186,7 +187,7 @@ class _DriverList extends ConsumerWidget {
     );
 
     if (filtered.isEmpty) {
-      return Center(child: Text(l10n.noDriversFoundMessage));
+      return EmptyState(message: l10n.noDriversFoundMessage);
     }
 
     return ListView.builder(
@@ -244,43 +245,22 @@ class _AvailabilityBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
-    final color = isAvailable ? AppColors.success(colorScheme) : VendorPalette.textMuted;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: AppRadius.pill),
-      child: Text(
-        isAvailable ? l10n.driverAvailableStatusLabel : l10n.driverUnavailableStatusLabel,
-        style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
-      ),
+    return StatusBadge(
+      label: isAvailable ? l10n.driverAvailableStatusLabel : l10n.driverUnavailableStatusLabel,
+      tone: isAvailable ? StatusTone.success : StatusTone.neutral,
     );
   }
 }
 
-/// Pill showing a driver's approval state (pending / approved / rejected),
-/// shared by the driver list and [AdminDriverDetailScreen]. Labels reuse the
-/// vendor approval strings — same three states, same wording.
+/// A driver's approval state (pending / approved / rejected), shared by the
+/// driver list and [AdminDriverDetailScreen]. Same mapping and labels as
+/// vendors — see [ApprovalStatusBadge].
 class DriverApprovalBadge extends StatelessWidget {
   const DriverApprovalBadge({required this.status, super.key});
 
   final ApprovalStatus status;
 
   @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final color = switch (status) {
-      ApprovalStatus.approved => AppColors.success(colorScheme),
-      ApprovalStatus.pending => AppColors.warning(colorScheme),
-      ApprovalStatus.rejected => colorScheme.error,
-    };
-    return Container(
-      key: ValueKey('driver_approval_badge_${status.name}'),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: AppRadius.pill),
-      child: Text(
-        vendorApprovalStatusLabel(context, status),
-        style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      ApprovalStatusBadge(key: ValueKey('driver_approval_badge_${status.name}'), status: status);
 }

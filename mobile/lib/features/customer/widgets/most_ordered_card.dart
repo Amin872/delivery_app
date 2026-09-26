@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../models/vendor.dart';
@@ -27,20 +28,16 @@ double mostOrderedCardAspectRatioForWidth(double cardWidth) {
   return cardWidth / cardHeight;
 }
 
-/// The "+" corner badge and the carousel's trailing arrow button share this
-/// dark-teal/cyan pair — sampled directly from the reference screenshots
-/// (badge fill ~RGB(5,40,52), icon/price ~RGB(84,188,225)) rather than the
-/// app's own brighter `VendorPalette.primaryCyan`, per "match the
-/// turquoise/blue accent color used in the reference."
-const Color mostOrderedAccentBackground = Color(0xFF052834);
-const Color mostOrderedAccentForeground = Color(0xFF54BCE1);
+/// The "+" corner badge / carousel arrow pair: a soft primary-container
+/// fill with the brand primary for the icon and prices. Unified-palette
+/// tokens (Phase 2A) — previously a dark-teal/cyan pair.
+const Color mostOrderedAccentBackground = AppPalette.primaryContainer;
+const Color mostOrderedAccentForeground = AppPalette.primary;
 
-/// Light-cyan "call to action" fill shared by every order/checkout pill in
-/// the vendor screens — `ProductOrderBar`'s "Add to order" button and the
-/// floating "View order" button (`FloatingOrderButton`) both sample to this
-/// exact RGB(113,210,246) from their reference screenshots, so it lives here
-/// once rather than as two separate private constants that happen to match.
-const Color orderAccentBackground = Color(0xFF71D2F6);
+/// Fill of every order/checkout pill in the store screens (`ProductOrderBar`'s
+/// "Add to order", `FloatingOrderButton`'s "View order"): the brand primary,
+/// with [AppPalette.onPrimary]-coloured content.
+const Color orderAccentBackground = AppPalette.primary;
 
 /// Product tile shared by VendorMenuScreen's horizontal "Most ordered"
 /// carousel (`MostOrderedSection`) and the full "Most ordered" grid page

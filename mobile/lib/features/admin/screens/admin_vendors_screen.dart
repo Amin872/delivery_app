@@ -7,6 +7,7 @@ import '../../../core/l10n/enum_labels.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/status_badge.dart';
 import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_spinner.dart';
@@ -19,6 +20,7 @@ import '../../../models/vendor.dart';
 import '../../customer/screens/customer_home_screen.dart'
     show allCitiesProvider, firestoreServiceProvider;
 import '../widgets/admin_scaffold.dart';
+import '../../../core/widgets/state_views.dart';
 
 /// Full restaurant directory (any approvalStatus/isOpen), unlike
 /// [pendingVendorsProvider] (approval queue only, still used by
@@ -116,7 +118,7 @@ class _AdminVendorsScreenState extends ConsumerState<AdminVendorsScreen> {
                   return matchesQuery && matchesStatus;
                 }).toList();
                 if (filtered.isEmpty) {
-                  return Center(child: Text(l10n.noVendorsFoundMessage));
+                  return EmptyState(message: l10n.noVendorsFoundMessage);
                 }
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(vertical: 8),
@@ -201,7 +203,7 @@ class _AdminVendorsScreenState extends ConsumerState<AdminVendorsScreen> {
                 );
               },
               loading: () => const ListSkeletonLoader(),
-              error: (error, _) => Center(child: Text(localizedErrorMessage(context, error))),
+              error: (error, _) => ErrorState(error: error),
             ),
           ),
         ],
@@ -215,24 +217,8 @@ class _StatusBadge extends StatelessWidget {
 
   final VendorApprovalStatus status;
 
-  // Design tokens, same mapping as DriverApprovalBadge.
-  Color _color(ColorScheme colorScheme) => switch (status) {
-        VendorApprovalStatus.pending => AppColors.warning(colorScheme),
-        VendorApprovalStatus.approved => AppColors.success(colorScheme),
-        VendorApprovalStatus.rejected => colorScheme.error,
-      };
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-      decoration: BoxDecoration(color: VendorPalette.surfaceElevated, borderRadius: AppRadius.pill),
-      child: Text(
-        vendorApprovalStatusLabel(context, status),
-        style: TextStyle(color: _color(Theme.of(context).colorScheme), fontWeight: FontWeight.w600, fontSize: 12),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => ApprovalStatusBadge(status: status);
 }
 
 /// Admin's edit-details form — same fields and same
