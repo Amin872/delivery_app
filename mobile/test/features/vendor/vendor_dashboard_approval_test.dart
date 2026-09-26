@@ -44,46 +44,72 @@ Future<void> _pump(WidgetTester tester, ApprovalStatus status) async {
   await tester.pumpAndSettle();
 }
 
+/// Opens the AppBar's "more" menu (store details, photo, stats, language
+/// and sign-out live there so the bar fits a 320px phone).
+Future<void> _openMoreMenu(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('vendor_more_menu')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('approved: the normal dashboard with orders, stats and setup actions', (tester) async {
     await _pump(tester, ApprovalStatus.approved);
 
     expect(find.text('Incoming orders'), findsOneWidget);
     expect(find.text('No orders yet.'), findsOneWidget);
-    expect(find.byTooltip('Sales & orders'), findsOneWidget);
     expect(find.byTooltip('Manage menu'), findsOneWidget);
     expect(find.byKey(const ValueKey('vendor_open_switch')), findsOneWidget);
     expect(find.text('Pending approval'), findsNothing);
     expect(find.text('Store not approved'), findsNothing);
+
+    await _openMoreMenu(tester);
+    expect(find.text('Sales & orders'), findsOneWidget);
+    expect(find.text('Edit store details'), findsOneWidget);
+    expect(find.text('Change storefront photo'), findsOneWidget);
+    expect(find.text('Change language'), findsOneWidget);
+    expect(find.text('Sign out'), findsOneWidget);
   });
 
   testWidgets('pending: approval notice instead of orders; store setup still available',
       (tester) async {
     await _pump(tester, ApprovalStatus.pending);
 
+    // No "Incoming orders" title while there can be no orders.
+    expect(find.text('Incoming orders'), findsNothing);
+    expect(find.text('Set up your store'), findsOneWidget);
     expect(find.byKey(const ValueKey('vendor_approval_pending')), findsOneWidget);
     expect(find.text('Pending approval'), findsOneWidget);
+    expect(find.text('Pending'), findsOneWidget); // ApprovalStatusBadge
     expect(find.text('No orders yet.'), findsNothing);
-    expect(find.byTooltip('Sales & orders'), findsNothing);
     // Setup actions a new vendor needs before approval (E2E scenario 2 uses these).
     expect(find.byKey(const ValueKey('vendor_open_switch')), findsOneWidget);
     expect(find.byTooltip('Manage menu'), findsOneWidget);
-    expect(find.byTooltip('Edit store details'), findsOneWidget);
-    expect(find.byTooltip('Sign out'), findsOneWidget);
+
+    await _openMoreMenu(tester);
+    expect(find.text('Edit store details'), findsOneWidget);
+    expect(find.text('Change storefront photo'), findsOneWidget);
+    expect(find.text('Sales & orders'), findsNothing);
+    expect(find.text('Sign out'), findsOneWidget);
   });
 
   testWidgets('rejected: rejection notice with no operational actions, but sign-out remains',
       (tester) async {
     await _pump(tester, ApprovalStatus.rejected);
 
+    expect(find.text('Incoming orders'), findsNothing);
+    expect(find.text('My store'), findsOneWidget);
     expect(find.byKey(const ValueKey('vendor_approval_rejected')), findsOneWidget);
     expect(find.text('Store not approved'), findsOneWidget);
+    expect(find.text('Rejected'), findsOneWidget); // ApprovalStatusBadge
     expect(find.text('No orders yet.'), findsNothing);
     expect(find.byKey(const ValueKey('vendor_open_switch')), findsNothing);
     expect(find.byTooltip('Manage menu'), findsNothing);
-    expect(find.byTooltip('Edit store details'), findsNothing);
-    expect(find.byTooltip('Change storefront photo'), findsNothing);
-    expect(find.byTooltip('Sales & orders'), findsNothing);
-    expect(find.byTooltip('Sign out'), findsOneWidget);
+
+    await _openMoreMenu(tester);
+    expect(find.text('Edit store details'), findsNothing);
+    expect(find.text('Change storefront photo'), findsNothing);
+    expect(find.text('Sales & orders'), findsNothing);
+    expect(find.text('Change language'), findsOneWidget);
+    expect(find.text('Sign out'), findsOneWidget);
   });
 }

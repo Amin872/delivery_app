@@ -4,8 +4,8 @@ import '../../../core/format/display_formatters.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/adaptive_label_value.dart';
 import '../../../l10n/app_localizations.dart';
-import 'adaptive_label_value.dart';
 import 'most_ordered_card.dart' show orderAccentBackground;
 
 /// Floating "عرض الطلبية" pill replacing the old full-width `StoreCartBar`

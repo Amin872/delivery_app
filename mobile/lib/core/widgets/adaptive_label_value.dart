@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_spacing.dart';
+import '../theme/app_spacing.dart';
 
 /// A label and a value (e.g. "Add to order" + "25,000 SYP") for the
 /// customer's order pills: side by side when both fit on one line, stacked

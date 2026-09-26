@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:delivery_app/core/errors/app_exception.dart';
+import 'package:delivery_app/core/format/display_formatters.dart';
 import 'package:delivery_app/core/providers/formatters_provider.dart';
 import 'package:delivery_app/features/driver/screens/driver_home_screen.dart' show functionsServiceProvider;
 import 'package:delivery_app/features/vendor/screens/vendor_dashboard_screen.dart';
@@ -116,7 +117,7 @@ void main() {
     expect(find.text('Pending'), findsOneWidget);
     expect(find.text('2026-09-22 18:30'), findsOneWidget);
     expect(find.text('Mezzeh, Building 4'), findsOneWidget);
-    expect(find.text('33.50000, 36.25000'), findsOneWidget);
+    expect(find.text(formatCoordinates(33.5, 36.25)), findsOneWidget);
     expect(find.text('Ring twice'), findsOneWidget);
     expect(find.text('Leave at door'), findsOneWidget);
   });

@@ -8,9 +8,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_sizes.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/adaptive_label_value.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
-import 'adaptive_label_value.dart';
 import 'cart_add_flow.dart';
 import 'most_ordered_card.dart'
     show mostOrderedAccentBackground, mostOrderedAccentForeground, orderAccentBackground;

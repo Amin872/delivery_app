@@ -92,7 +92,9 @@ void main() {
       phone: '+15550000002',
       role: UserRole.vendor,
     );
-    expect(find.text('Incoming orders'), findsOneWidget);
+    // A new vendor is still pending approval, so the home is titled for
+    // store setup rather than incoming orders.
+    expect(find.text('Set up your store'), findsOneWidget);
     vendorUid = FirebaseAuth.instance.currentUser!.uid;
 
     // New vendors start closed (isOpen: false) — open the store.

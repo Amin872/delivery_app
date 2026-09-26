@@ -43,12 +43,19 @@ class StatCard extends StatelessWidget {
           children: [
             if (icon != null) Icon(icon, color: AppGradients.onPrimary),
             const SizedBox(height: 8),
-            Text(
-              value,
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(color: AppGradients.onPrimary),
+            // A long amount (large sales totals, 1.3x text) shrinks to fit
+            // on one line instead of wrapping mid-number; it never grows.
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(
+                value,
+                maxLines: 1,
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall
+                    ?.copyWith(color: AppGradients.onPrimary),
+              ),
             ),
             const SizedBox(height: 4),
             Text(label, style: TextStyle(color: AppGradients.onPrimary.withValues(alpha: 0.9))),

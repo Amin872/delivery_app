@@ -6,18 +6,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/format/display_formatters.dart';
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/providers/formatters_provider.dart';
+import '../../../core/providers/preferences_provider.dart';
+import '../../../core/theme/app_sizes.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/image_picker_avatar.dart';
-import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
+import '../../../core/widgets/state_views.dart';
+import '../../../core/widgets/status_badge.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/approval_status.dart';
 import '../../../models/city.dart';
@@ -30,11 +34,11 @@ import '../../customer/screens/customer_home_screen.dart'
     show allCitiesProvider, firestoreServiceProvider;
 import '../../customer/screens/location_picker_screen.dart'
     show LocationPickerScreen, LocationPickResult;
-import '../widgets/vendor_order_actions.dart';
+import '../widgets/vendor_order_actions.dart' show isActiveVendorOrder;
+import '../widgets/vendor_order_card.dart';
 import 'menu_management_screen.dart' show MenuManagementScreen, storageServiceProvider;
 import 'vendor_order_detail_screen.dart';
 import 'vendor_stats_screen.dart';
-import '../../../core/widgets/state_views.dart';
 
 final vendorOrdersProvider =
     StreamProvider.autoDispose.family<List<DeliveryOrder>, String>((ref, vendorId) {
@@ -94,6 +98,37 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
     );
   }
 
+  // A failed write shows a localized snackbar; the switch keeps following
+  // the vendor stream, so it snaps back to the stored value on its own.
+  Future<void> _setOpen(bool value) async {
+    HapticFeedback.selectionClick();
+    final messenger = ScaffoldMessenger.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    try {
+      await ref.read(firestoreServiceProvider).setVendorOpen(widget.vendorId, value);
+    } catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        buildAppSnackBar(colorScheme, localizedErrorMessage(context, error), isError: true),
+      );
+    }
+  }
+
+  void _onMoreAction(_VendorMoreAction action, Vendor? vendor) {
+    switch (action) {
+      case _VendorMoreAction.storeDetails:
+        if (vendor != null) _openStoreDetailsForm(vendor);
+      case _VendorMoreAction.storefrontPhoto:
+        _changeStorefrontImage();
+      case _VendorMoreAction.stats:
+        Navigator.of(context).push(fadeSlideRoute(VendorStatsScreen(vendorId: widget.vendorId)));
+      case _VendorMoreAction.language:
+        ref.read(localeProvider.notifier).toggle();
+      case _VendorMoreAction.signOut:
+        ref.read(authServiceProvider).signOut();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final vendorId = widget.vendorId;
@@ -111,10 +146,18 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
     final approval = vendorSelf?.approvalStatus;
     final isApproved = approval == ApprovalStatus.approved;
     final canSetUpStore = vendorSelf != null && approval != ApprovalStatus.rejected;
+    final title = switch (approval) {
+      ApprovalStatus.approved => l10n.incomingOrdersTitle,
+      ApprovalStatus.pending => l10n.vendorStoreSetupTitle,
+      ApprovalStatus.rejected || null => l10n.vendorStoreTitle,
+    };
 
+    // Only the two everyday controls stay on the bar (store open/closed
+    // and the menu); everything else lives in the "more" menu, so the bar
+    // fits a 320px phone at any text scale.
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.incomingOrdersTitle),
+        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           if (canSetUpStore)
             Tooltip(
@@ -122,32 +165,8 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
               child: Switch(
                 key: const ValueKey('vendor_open_switch'),
                 value: vendorSelf.isOpen,
-                onChanged: (value) {
-                  HapticFeedback.selectionClick();
-                  ref.read(firestoreServiceProvider).setVendorOpen(vendorId, value);
-                },
+                onChanged: _setOpen,
               ),
-            ),
-          if (canSetUpStore)
-            IconButton(
-              icon: _uploadingStorefrontImage
-                  ? buttonSpinner(Theme.of(context).colorScheme.onSurface, size: 16)
-                  : const Icon(Icons.photo_camera_outlined),
-              tooltip: l10n.changeStorefrontPhotoTooltip,
-              onPressed: _uploadingStorefrontImage ? null : _changeStorefrontImage,
-            ),
-          if (canSetUpStore)
-            IconButton(
-              icon: const Icon(Icons.storefront_outlined),
-              tooltip: l10n.editStoreDetailsTooltip,
-              onPressed: () => _openStoreDetailsForm(vendorSelf),
-            ),
-          if (isApproved)
-            IconButton(
-              icon: const Icon(Icons.bar_chart),
-              tooltip: l10n.vendorStatsTitle,
-              onPressed: () =>
-                  Navigator.of(context).push(fadeSlideRoute(VendorStatsScreen(vendorId: vendorId))),
             ),
           if (canSetUpStore)
             IconButton(
@@ -156,13 +175,33 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
               onPressed: () => Navigator.of(context)
                   .push(fadeSlideRoute(MenuManagementScreen(vendorId: vendorId))),
             ),
-          const LanguageToggleButton(),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: l10n.signOutTooltip,
-            onPressed: () => ref.read(authServiceProvider).signOut(),
+          PopupMenuButton<_VendorMoreAction>(
+            key: const ValueKey('vendor_more_menu'),
+            tooltip: l10n.vendorMoreActionsTooltip,
+            onSelected: (action) => _onMoreAction(action, vendorSelf),
+            itemBuilder: (context) => [
+              if (canSetUpStore) ...[
+                _moreItem(_VendorMoreAction.storeDetails, Icons.storefront_outlined,
+                    l10n.editStoreDetailsTooltip),
+                _moreItem(_VendorMoreAction.storefrontPhoto, Icons.photo_camera_outlined,
+                    l10n.changeStorefrontPhotoTooltip,
+                    enabled: !_uploadingStorefrontImage),
+              ],
+              if (isApproved)
+                _moreItem(_VendorMoreAction.stats, Icons.bar_chart, l10n.vendorStatsTitle),
+              if (canSetUpStore || isApproved) const PopupMenuDivider(),
+              _moreItem(_VendorMoreAction.language, Icons.translate, l10n.languageToggleTooltip),
+              _moreItem(_VendorMoreAction.signOut, Icons.logout, l10n.signOutTooltip),
+            ],
           ),
         ],
+        // The storefront photo uploads in the background once picked.
+        bottom: _uploadingStorefrontImage
+            ? const PreferredSize(
+                preferredSize: Size.fromHeight(AppSpacing.xs),
+                child: LinearProgressIndicator(minHeight: AppSpacing.xs),
+              )
+            : null,
       ),
       body: ResponsiveCenter(
         child: vendorSelfAsync.animatedWhen(
@@ -177,44 +216,102 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
   }
 }
 
-/// The live incoming-orders list, shown only to an approved vendor. Each
-/// row opens [VendorOrderDetailScreen] and carries the same quick actions
-/// (via the shared [VendorOrderActions]) as before.
-class _VendorOrderList extends ConsumerWidget {
+enum _VendorMoreAction { storeDetails, storefrontPhoto, stats, language, signOut }
+
+PopupMenuItem<_VendorMoreAction> _moreItem(
+  _VendorMoreAction action,
+  IconData icon,
+  String label, {
+  bool enabled = true,
+}) {
+  return PopupMenuItem(
+    value: action,
+    enabled: enabled,
+    child: Row(
+      children: [
+        Icon(icon, size: AppSizes.iconLarge),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(child: Text(label)),
+      ],
+    ),
+  );
+}
+
+/// The live orders list, shown only to an approved vendor: an
+/// Active/Completed filter over the one [vendorOrdersProvider] stream
+/// (client-side, no second query), then one [VendorOrderCard] per order,
+/// each opening [VendorOrderDetailScreen].
+class _VendorOrderList extends ConsumerStatefulWidget {
   const _VendorOrderList({required this.vendorId});
 
   final String vendorId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_VendorOrderList> createState() => _VendorOrderListState();
+}
+
+class _VendorOrderListState extends ConsumerState<_VendorOrderList> {
+  bool _showActive = true;
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final currencyFormat = ref.watch(currencyFormatProvider);
-    return ref.watch(vendorOrdersProvider(vendorId)).animatedWhen(
+    final countFormat = ref.watch(countFormatProvider);
+    return ref.watch(vendorOrdersProvider(widget.vendorId)).animatedWhen(
           data: (orders) {
             if (orders.isEmpty) {
-              return EmptyState(message: l10n.noOrdersMessage);
+              return EmptyState(icon: Icons.receipt_long_outlined, message: l10n.noOrdersMessage);
             }
-            return ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              itemCount: orders.length,
-              itemBuilder: (context, index) {
-                final order = orders[index];
-                return Card(
-                  child: ListTile(
-                    onTap: () => Navigator.of(context).push(fadeSlideRoute(
-                        VendorOrderDetailScreen(vendorId: vendorId, orderId: order.id))),
-                    title: Text(l10n.orderLabel(order.id)),
-                    subtitle: Text(orderStatusLabel(context, order.status)),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(currencyFormat.format(order.total)),
-                        VendorOrderActions(order: order, compact: true),
-                      ],
-                    ),
+            final active = orders.where((o) => isActiveVendorOrder(o.status)).toList();
+            final completed = orders.where((o) => !isActiveVendorOrder(o.status)).toList();
+            final shown = _showActive ? active : completed;
+
+            Widget filter(bool isActive, String label, int count) => ChoiceChip(
+                  key: ValueKey(isActive ? 'vendor_filter_active' : 'vendor_filter_completed'),
+                  label: Text('$label (${countFormat.format(count)})'),
+                  selected: _showActive == isActive,
+                  onSelected: (_) => setState(() => _showActive = isActive),
+                );
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(
+                      AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xs),
+                  child: Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      filter(true, l10n.vendorOrdersActiveFilter, active.length),
+                      filter(false, l10n.vendorOrdersCompletedFilter, completed.length),
+                    ],
                   ),
-                ).staggeredEntrance(index);
-              },
+                ),
+                Expanded(
+                  child: shown.isEmpty
+                      ? EmptyState(
+                          icon: Icons.receipt_long_outlined,
+                          message: _showActive
+                              ? l10n.vendorNoActiveOrdersMessage
+                              : l10n.vendorNoCompletedOrdersMessage,
+                        )
+                      : ListView.builder(
+                          key: ValueKey('vendor_orders_${_showActive ? 'active' : 'completed'}'),
+                          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                          itemCount: shown.length,
+                          itemBuilder: (context, index) {
+                            final order = shown[index];
+                            return VendorOrderCard(
+                              key: ValueKey('vendor_order_${order.id}'),
+                              order: order,
+                              onTap: () => Navigator.of(context).push(fadeSlideRoute(
+                                  VendorOrderDetailScreen(vendorId: widget.vendorId, orderId: order.id))),
+                            ).staggeredEntrance(index);
+                          },
+                        ),
+                ),
+              ],
             );
           },
           loading: () => const ListSkeletonLoader(),
@@ -223,7 +320,8 @@ class _VendorOrderList extends ConsumerWidget {
   }
 }
 
-/// Shown instead of the orders list while the vendor isn't approved.
+/// Shown instead of the orders list while the vendor isn't approved: the
+/// shared [EmptyState] with the approval badge underneath.
 class _ApprovalStatusView extends StatelessWidget {
   const _ApprovalStatusView({required this.status});
 
@@ -232,37 +330,14 @@ class _ApprovalStatusView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     final isRejected = status == ApprovalStatus.rejected;
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: Column(
-          key: ValueKey('vendor_approval_${status.name}'),
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isRejected ? Icons.block_outlined : Icons.hourglass_top_outlined,
-              size: 48,
-              color: isRejected ? colorScheme.error : colorScheme.primary,
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Text(
-              isRejected ? l10n.vendorRejectedTitle : l10n.vendorPendingApprovalTitle,
-              style: textTheme.titleLarge,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              isRejected ? l10n.vendorRejectedMessage : l10n.vendorPendingApprovalMessage,
-              style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+    return EmptyState(
+      key: ValueKey('vendor_approval_${status.name}'),
+      icon: isRejected ? Icons.block_outlined : Icons.hourglass_top_outlined,
+      title: isRejected ? l10n.vendorRejectedTitle : l10n.vendorPendingApprovalTitle,
+      message: isRejected ? l10n.vendorRejectedMessage : l10n.vendorPendingApprovalMessage,
+      action: ApprovalStatusBadge(status: status),
     );
   }
 }
@@ -313,11 +388,11 @@ class _StoreDetailsFormState extends ConsumerState<_StoreDetailsForm> {
     _category = widget.vendor.category;
     _city = widget.vendor.city;
     _feeController =
-        TextEditingController(text: widget.vendor.deliveryFee?.toStringAsFixed(2) ?? '');
+        TextEditingController(text: formatAmountForInput(widget.vendor.deliveryFee));
     _etaMinController = TextEditingController(text: widget.vendor.etaMinMinutes?.toString() ?? '');
     _etaMaxController = TextEditingController(text: widget.vendor.etaMaxMinutes?.toString() ?? '');
     _minOrderController =
-        TextEditingController(text: widget.vendor.minimumOrderAmount?.toStringAsFixed(2) ?? '');
+        TextEditingController(text: formatAmountForInput(widget.vendor.minimumOrderAmount));
     _openTime = _hhmmToTimeOfDay(widget.vendor.openTime);
     _closeTime = _hhmmToTimeOfDay(widget.vendor.closeTime);
   }
@@ -524,30 +599,40 @@ class _StoreDetailsFormState extends ConsumerState<_StoreDetailsForm> {
               maxLines: 3,
             ),
             const SizedBox(height: AppSpacing.md),
+            // isExpanded: a long category/city name ellipsizes inside the
+            // field instead of overflowing it on narrow phones.
             DropdownButtonFormField<VendorCategory>(
               initialValue: _category,
+              isExpanded: true,
               decoration: InputDecoration(labelText: l10n.categoryFieldLabel),
               items: [
                 for (final category in VendorCategory.values)
-                  DropdownMenuItem(value: category, child: Text(vendorCategoryLabel(context, category))),
+                  DropdownMenuItem(
+                    value: category,
+                    child: Text(vendorCategoryLabel(context, category), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
               ],
               onChanged: (value) {
                 if (value != null) setState(() => _category = value);
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             DropdownButtonFormField<String>(
               initialValue: _city,
+              isExpanded: true,
               decoration: InputDecoration(labelText: l10n.cityFieldLabel),
               items: [
                 for (final cityId in selectableCityIds)
-                  DropdownMenuItem(value: cityId, child: Text(cityLabel(context, cityId, liveCities))),
+                  DropdownMenuItem(
+                    value: cityId,
+                    child: Text(cityLabel(context, cityId, liveCities), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
               ],
               onChanged: (value) {
                 if (value != null) setState(() => _city = value);
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             TextFormField(
               controller: _feeController,
               decoration: InputDecoration(labelText: l10n.deliveryFeeFieldLabel),
@@ -557,7 +642,7 @@ class _StoreDetailsFormState extends ConsumerState<_StoreDetailsForm> {
                 return double.tryParse(value.trim()) == null ? l10n.invalidPriceError : null;
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             Row(
               children: [
                 Expanded(
@@ -568,7 +653,7 @@ class _StoreDetailsFormState extends ConsumerState<_StoreDetailsForm> {
                     validator: (value) => _validateEta(value, l10n),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: TextFormField(
                     controller: _etaMaxController,
@@ -579,7 +664,7 @@ class _StoreDetailsFormState extends ConsumerState<_StoreDetailsForm> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             TextFormField(
               controller: _minOrderController,
               decoration: InputDecoration(labelText: l10n.minimumOrderFieldLabel),
@@ -589,7 +674,7 @@ class _StoreDetailsFormState extends ConsumerState<_StoreDetailsForm> {
                 return double.tryParse(value.trim()) == null ? l10n.invalidPriceError : null;
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             Row(
               children: [
                 Expanded(
@@ -604,7 +689,7 @@ class _StoreDetailsFormState extends ConsumerState<_StoreDetailsForm> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => _pickTime(isOpenTime: false),
@@ -625,8 +710,7 @@ class _StoreDetailsFormState extends ConsumerState<_StoreDetailsForm> {
             Text(
               pickup == null
                   ? l10n.pickupLocationNotSetMessage
-                  : l10n.pickupPinSetLabel(
-                      '${pickup.latitude.toStringAsFixed(5)}, ${pickup.longitude.toStringAsFixed(5)}'),
+                  : l10n.pickupPinSetLabel(formatCoordinates(pickup.latitude, pickup.longitude)),
               style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -672,10 +756,10 @@ class _StoreDetailsFormState extends ConsumerState<_StoreDetailsForm> {
   String? _validateEta(String? value, AppLocalizations l10n) {
     if (value == null || value.trim().isEmpty) return null;
     final parsed = int.tryParse(value.trim());
-    if (parsed == null || parsed <= 0) return l10n.invalidPriceError;
+    if (parsed == null || parsed <= 0) return l10n.invalidEtaError;
     final min = int.tryParse(_etaMinController.text.trim());
     final max = int.tryParse(_etaMaxController.text.trim());
-    if (min != null && max != null && min > max) return l10n.invalidPriceError;
+    if (min != null && max != null && min > max) return l10n.invalidEtaError;
     return null;
   }
 }

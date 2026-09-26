@@ -123,7 +123,13 @@ void main() {
     await _reveal(tester, find.text(l10n.changeLocationButton));
     expect(find.text(l10n.changeLocationButton).hitTestable(), findsOneWidget);
     await _reveal(tester, find.byKey(const ValueKey('cart_place_order_button')));
-    expect(find.byKey(const ValueKey('cart_place_order_button')).hitTestable(), findsOneWidget);
+    // GradientButton's outermost render object is an entrance-animation
+    // transform, which never reports itself in a hit test — check its label.
+    expect(
+        find
+            .descendant(of: find.byKey(const ValueKey('cart_place_order_button')), matching: find.byType(Text))
+            .hitTestable(),
+        findsOneWidget);
     await tester.pump(const Duration(seconds: 2)); // let entrance animations finish
   }, textScales: sensitiveTextScales);
 

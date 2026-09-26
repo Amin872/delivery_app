@@ -474,5 +474,13 @@
   "noPastOrdersMessage": "لا توجد طلبات سابقة بعد.",
   "orderFallbackTitle": "طلب",
   "driverApprovalsTitle": "الموافقة على السائقين",
-  "pendingDriverApprovalsCountLabel": "{count} سائق بانتظار الموافقة"
+  "pendingDriverApprovalsCountLabel": "{count} سائق بانتظار الموافقة",
+  "vendorOrdersActiveFilter": "النشطة",
+  "vendorOrdersCompletedFilter": "المكتملة",
+  "vendorNoActiveOrdersMessage": "لا توجد طلبات نشطة حاليًا.",
+  "vendorNoCompletedOrdersMessage": "لا توجد طلبات مكتملة بعد.",
+  "vendorMoreActionsTooltip": "خيارات إضافية",
+  "vendorStoreSetupTitle": "إعداد متجرك",
+  "vendorStoreTitle": "متجري",
+  "invalidEtaError": "أدخل عدد دقائق صحيحًا، ولا يتجاوز الحد الأدنى الحد الأقصى."
 }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
+import '../../../core/theme/app_sizes.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_spinner.dart';
@@ -40,10 +41,18 @@ bool vendorCanCancel(OrderStatus status) {
       status == OrderStatus.preparing;
 }
 
-/// The vendor's advance/cancel actions for one order. [compact] renders the
-/// icon + text-button pair that fits a list row's trailing slot; otherwise
-/// full-width buttons for the detail screen. While either action is in
-/// flight both are disabled, so a double tap can't send a second write.
+// The dashboard's Active/Completed split: only the two terminal statuses
+// count as completed (the same split as the customer's order lists), so an
+// order stays under Active while it is still on its way to the customer.
+bool isActiveVendorOrder(OrderStatus status) {
+  return status != OrderStatus.delivered && status != OrderStatus.cancelled;
+}
+
+/// The vendor's advance/cancel actions for one order. [compact] renders a
+/// single row (cancel icon + advance button) for a vendor order card;
+/// otherwise stacked full-width buttons for the detail screen. While either
+/// action is in flight both are disabled, so a double tap can't send a
+/// second write.
 /// Renders nothing when the order has no vendor action left.
 class VendorOrderActions extends ConsumerStatefulWidget {
   const VendorOrderActions({
@@ -136,35 +145,28 @@ class _VendorOrderActionsState extends ConsumerState<VendorOrderActions> {
         : l10n.advanceStatusButtonLabel(orderStatusLabel(context, next));
 
     if (widget.compact) {
+      // Needs a bounded width (a card, not a ListTile trailing slot): the
+      // advance button takes all the room the cancel icon leaves, and its
+      // label may wrap to a second line rather than being cut off.
       return Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           if (canCancel)
             IconButton(
-              icon: const Icon(Icons.cancel_outlined),
+              icon: _cancelling
+                  ? buttonSpinner(colorScheme.error, size: AppSizes.iconSmall)
+                  : const Icon(Icons.cancel_outlined),
               tooltip: l10n.cancelOrderButton,
               color: colorScheme.error,
               onPressed: _busy ? null : _cancel,
             ),
           if (next != null) ...[
             const SizedBox(width: AppSpacing.sm),
-            // ListTile computes trailing's preferred width by asking it to
-            // lay out with unbounded constraints; TextButton's internal
-            // InputPadding does a real (non-dry) child layout() call during
-            // that probe, which throws on the resulting infinite width. A
-            // bounded ConstrainedBox absorbs the unbounded probe before it
-            // ever reaches TextButton.
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 140),
-              child: TextButton(
+            Expanded(
+              child: FilledButton(
                 onPressed: _busy ? null : () => _advance(next),
                 child: _advancing
-                    ? buttonSpinner(colorScheme.primary, size: 16)
-                    : Text(
-                        advanceLabel!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    ? buttonSpinner(colorScheme.onPrimary, size: AppSizes.iconSmall)
+                    : Text(advanceLabel!, maxLines: 2, textAlign: TextAlign.center),
               ),
             ),
           ],
@@ -179,7 +181,7 @@ class _VendorOrderActionsState extends ConsumerState<VendorOrderActions> {
           FilledButton(
             onPressed: _busy ? null : () => _advance(next),
             child: _advancing
-                ? buttonSpinner(colorScheme.onPrimary, size: 16)
+                ? buttonSpinner(colorScheme.onPrimary, size: AppSizes.iconSmall)
                 : Text(advanceLabel!),
           ),
         if (next != null && canCancel) const SizedBox(height: AppSpacing.sm),
@@ -188,7 +190,7 @@ class _VendorOrderActionsState extends ConsumerState<VendorOrderActions> {
             onPressed: _busy ? null : _cancel,
             style: OutlinedButton.styleFrom(foregroundColor: colorScheme.error),
             icon: _cancelling
-                ? buttonSpinner(colorScheme.error, size: 16)
+                ? buttonSpinner(colorScheme.error, size: AppSizes.iconSmall)
                 : const Icon(Icons.cancel_outlined),
             label: Text(l10n.cancelOrderButton),
           ),

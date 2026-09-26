@@ -568,5 +568,25 @@
   "@pendingDriverApprovalsCountLabel": {
     "description": "Admin dashboard quick-access card subtitle showing how many drivers await approval.",
     "placeholders": {"count": {"type": "int"}}
-  }
+  },
+  "vendorOrdersActiveFilter": "Active",
+  "@vendorOrdersActiveFilter": {
+    "description": "Vendor order list filter: orders not yet delivered or cancelled."
+  },
+  "vendorOrdersCompletedFilter": "Completed",
+  "@vendorOrdersCompletedFilter": {
+    "description": "Vendor order list filter: delivered or cancelled orders."
+  },
+  "vendorNoActiveOrdersMessage": "No active orders right now.",
+  "vendorNoCompletedOrdersMessage": "No completed orders yet.",
+  "vendorMoreActionsTooltip": "More options",
+  "vendorStoreSetupTitle": "Set up your store",
+  "@vendorStoreSetupTitle": {
+    "description": "Vendor home AppBar title while the store is pending approval."
+  },
+  "vendorStoreTitle": "My store",
+  "@vendorStoreTitle": {
+    "description": "Vendor home AppBar title when the store was not approved."
+  },
+  "invalidEtaError": "Enter whole minutes; the minimum can't exceed the maximum."
 }
