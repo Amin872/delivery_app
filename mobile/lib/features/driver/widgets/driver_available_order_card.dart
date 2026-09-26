@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/format/display_formatters.dart';
 import '../../../core/providers/formatters_provider.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_sizes.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/adaptive_label_value.dart';
 import '../../../core/widgets/app_spinner.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/order.dart';
 import 'driver_order_summary.dart';
 
-/// One unclaimed order in the driver's queue: where to collect it, where
-/// it's going, how many items, and the cash total to collect. Purely
-/// presentational — accepting (and its busy state) is owned by
-/// DriverHomeScreen, which passes [isAccepting] and [onAccept].
+/// One unclaimed order in the driver's queue: its short reference, where
+/// to collect it and where it's going, how many items, the cash total to
+/// collect, and Accept on its own full-width line. Purely presentational —
+/// accepting (and its busy state) is owned by DriverHomeScreen, which
+/// passes [isAccepting] and [onAccept].
 class DriverAvailableOrderCard extends ConsumerWidget {
   const DriverAvailableOrderCard({
     required this.order,
@@ -28,7 +33,9 @@ class DriverAvailableOrderCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
     final currencyFormat = ref.watch(currencyFormatProvider);
+    final secondary = AppColors.textSecondary(colorScheme);
 
     return Card(
       child: Padding(
@@ -36,41 +43,34 @@ class DriverAvailableOrderCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Expanded(child: Text(l10n.orderLabel(order.id), style: textTheme.titleSmall)),
-                const SizedBox(width: AppSpacing.sm),
-                FilledButton(
-                  onPressed: isAccepting ? null : onAccept,
-                  child: isAccepting
-                      ? buttonSpinner(Theme.of(context).colorScheme.onPrimary, size: 16)
-                      : Text(l10n.acceptButton, maxLines: 1, overflow: TextOverflow.ellipsis),
-                ),
-              ],
-            ),
+            Text(l10n.orderLabel(displayOrderId(order.id)), style: textTheme.titleMedium),
             DriverOrderLocations(order: order),
             const SizedBox(height: AppSpacing.sm),
-            // The amount (label + value) is the flexible side, aligned to the
-            // end: the label is long in Arabic, so it wraps instead of
-            // pushing the Row past the card's width.
             Row(
               children: [
-                Text(
-                  l10n.orderItemCount(orderItemQuantity(order)),
-                  style: textTheme.bodySmall,
-                ),
+                Icon(Icons.shopping_bag_outlined, size: AppSizes.iconSmall, color: secondary),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
-                  child: Wrap(
-                    alignment: WrapAlignment.end,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text('${l10n.amountToCollectLabel}: ', style: textTheme.bodySmall),
-                      Text(currencyFormat.format(order.total), style: textTheme.titleSmall),
-                    ],
+                  child: Text(
+                    l10n.orderItemCount(orderItemQuantity(order)),
+                    style: textTheme.bodySmall?.copyWith(color: secondary),
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AdaptiveLabelValue(
+              label: l10n.amountToCollectLabel,
+              value: currencyFormat.format(order.total),
+              style: textTheme.titleSmall,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            FilledButton(
+              key: ValueKey('driver_accept_${order.id}'),
+              onPressed: isAccepting ? null : onAccept,
+              child: isAccepting
+                  ? buttonSpinner(colorScheme.onPrimary, size: AppSizes.iconSmall)
+                  : Text(l10n.acceptButton),
             ),
           ],
         ),

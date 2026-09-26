@@ -93,7 +93,7 @@ void main() {
       expect(find.text('Hamra St, Damascus'), findsOneWidget);
       expect(find.text('Mezzeh, Building 4 · Damascus'), findsOneWidget);
       expect(find.text('3 items'), findsOneWidget); // 2 + 1
-      expect(find.text('To collect (cash): '), findsOneWidget);
+      expect(find.text('To collect (cash)'), findsOneWidget);
       expect(find.text(_currency.format(8500)), findsOneWidget);
     });
 

@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/providers/formatters_provider.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_sizes.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/adaptive_label_value.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/city.dart';
 import '../../../models/coordinates.dart';
@@ -84,11 +87,73 @@ class DriverOrderLocations extends ConsumerWidget {
   }
 }
 
-/// Items (name, quantity × unit price, line total) followed by subtotal,
-/// delivery fee and the cash total to collect. Uses the effective* getters
-/// so legacy orders (total only) still read correctly.
-class DriverOrderItemsBreakdown extends ConsumerWidget {
-  const DriverOrderItemsBreakdown({required this.order, super.key});
+/// The order's lines: each item's name across the full width, then
+/// "quantity × unit price" and the line total on the next line — side by
+/// side when they fit, the total moving under it when they don't (large
+/// amounts, 1.3x text), so neither the name nor an amount is ever squeezed.
+class DriverOrderItems extends ConsumerWidget {
+  const DriverOrderItems({required this.order, super.key});
+
+  final DeliveryOrder order;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final textTheme = Theme.of(context).textTheme;
+    final secondary = AppColors.textSecondary(Theme.of(context).colorScheme);
+    final currencyFormat = ref.watch(currencyFormatProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final item in order.items)
+          Semantics(
+            label: '${item.name}, ${l10n.quantityLabel} ${item.quantity}, '
+                '${l10n.unitPriceLabel} ${currencyFormat.format(item.unitPrice)}, '
+                '${currencyFormat.format(item.unitPrice * item.quantity)}',
+            excludeSemantics: true,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(item.name, style: textTheme.bodyMedium),
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: AppSpacing.md,
+                    children: [
+                      Text(
+                        l10n.orderItemQuantityPrice(item.quantity, currencyFormat.format(item.unitPrice)),
+                        style: textTheme.bodySmall?.copyWith(color: secondary),
+                      ),
+                      // One line always: shrinks (never wraps mid-number) in the
+                      // rare case it is wider than the whole card.
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          currencyFormat.format(item.unitPrice * item.quantity),
+                          style: textTheme.bodyMedium,
+                          maxLines: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Subtotal, delivery fee and the cash total to collect. Uses the
+/// effective* getters so legacy orders (total only) still read correctly.
+/// Each label and amount share a line when they fit and stack when they
+/// don't; an amount is never wrapped mid-number.
+class DriverOrderTotals extends ConsumerWidget {
+  const DriverOrderTotals({required this.order, super.key});
 
   final DeliveryOrder order;
 
@@ -98,55 +163,18 @@ class DriverOrderItemsBreakdown extends ConsumerWidget {
     final textTheme = Theme.of(context).textTheme;
     final currencyFormat = ref.watch(currencyFormatProvider);
 
-    Widget amountRow(String label, double amount, {bool emphasized = false}) {
-      final style = emphasized ? textTheme.titleSmall : textTheme.bodySmall;
-      return Padding(
-        padding: const EdgeInsets.only(top: AppSpacing.xs),
-        child: Row(
-          children: [
-            Expanded(child: Text(label, style: style)),
-            Text(currencyFormat.format(amount), style: style),
-          ],
-        ),
-      );
-    }
+    Widget amountRow(String label, double amount, {bool emphasized = false}) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          child: AdaptiveLabelValue(
+            label: label,
+            value: currencyFormat.format(amount),
+            style: emphasized ? textTheme.titleSmall : textTheme.bodySmall,
+          ),
+        );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(l10n.orderItemsTitle, style: textTheme.labelLarge),
-        for (final item in order.items)
-          Semantics(
-            label: '${item.name}, ${l10n.quantityLabel} ${item.quantity}, '
-                '${l10n.unitPriceLabel} ${currencyFormat.format(item.unitPrice)}, '
-                '${currencyFormat.format(item.unitPrice * item.quantity)}',
-            excludeSemantics: true,
-            child: Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.xs),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(item.name, style: textTheme.bodyMedium),
-                        Text(
-                          l10n.orderItemQuantityPrice(
-                            item.quantity,
-                            currencyFormat.format(item.unitPrice),
-                          ),
-                          style: textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Text(currencyFormat.format(item.unitPrice * item.quantity)),
-                ],
-              ),
-            ),
-          ),
-        const Divider(height: AppSpacing.lg),
         amountRow(l10n.subtotalLabel, order.effectiveSubtotal),
         amountRow(l10n.deliveryFeeLabel, order.effectiveDeliveryFee),
         amountRow(l10n.amountToCollectLabel, order.total, emphasized: true),
@@ -173,7 +201,7 @@ class _InfoLine extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Tooltip(message: label, child: Icon(icon, size: 16, color: colorScheme.onSurfaceVariant)),
+            Tooltip(message: label, child: Icon(icon, size: AppSizes.iconSmall, color: colorScheme.onSurfaceVariant)),
             const SizedBox(width: AppSpacing.sm),
             Expanded(child: Text(text)),
           ],

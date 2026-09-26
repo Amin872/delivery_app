@@ -83,6 +83,15 @@ class _Harness {
   }
 }
 
+/// Sign-out (with stats and language) lives in the AppBar's "more" menu.
+Future<void> _expectSignOutInMoreMenu(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('driver_more_menu')));
+  await tester.pumpAndSettle();
+  expect(find.text('Sign out'), findsOneWidget);
+  expect(find.text('Earnings'), findsOneWidget);
+  expect(find.text('Change language'), findsOneWidget);
+}
+
 void main() {
   testWidgets('approved: the existing queue, availability switch and Accept', (tester) async {
     final harness = _Harness();
@@ -101,12 +110,13 @@ void main() {
     await harness.pump(tester, ApprovalStatus.pending);
 
     expect(find.byKey(const ValueKey('driver_approval_pending')), findsOneWidget);
-    expect(find.text('Pending approval'), findsOneWidget);
+    expect(find.text('Pending approval'), findsOneWidget); // AppBar title
+    expect(find.text('Pending'), findsOneWidget); // ApprovalStatusBadge
     // The unclaimed queue is never even subscribed to.
     expect(harness.queueQueried, isFalse);
     expect(find.text('Accept'), findsNothing);
     expect(find.byKey(const ValueKey('driver_available_switch')), findsNothing);
-    expect(find.byTooltip('Sign out'), findsOneWidget);
+    await _expectSignOutInMoreMenu(tester);
   });
 
   testWidgets('rejected: rejection notice; no queue query, switch or Accept', (tester) async {
@@ -114,11 +124,12 @@ void main() {
     await harness.pump(tester, ApprovalStatus.rejected);
 
     expect(find.byKey(const ValueKey('driver_approval_rejected')), findsOneWidget);
-    expect(find.text('Driver account not approved'), findsOneWidget);
+    expect(find.text('Not approved'), findsOneWidget); // AppBar title
+    expect(find.text('Rejected'), findsOneWidget); // ApprovalStatusBadge
     expect(harness.queueQueried, isFalse);
     expect(find.text('Accept'), findsNothing);
     expect(find.byKey(const ValueKey('driver_available_switch')), findsNothing);
-    expect(find.byTooltip('Sign out'), findsOneWidget);
+    await _expectSignOutInMoreMenu(tester);
   });
 
   for (final status in [ApprovalStatus.pending, ApprovalStatus.rejected]) {
@@ -145,13 +156,13 @@ void main() {
       await harness.pump(tester, ApprovalStatus.approved, isAvailable: false);
 
       expect(find.byKey(const ValueKey('driver_offline')), findsOneWidget);
-      expect(find.text("You're offline"), findsOneWidget);
+      expect(find.text("You're offline"), findsOneWidget); // AppBar title
       // The unclaimed queue is never even subscribed to while offline.
       expect(harness.queueQueried, isFalse);
       expect(find.text('Accept'), findsNothing);
       // The switch stays so the driver can go back online.
       expect(find.byKey(const ValueKey('driver_available_switch')), findsOneWidget);
-      expect(find.byTooltip('Sign out'), findsOneWidget);
+      await _expectSignOutInMoreMenu(tester);
     });
 
     testWidgets('approved + offline: an in-flight delivery stays visible and advanceable',
@@ -177,7 +188,7 @@ void main() {
       expect(find.byKey(const ValueKey('driver_offline')), findsNothing);
       expect(harness.queueQueried, isTrue);
       expect(find.text('Queue address queued-1'), findsOneWidget);
-      expect(find.text('To collect (cash): '), findsOneWidget);
+      expect(find.text('To collect (cash)'), findsOneWidget);
     });
   });
 }

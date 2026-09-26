@@ -588,5 +588,27 @@
   "@vendorStoreTitle": {
     "description": "Vendor home AppBar title when the store was not approved."
   },
-  "invalidEtaError": "Enter whole minutes; the minimum can't exceed the maximum."
+  "invalidEtaError": "Enter whole minutes; the minimum can't exceed the maximum.",
+  "driverHomeTitle": "Deliveries",
+  "@driverHomeTitle": {
+    "description": "Driver home AppBar title while the driver's account is still loading or failed to load."
+  },
+  "activeDeliveryTitle": "Active delivery",
+  "driverPendingApprovalTitle": "Pending approval",
+  "driverNotApprovedTitle": "Not approved",
+  "@driverNotApprovedTitle": {
+    "description": "Short driver home AppBar title for a rejected driver account."
+  },
+  "driverMoreActionsTooltip": "More options",
+  "proofSectionTitle": "Proof of delivery",
+  "proofTakePhotoButton": "Take photo",
+  "proofChooseFromGalleryButton": "Choose from gallery",
+  "proofPhotoAttachedLabel": "Proof photo attached",
+  "proofNoPhotoLabel": "No proof photo yet",
+  "proofPermissionDeniedMessage": "Allow camera or photo access in your phone settings to attach a proof photo.",
+  "proofCameraUnavailableMessage": "No camera is available. Choose a photo from the gallery instead.",
+  "proofPickFailedMessage": "Couldn't get the photo. Please try again.",
+  "proofStaleMessage": "That photo was for a different delivery. Please attach a new one.",
+  "confirmDeliveredTitle": "Complete delivery?",
+  "confirmDeliveredMessage": "Mark this delivery as delivered? This can't be undone."
 }

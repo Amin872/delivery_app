@@ -482,5 +482,21 @@
   "vendorMoreActionsTooltip": "خيارات إضافية",
   "vendorStoreSetupTitle": "إعداد متجرك",
   "vendorStoreTitle": "متجري",
-  "invalidEtaError": "أدخل عدد دقائق صحيحًا، ولا يتجاوز الحد الأدنى الحد الأقصى."
+  "invalidEtaError": "أدخل عدد دقائق صحيحًا، ولا يتجاوز الحد الأدنى الحد الأقصى.",
+  "driverHomeTitle": "التوصيلات",
+  "activeDeliveryTitle": "التوصيلة الحالية",
+  "driverPendingApprovalTitle": "بانتظار الموافقة",
+  "driverNotApprovedTitle": "غير مقبول",
+  "driverMoreActionsTooltip": "خيارات إضافية",
+  "proofSectionTitle": "إثبات التسليم",
+  "proofTakePhotoButton": "التقاط صورة",
+  "proofChooseFromGalleryButton": "اختيار من المعرض",
+  "proofPhotoAttachedLabel": "تم إرفاق صورة الإثبات",
+  "proofNoPhotoLabel": "لم تُرفق صورة إثبات بعد",
+  "proofPermissionDeniedMessage": "اسمح بالوصول إلى الكاميرا أو الصور من إعدادات الهاتف لإرفاق صورة الإثبات.",
+  "proofCameraUnavailableMessage": "لا تتوفر كاميرا. اختر صورة من المعرض بدلًا من ذلك.",
+  "proofPickFailedMessage": "تعذّر الحصول على الصورة. يرجى المحاولة مرة أخرى.",
+  "proofStaleMessage": "هذه الصورة تخص توصيلة أخرى. يرجى إرفاق صورة جديدة.",
+  "confirmDeliveredTitle": "إتمام التوصيل؟",
+  "confirmDeliveredMessage": "هل تريد تعليم هذه التوصيلة كمُسلَّمة؟ لا يمكن التراجع عن ذلك."
 }

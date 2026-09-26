@@ -4,22 +4,29 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart' show launchUrl;
 
 import '../../../core/contact/phone_launcher.dart';
+import '../../../core/format/display_formatters.dart';
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/location/navigation_launcher.dart' show UrlLaunchFn;
 import '../../../core/location/distance_estimator.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_sizes.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_spinner.dart';
-import '../../../core/widgets/image_picker_avatar.dart';
+import '../../../core/widgets/info_card.dart';
+import '../../../core/widgets/status_badge.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/coordinates.dart';
 import '../../../models/order.dart';
 import 'driver_order_summary.dart';
+import 'driver_proof_picker.dart';
 
-/// The delivery the driver currently holds: status, pickup and drop-off,
-/// notes, items and the cash total to collect, plus the proof photo and
-/// "Move to …" action. Purely presentational — DriverHomeScreen still owns
-/// the lifecycle decision (which status is next, whether a proof photo is
-/// needed) and the advance/upload calls, and passes them in.
+/// The delivery the driver currently holds, as one tinted card in sections:
+/// the order reference and status; the route (stops, estimate, navigate);
+/// calling the customer; notes; items; the proof photo; the totals to
+/// collect; and the "Move to …" action. Purely presentational —
+/// DriverHomeScreen still owns the lifecycle decision (which status is
+/// next, whether a proof photo is needed) and the advance/upload calls,
+/// and passes them in.
 class DriverActiveDeliveryCard extends StatelessWidget {
   const DriverActiveDeliveryCard({
     required this.order,
@@ -62,21 +69,38 @@ class DriverActiveDeliveryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
     final next = nextStatus;
     final stop = driverNextStop(order);
     final stopCoordinates = stop?.coordinates;
     final toPickup = stop?.kind == DriverStopKind.pickup;
     final estimate = estimateTrip(driverPosition, stopCoordinates);
+    final canCall = fetchCustomerPhone != null && driverCanCallCustomer(order);
+    final instructions = order.deliveryInstructions;
+    final driverNote = order.driverNote;
+    final hasNotes = (instructions?.isNotEmpty ?? false) || (driverNote?.isNotEmpty ?? false);
+
+    const sectionGap = Divider(height: AppSpacing.xl);
 
     return Card(
-      color: Theme.of(context).colorScheme.primaryContainer,
+      color: colorScheme.primaryContainer,
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(l10n.orderLabel(order.id), style: textTheme.titleMedium),
-            Text(orderStatusLabel(context, order.status), style: textTheme.bodyMedium),
+            // 1. Order: short reference + status chip (the chip drops under
+            // the reference when both don't fit).
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              children: [
+                Text(l10n.orderLabel(displayOrderId(order.id)), style: textTheme.titleMedium),
+                OrderStatusChip(status: order.status),
+              ],
+            ),
+            // 2. Route.
             DriverOrderLocations(order: order),
             // Straight-line estimate at an assumed average speed — labeled
             // "≈ … estimated", never presented as a routed/traffic ETA.
@@ -85,8 +109,9 @@ class DriverActiveDeliveryCard extends StatelessWidget {
                 key: const ValueKey('driver_trip_estimate'),
                 padding: const EdgeInsets.only(top: AppSpacing.xs),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.schedule_outlined, size: 16),
+                    Icon(Icons.schedule_outlined, size: AppSizes.iconSmall, color: AppColors.textSecondary(colorScheme)),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
@@ -109,7 +134,8 @@ class DriverActiveDeliveryCard extends StatelessWidget {
                   label: Text(toPickup ? l10n.navigateToPickupButton : l10n.navigateToDropOffButton),
                 ),
               ),
-            if (fetchCustomerPhone != null && driverCanCallCustomer(order))
+            // 3. Customer contact.
+            if (canCall)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpacing.sm),
                 child: PhoneCallAction(
@@ -119,59 +145,99 @@ class DriverActiveDeliveryCard extends StatelessWidget {
                   builder: (context, onPressed, busy) => OutlinedButton.icon(
                     onPressed: onPressed,
                     icon: busy
-                        ? buttonSpinner(Theme.of(context).colorScheme.primary, size: 16)
+                        ? buttonSpinner(colorScheme.primary, size: AppSizes.iconSmall)
                         : const Icon(Icons.call_outlined),
                     label: Text(l10n.callCustomerButton),
                   ),
                 ),
               ),
-            if (order.deliveryInstructions != null)
-              Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.xs),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline, size: 16),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(child: Text(order.deliveryInstructions!)),
-                  ],
-                ),
-              ),
-            if (order.driverNote != null)
-              Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.xs),
-                child: Row(
-                  children: [
-                    const Icon(Icons.sticky_note_2_outlined, size: 16),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(child: Text(order.driverNote!)),
-                  ],
-                ),
-              ),
+            // 4. Notes.
+            if (hasNotes) ...[
+              sectionGap,
+              if (instructions?.isNotEmpty ?? false)
+                _NoteLine(icon: Icons.info_outline, label: l10n.orderDeliveryInstructionsLabel, text: instructions!),
+              if (driverNote?.isNotEmpty ?? false)
+                _NoteLine(icon: Icons.sticky_note_2_outlined, label: l10n.orderDriverNoteLabel, text: driverNote!),
+            ],
+            // 5. Items.
+            sectionGap,
+            _SectionTitle(l10n.orderItemsTitle),
+            InfoCard(children: [DriverOrderItems(order: order)]),
+            // 6. Proof (only on the final hop).
+            if (needsProof) ...[
+              sectionGap,
+              _SectionTitle(l10n.proofSectionTitle),
+              DriverProofPicker(file: proofImage, onPicked: onProofPicked),
+            ],
+            // 7. Totals.
             const SizedBox(height: AppSpacing.md),
-            DriverOrderItemsBreakdown(order: order),
-            if (needsProof)
-              Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.md),
-                child: Row(
-                  children: [
-                    ImagePickerAvatar(radius: 28, localFile: proofImage, onPicked: onProofPicked),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(child: Text(l10n.proofOfDeliveryHint)),
-                  ],
-                ),
-              ),
+            InfoCard(children: [DriverOrderTotals(order: order)]),
+            // 8. The next step.
             if (next != null)
               Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.md),
+                padding: const EdgeInsets.only(top: AppSpacing.lg),
                 child: FilledButton(
+                  key: const ValueKey('driver_advance_button'),
                   onPressed: (advancing || !canAdvance) ? null : onAdvance,
                   child: advancing
-                      ? buttonSpinner(Theme.of(context).colorScheme.onPrimary, size: 16)
-                      : Text(l10n.advanceStatusButtonLabel(orderStatusLabel(context, next))),
+                      ? buttonSpinner(colorScheme.onPrimary, size: AppSizes.iconSmall)
+                      : Text(
+                          l10n.advanceStatusButtonLabel(orderStatusLabel(context, next)),
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
+                        ),
                 ),
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Semantics(header: true, child: Text(title, style: Theme.of(context).textTheme.labelLarge)),
+    );
+  }
+}
+
+/// A delivery note: icon, a small label, and the full text under it.
+class _NoteLine extends StatelessWidget {
+  const _NoteLine({required this.icon, required this.label, required this.text});
+
+  final IconData icon;
+  final String label;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final secondary = AppColors.textSecondary(Theme.of(context).colorScheme);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: AppSizes.iconSmall, color: secondary),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: textTheme.bodySmall?.copyWith(color: secondary)),
+                Text(text, style: textTheme.bodyMedium),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
