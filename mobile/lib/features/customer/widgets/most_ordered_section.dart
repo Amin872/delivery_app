@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 // Flutter's (dart:ui's) TextDirection instead.
 import 'package:intl/intl.dart' hide TextDirection;
 
+import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/vendor.dart';
 import 'most_ordered_card.dart';
@@ -64,7 +65,7 @@ class MostOrderedSection extends StatelessWidget {
           builder: (context, constraints) {
             final cardWidth =
                 (constraints.maxWidth * _cardWidthFraction).clamp(_cardWidthMin, _cardWidthMax);
-            final rowHeight = cardWidth / mostOrderedImageAspectRatio + mostOrderedFooterHeight;
+            final rowHeight = cardWidth / mostOrderedImageAspectRatio + mostOrderedFooterHeightFor(MediaQuery.textScalerOf(context));
 
             return SizedBox(
               height: rowHeight,
@@ -117,10 +118,10 @@ class _ViewAllArrow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: mostOrderedAccentBackground,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: AppRadius.medium,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppRadius.medium,
         child: SizedBox(
           width: _arrowButtonSize,
           height: _arrowButtonSize,

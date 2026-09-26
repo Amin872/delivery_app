@@ -6,6 +6,7 @@ import '../../../core/errors/error_messages.dart';
 import '../../../core/providers/formatters_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_sizes.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_snackbar.dart';
@@ -166,71 +167,14 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   for (final (index, line) in cart.lines.values.indexed)
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Row(
-                          children: [
-                            line.item.imageUrl != null
-                                ? AppNetworkImage(
-                                    imageUrl: line.item.imageUrl!,
-                                    width: 52,
-                                    height: 52,
-                                    borderRadius: BorderRadius.circular(10),
-                                  )
-                                : ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: Container(
-                                      width: 52,
-                                      height: 52,
-                                      color: colorScheme.surfaceContainerHighest,
-                                      child: Icon(
-                                        Icons.fastfood_outlined,
-                                        color: colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    line.item.name,
-                                    style: textTheme.titleSmall,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    currencyFormat.format(line.item.price),
-                                    style: textTheme.bodySmall,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // The same stepper as the menu cards; a line
-                            // is always in the cart here, so its add
-                            // state (quantity 0) is never shown.
-                            CartQuantityControl(
-                              item: line.item,
-                              direction: Axis.horizontal,
-                              compact: false,
-                              onAdd: () => ref
-                                  .read(cartProvider.notifier)
-                                  .addItem(cart.vendorId!, cart.vendorName ?? '', line.item),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline),
-                              tooltip: l10n.removeItemTooltip,
-                              onPressed: () {
-                                HapticFeedback.lightImpact();
-                                ref.read(cartProvider.notifier).removeItem(line.item.id);
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
+                    _CartLine(
+                      line: line,
+                      priceLabel: currencyFormat.format(line.item.price),
+                      onAdd: () => ref.read(cartProvider.notifier).addItem(cart.vendorId!, cart.vendorName ?? '', line.item),
+                      onRemove: () {
+                        HapticFeedback.lightImpact();
+                        ref.read(cartProvider.notifier).removeItem(line.item.id);
+                      },
                     ).staggeredEntrance(index),
                   const Divider(),
                   // An estimate from the cart and the vendor's current fee.
@@ -293,6 +237,115 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                 ],
               ),
             ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One cart line: photo, name and unit price, the quantity stepper and a
+/// remove button. On one row when the name/price column still has room for
+/// the full price; otherwise the stepper and remove button move to a second
+/// row (end-aligned), and at extreme sizes the price takes its own line —
+/// so it is never squeezed, wrapped or shrunk on a narrow phone or at a
+/// large text size. Decided by measuring the price at
+/// the current text scale, not by a screen-width breakpoint.
+class _CartLine extends StatelessWidget {
+  const _CartLine({required this.line, required this.priceLabel, required this.onAdd, required this.onRemove});
+
+  final CartLine line;
+  final String priceLabel;
+  final VoidCallback onAdd;
+  final VoidCallback onRemove;
+
+  static const double _imageSize = 52;
+
+  /// Stepper (two tap targets + the count) and the remove button.
+  static const double _controlsWidth = AppSizes.minTapTarget * 3 + AppSizes.iconLarge;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    final image = line.item.imageUrl != null
+        ? AppNetworkImage(
+            imageUrl: line.item.imageUrl!,
+            width: _imageSize,
+            height: _imageSize,
+            borderRadius: BorderRadius.circular(10),
+          )
+        : ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              width: _imageSize,
+              height: _imageSize,
+              color: colorScheme.surfaceContainerHighest,
+              child: Icon(Icons.fastfood_outlined, color: colorScheme.onSurfaceVariant),
+            ),
+          );
+    final nameText = Text(line.item.name, style: textTheme.titleSmall, maxLines: 2, overflow: TextOverflow.ellipsis);
+    // Never wraps mid-number; the layout below keeps it at full size (the
+    // FittedBox is only a last-resort guard).
+    final priceText = FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: AlignmentDirectional.centerStart,
+      child: Text(priceLabel, style: textTheme.bodySmall, maxLines: 1),
+    );
+    final controls = [
+      // The same stepper as the menu cards; a line is always in the cart
+      // here, so its add state (quantity 0) is never shown.
+      CartQuantityControl(item: line.item, direction: Axis.horizontal, compact: false, onAdd: onAdd),
+      IconButton(icon: const Icon(Icons.delete_outline), tooltip: l10n.removeItemTooltip, onPressed: onRemove),
+    ];
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final priceWidth = (TextPainter(
+              text: TextSpan(text: priceLabel, style: textTheme.bodySmall),
+              textDirection: Directionality.of(context),
+              textScaler: MediaQuery.textScalerOf(context),
+              maxLines: 1,
+            )..layout())
+                .width;
+            final besideImage = constraints.maxWidth - _imageSize - AppSpacing.md;
+            // Where the price goes: next to the photo with the controls on the
+            // same row; next to the photo with the controls on a second row;
+            // or (extreme widths/text sizes) on its own full-width line.
+            final oneRow = besideImage - _controlsWidth >= priceWidth + AppSpacing.sm;
+            final priceBesideImage = oneRow || besideImage >= priceWidth + AppSpacing.sm;
+
+            final top = Row(
+              children: [
+                image,
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      nameText,
+                      if (priceBesideImage) ...[const SizedBox(height: 2), priceText],
+                    ],
+                  ),
+                ),
+                if (oneRow) ...controls,
+              ],
+            );
+            if (oneRow) return top;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                top,
+                if (!priceBesideImage) ...[const SizedBox(height: AppSpacing.xs), priceText],
+                const SizedBox(height: AppSpacing.xs),
+                Row(mainAxisAlignment: MainAxisAlignment.end, children: controls),
+              ],
+            );
+          },
         ),
       ),
     );

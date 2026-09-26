@@ -7,6 +7,7 @@ import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/providers/formatters_provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/app_snackbar.dart';
@@ -245,7 +246,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                       Text(l10n.proofOfDeliveryLabel, style: vendorTheme.textTheme.titleSmall),
                       const SizedBox(height: 8),
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: AppRadius.medium,
                         child: Image.network(order.proofImageUrl!, height: 200, fit: BoxFit.cover),
                       ),
                     ],

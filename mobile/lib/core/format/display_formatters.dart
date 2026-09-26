@@ -8,6 +8,8 @@
 /// (core/providers/formatters_provider.dart).
 library;
 
+import 'package:intl/intl.dart';
+
 const _lri = '\u2066'; // LEFT-TO-RIGHT ISOLATE
 const _pdi = '\u2069'; // POP DIRECTIONAL ISOLATE
 
@@ -66,3 +68,12 @@ String formatAmountForInput(num? amount) {
   if (amount == amount.roundToDouble()) return amount.toInt().toString();
   return amount.toString();
 }
+
+/// The one count format (quantities, badges, statistics): locale grouping,
+/// Western digits (see core/l10n/numeral_policy.dart). Shared by
+/// `countFormatProvider` and [formatCount] so both always agree.
+NumberFormat countNumberFormat(String locale) => NumberFormat.decimalPattern(locale);
+
+/// A count for widgets without a Riverpod ref — same output as
+/// `countFormatProvider` for the app's current [locale].
+String formatCount(num value, String locale) => countNumberFormat(locale).format(value);

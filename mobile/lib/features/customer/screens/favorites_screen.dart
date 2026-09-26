@@ -68,7 +68,7 @@ class FavoritesScreen extends ConsumerWidget {
               return LayoutBuilder(
                 builder: (context, constraints) {
                   final cardWidth = constraints.maxWidth - AppSpacing.lg * 2;
-                  final cardHeight = cardWidth / storeCardImageAspectRatio + storeCardBodyHeight;
+                  final cardHeight = cardWidth / storeCardImageAspectRatio + storeCardBodyHeightFor(MediaQuery.textScalerOf(context));
 
                   return ListView.builder(
                     padding: const EdgeInsets.all(AppSpacing.lg),

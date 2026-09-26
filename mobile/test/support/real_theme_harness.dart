@@ -23,13 +23,20 @@ const phoneWidths = <double>[320, 360, 393];
 /// Arabic (RTL, the default app language) and English (LTR).
 const layoutLocales = <Locale>[Locale('ar'), Locale('en')];
 
-/// One width × locale combination.
-typedef LayoutConfig = ({double width, Locale locale});
+/// One width × locale (× text scale) combination.
+typedef LayoutConfig = ({double width, Locale locale, double textScale});
 
-List<LayoutConfig> get allLayoutConfigs => [
+/// Text scales for the most sensitive components (normal, and a common
+/// enlarged accessibility setting).
+const sensitiveTextScales = <double>[1, 1.3];
+
+List<LayoutConfig> layoutConfigs({List<double> textScales = const [1]}) => [
       for (final width in phoneWidths)
-        for (final locale in layoutLocales) (width: width, locale: locale),
+        for (final locale in layoutLocales)
+          for (final textScale in textScales) (width: width, locale: locale, textScale: textScale),
     ];
+
+List<LayoutConfig> get allLayoutConfigs => layoutConfigs();
 
 /// Pumps [home] under the real theme at [width] × [height] logical pixels
 /// in [locale], with SharedPreferences and the formatters provided. Extra
@@ -75,15 +82,18 @@ Future<void> pumpWithRealTheme(
   );
 }
 
-/// Declares one `testWidgets` per [allLayoutConfigs] entry, named
-/// `"<description> [<width> <lang>]"`. Any framework error during the test
-/// (overflow, infinite-width, null check) fails that combination.
+/// Declares one `testWidgets` per width × locale (× [textScales]) entry,
+/// named `"<description> [<width> <lang> <scale>x]"`. Any framework error
+/// during the test (overflow, infinite-width, null check) fails that
+/// combination. Pass `config.textScale` on to [pumpWithRealTheme].
 void testWidgetsAcrossLayouts(
   String description,
-  Future<void> Function(WidgetTester tester, LayoutConfig config) body,
-) {
-  for (final config in allLayoutConfigs) {
-    testWidgets('$description [${config.width.toInt()} ${config.locale.languageCode}]', (tester) async {
+  Future<void> Function(WidgetTester tester, LayoutConfig config) body, {
+  List<double> textScales = const [1],
+}) {
+  for (final config in layoutConfigs(textScales: textScales)) {
+    final scale = config.textScale == 1 ? '' : ' ${config.textScale}x';
+    testWidgets('$description [${config.width.toInt()} ${config.locale.languageCode}$scale]', (tester) async {
       await body(tester, config);
     });
   }

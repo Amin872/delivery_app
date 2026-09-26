@@ -7,11 +7,11 @@ import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
 import 'store_card.dart';
-import '../../../core/theme/app_shadows.dart';
 
 /// One row of CustomerHomeScreen's dynamic, extensible, **store-first**
 /// feed — see `core/discovery/vendor_carousels.dart` for how [vendors] is
@@ -123,7 +123,7 @@ class _StoreCarouselState extends State<StoreCarousel> {
             builder: (context, constraints) {
               final cardWidth = (constraints.maxWidth * StoreCarousel._cardWidthFraction)
                   .clamp(StoreCarousel._cardWidthMin, StoreCarousel._cardWidthMax);
-              final cardHeight = cardWidth / storeCardImageAspectRatio + storeCardBodyHeight;
+              final cardHeight = cardWidth / storeCardImageAspectRatio + storeCardBodyHeightFor(MediaQuery.textScalerOf(context));
 
               return SizedBox(
                 height: cardHeight,

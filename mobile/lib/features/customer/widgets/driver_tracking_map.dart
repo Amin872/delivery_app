@@ -6,6 +6,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../core/location/distance_estimator.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_spinner.dart';
 import '../../../l10n/app_localizations.dart';
@@ -167,7 +168,7 @@ class _DriverTrackingMapState extends ConsumerState<DriverTrackingMap> {
     );
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: AppRadius.medium,
       child: SizedBox(
         height: 220,
         child: Stack(
@@ -210,7 +211,7 @@ class _InfoPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: VendorPalette.surfaceContainer.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppRadius.extraLarge,
       ),
       child: Text(
         text,

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/promotion.dart';
 import '../../../models/vendor.dart';
@@ -318,9 +319,9 @@ class _PromotionCard extends StatelessWidget {
                       const SizedBox(height: 8),
                       Material(
                         color: VendorPalette.primaryCyan,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: AppRadius.extraLarge,
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: AppRadius.extraLarge,
                           onTap: onCtaTap,
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

@@ -17,8 +17,12 @@ import '../../../models/vendor.dart';
 const double storeCardImageAspectRatio = 1.55;
 const double storeCardBodyHeight = 116;
 
-double storeCardAspectRatioForWidth(double width) {
-  final height = width / storeCardImageAspectRatio + storeCardBodyHeight;
+/// [storeCardBodyHeight] at the current text scale — the body is text only
+/// (name, rating, ETA/fee), so it must grow with it.
+double storeCardBodyHeightFor(TextScaler scaler) => scaler.scale(storeCardBodyHeight);
+
+double storeCardAspectRatioForWidth(double width, [TextScaler scaler = TextScaler.noScaling]) {
+  final height = width / storeCardImageAspectRatio + storeCardBodyHeightFor(scaler);
   return width / height;
 }
 
@@ -76,29 +80,35 @@ class StoreCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              AspectRatio(
-                aspectRatio: storeCardImageAspectRatio,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Positioned.fill(
-                      child: vendor.imageUrl != null
-                          ? AppNetworkImage(imageUrl: vendor.imageUrl!, fit: BoxFit.cover)
-                          : Container(
-                              color: VendorPalette.surfaceElevated,
-                              child: const Icon(
-                                Icons.storefront_outlined,
-                                size: 32,
-                                color: VendorPalette.textMuted,
+              // The photo gives way (by a pixel or two) if the text body
+              // needs more than its budgeted height, so the name/rating/
+              // ETA are never clipped. Every parent sizes the card with a
+              // bounded height (see storeCardBodyHeightFor).
+              Flexible(
+                child: AspectRatio(
+                  aspectRatio: storeCardImageAspectRatio,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned.fill(
+                        child: vendor.imageUrl != null
+                            ? AppNetworkImage(imageUrl: vendor.imageUrl!, fit: BoxFit.cover)
+                            : Container(
+                                color: VendorPalette.surfaceElevated,
+                                child: const Icon(
+                                  Icons.storefront_outlined,
+                                  size: 32,
+                                  color: VendorPalette.textMuted,
+                                ),
                               ),
-                            ),
-                    ),
-                    // Literal top-left (not RTL start/end) — matches the
-                    // reference's badge position and this codebase's other
-                    // corner-badge precedent (MostOrderedCard's "+" badge).
-                    if (isFreeDelivery)
-                      const Positioned(top: 8, left: 8, child: _FreeDeliveryBadge()),
-                  ],
+                      ),
+                      // Literal top-left (not RTL start/end) — matches the
+                      // reference's badge position and this codebase's other
+                      // corner-badge precedent (MostOrderedCard's "+" badge).
+                      if (isFreeDelivery)
+                        const Positioned(top: 8, left: 8, child: _FreeDeliveryBadge()),
+                    ],
+                  ),
                 ),
               ),
               Padding(

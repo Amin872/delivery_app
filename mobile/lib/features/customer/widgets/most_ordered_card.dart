@@ -23,8 +23,12 @@ const double mostOrderedFooterHeight = 90;
 /// shape as the horizontal carousel — shared by `MostOrderedScreen` and
 /// `ProductDetailsSheet`'s recommended-products grid so this formula only
 /// lives in one place.
-double mostOrderedCardAspectRatioForWidth(double cardWidth) {
-  final cardHeight = cardWidth / mostOrderedImageAspectRatio + mostOrderedFooterHeight;
+/// [mostOrderedFooterHeight] at the current text scale — the footer holds
+/// only text (price + two-line name), so it must grow with it.
+double mostOrderedFooterHeightFor(TextScaler scaler) => scaler.scale(mostOrderedFooterHeight);
+
+double mostOrderedCardAspectRatioForWidth(double cardWidth, [TextScaler scaler = TextScaler.noScaling]) {
+  final cardHeight = cardWidth / mostOrderedImageAspectRatio + mostOrderedFooterHeightFor(scaler);
   return cardWidth / cardHeight;
 }
 
@@ -119,7 +123,7 @@ class MostOrderedCard extends StatelessWidget {
               ),
             ),
             SizedBox(
-              height: mostOrderedFooterHeight,
+              height: mostOrderedFooterHeightFor(MediaQuery.textScalerOf(context)),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 child: Column(

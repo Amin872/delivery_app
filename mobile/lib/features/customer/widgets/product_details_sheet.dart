@@ -295,8 +295,7 @@ class ProductDetailsSheet extends ConsumerWidget {
                                                   mainAxisSpacing: gap,
                                                   childAspectRatio:
                                                       mostOrderedCardAspectRatioForWidth(
-                                                        cardWidth,
-                                                      ),
+                                                        cardWidth, MediaQuery.textScalerOf(context)),
                                                 ),
                                             delegate: SliverChildBuilderDelegate((
                                               context,

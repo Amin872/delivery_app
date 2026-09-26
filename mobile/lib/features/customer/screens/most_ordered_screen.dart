@@ -7,13 +7,13 @@ import 'package:intl/intl.dart' hide TextDirection;
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/vendor.dart';
+import '../../../routing/page_transitions.dart';
 import '../providers/cart_provider.dart';
 import '../widgets/cart_add_flow.dart';
 import '../widgets/floating_order_button.dart';
 import '../widgets/most_ordered_card.dart';
 import '../widgets/product_details_sheet.dart';
 import 'cart_screen.dart';
-import '../../../routing/page_transitions.dart';
 
 /// Full "Most ordered" grid — opened from the trailing arrow at the end of
 /// VendorMenuScreen's horizontal carousel (`MostOrderedSection`). Shows
@@ -69,7 +69,7 @@ class MostOrderedScreen extends ConsumerWidget {
                   final cardWidth =
                       (constraints.maxWidth - AppSpacing.lg * 2 - crossAxisSpacing) / 2;
                   final cardHeight =
-                      cardWidth / mostOrderedImageAspectRatio + mostOrderedFooterHeight;
+                      cardWidth / mostOrderedImageAspectRatio + mostOrderedFooterHeightFor(MediaQuery.textScalerOf(context));
 
                   return GridView.builder(
                     padding: const EdgeInsets.all(AppSpacing.lg),

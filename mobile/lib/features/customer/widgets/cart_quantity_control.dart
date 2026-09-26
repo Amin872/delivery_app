@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/format/display_formatters.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
 import '../providers/cart_provider.dart';
@@ -94,7 +95,7 @@ class CartQuantityControl extends ConsumerWidget {
       constraints: compact ? const BoxConstraints() : null,
       onPressed: increment,
     );
-    final countLabel = Text('$quantity', style: textTheme.labelLarge);
+    final countLabel = Text(formatCount(quantity, Localizations.localeOf(context).toString()), style: textTheme.labelLarge);
 
     return direction == Axis.vertical
         ? Column(

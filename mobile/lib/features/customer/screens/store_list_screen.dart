@@ -43,7 +43,7 @@ class StoreListScreen extends ConsumerWidget {
               const crossAxisSpacing = AppSpacing.sm;
               final cardWidth =
                   (constraints.maxWidth - AppSpacing.lg * 2 - crossAxisSpacing) / 2;
-              final cardHeight = cardWidth / storeCardImageAspectRatio + storeCardBodyHeight;
+              final cardHeight = cardWidth / storeCardImageAspectRatio + storeCardBodyHeightFor(MediaQuery.textScalerOf(context));
 
               return GridView.builder(
                 padding: const EdgeInsets.all(AppSpacing.lg),

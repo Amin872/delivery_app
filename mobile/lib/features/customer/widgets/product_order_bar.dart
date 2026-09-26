@@ -3,18 +3,21 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
+import '../../../core/format/display_formatters.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_sizes.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
+import 'adaptive_label_value.dart';
 import 'cart_add_flow.dart';
 import 'most_ordered_card.dart'
     show mostOrderedAccentBackground, mostOrderedAccentForeground, orderAccentBackground;
 
-/// Fixed bottom bar of `ProductDetailsSheet` — measured from the reference
-/// (RGB(113,210,246) fill, RGB(1,15,21) text, 56dp pill height, 16dp outer
-/// margin, 8dp gap between the two pills). Deliberately a *local* quantity
+/// Fixed bottom bar of `ProductDetailsSheet`: an "Add to order · price" pill
+/// and a quantity pill, both at least [AppSizes.largeButtonHeight] tall and
+/// free to grow with the text scale. Deliberately a *local* quantity
 /// picker (starts at 1, independent of the cart) rather than reusing
 /// `CartQuantityControl`: this bar decides how many units to commit in one
 /// "Add to order" tap, it doesn't mirror the cart's live quantity the way
@@ -87,28 +90,21 @@ class _ProductOrderBarState extends ConsumerState<ProductOrderBar> {
                 child: InkWell(
                   borderRadius: AppRadius.pill,
                   onTap: widget.item.available ? _addToOrder : null,
-                  child: Container(
-                    height: 56,
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-                    alignment: Alignment.center,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          l10n.addToOrderButtonLabel,
-                          style: textTheme.titleSmall?.copyWith(
-                            color: VendorPalette.background,
-                            fontWeight: FontWeight.w700,
-                          ),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: AppSizes.largeButtonHeight),
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.xs,
+                      ),
+                      child: AdaptiveLabelValue(
+                        label: l10n.addToOrderButtonLabel,
+                        value: totalPrice,
+                        style: textTheme.titleSmall?.copyWith(
+                          color: VendorPalette.background,
+                          fontWeight: FontWeight.w700,
                         ),
-                        Text(
-                          totalPrice,
-                          style: textTheme.titleSmall?.copyWith(
-                            color: VendorPalette.background,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -119,8 +115,8 @@ class _ProductOrderBarState extends ConsumerState<ProductOrderBar> {
               color: mostOrderedAccentBackground,
               borderRadius: AppRadius.pill,
               child: Container(
-                height: 56,
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+                constraints: const BoxConstraints(minHeight: AppSizes.largeButtonHeight),
+                padding: const EdgeInsetsDirectional.symmetric(horizontal: AppSpacing.xs),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   // First child renders at the RTL *start* (right) — source
@@ -133,10 +129,12 @@ class _ProductOrderBarState extends ConsumerState<ProductOrderBar> {
                       icon: const Icon(Icons.remove, color: mostOrderedAccentForeground),
                       onPressed: _decrement,
                     ),
-                    SizedBox(
-                      width: 20,
+                    // Grows with the digits and the text scale (a fixed
+                    // width clipped "99" at larger text sizes).
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: AppSizes.iconLarge),
                       child: Text(
-                        '$_quantity',
+                        formatCount(_quantity, Localizations.localeOf(context).toString()),
                         textAlign: TextAlign.center,
                         style: textTheme.titleSmall
                             ?.copyWith(color: mostOrderedAccentForeground, fontWeight: FontWeight.w700),

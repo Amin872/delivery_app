@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 
 import '../../../core/discovery/menu_sections.dart';
+import '../../../core/theme/app_radius.dart';
 
 const double storeStickyTabsHeight = 48;
 
@@ -140,7 +141,7 @@ class _StickyTabsRowState extends State<_StickyTabsRow> {
           key: _tabKeys[index],
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: InkWell(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: AppRadius.extraLarge,
             onTap: () => widget.onTap(index),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
@@ -151,7 +152,7 @@ class _StickyTabsRowState extends State<_StickyTabsRow> {
                 // solid tab fill (see AppGradients.primary's doc comment
                 // in app_theme.dart for the full reasoning).
                 color: selected ? colorScheme.primaryContainer : colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: AppRadius.extraLarge,
               ),
               child: Text(
                 widget.sections[index].title,

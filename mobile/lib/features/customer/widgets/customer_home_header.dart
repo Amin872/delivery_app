@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
 import '../../../l10n/app_localizations.dart';
 import 'store_header_action_button.dart';
 
@@ -57,7 +58,7 @@ class CustomerHomeHeader extends StatelessWidget {
                 ),
                 Center(
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: AppRadius.extraLarge,
                     onTap: onLocationTap,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/format/display_formatters.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../core/theme/app_shadows.dart';
 
 /// Floating white/off-white search pill for the redesigned
 /// CustomerHomeScreen — replaces the previous bottom-right
@@ -108,7 +109,7 @@ class HomeFloatingBagButton extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: Text(
-                    '$itemCount',
+                    formatCount(itemCount, Localizations.localeOf(context).toString()),
                     style: const TextStyle(
                       color: VendorPalette.background,
                       fontSize: 11,

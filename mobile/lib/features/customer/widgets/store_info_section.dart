@@ -132,11 +132,13 @@ class _StoreInfoSectionState extends State<StoreInfoSection> {
                           decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
                         ),
                         const SizedBox(width: AppSpacing.xs),
-                        Text(
-                          _statusText(l10n),
-                          textAlign: TextAlign.center,
-                          style: textTheme.bodyMedium
-                              ?.copyWith(color: statusColor, fontWeight: FontWeight.w600),
+                        Flexible(
+                          child: Text(
+                            _statusText(l10n),
+                            textAlign: TextAlign.center,
+                            style: textTheme.bodyMedium
+                                ?.copyWith(color: statusColor, fontWeight: FontWeight.w600),
+                          ),
                         ),
                       ],
                     ),
@@ -187,10 +189,12 @@ class _StoreInfoSectionState extends State<StoreInfoSection> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              _moreInfoExpanded ? l10n.lessInfoLabel : l10n.moreInfoLabel,
-                              textAlign: TextAlign.center,
-                              style: textTheme.labelLarge?.copyWith(color: VendorPalette.primaryCyan),
+                            Flexible(
+                              child: Text(
+                                _moreInfoExpanded ? l10n.lessInfoLabel : l10n.moreInfoLabel,
+                                textAlign: TextAlign.center,
+                                style: textTheme.labelLarge?.copyWith(color: VendorPalette.primaryCyan),
+                              ),
                             ),
                             AnimatedRotation(
                               turns: _moreInfoExpanded ? 0.5 : 0,

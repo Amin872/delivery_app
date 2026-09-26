@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import '../../../core/format/display_formatters.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../l10n/app_localizations.dart';
@@ -102,7 +103,7 @@ class ProfileHeader extends StatelessWidget {
                             const SizedBox(width: 4),
                             Flexible(
                               child: Text(
-                                phoneNumber!,
+                                formatPhone(phoneNumber!),
                                 style: textTheme.bodySmall
                                     ?.copyWith(color: colorScheme.onSurfaceVariant),
                                 maxLines: 1,

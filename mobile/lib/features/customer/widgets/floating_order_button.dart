@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/format/display_formatters.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../l10n/app_localizations.dart';
+import 'adaptive_label_value.dart';
 import 'most_ordered_card.dart' show orderAccentBackground;
 
 /// Floating "عرض الطلبية" pill replacing the old full-width `StoreCartBar`
@@ -34,6 +36,7 @@ class FloatingOrderButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final textTheme = Theme.of(context).textTheme;
+    final labelStyle = textTheme.titleSmall?.copyWith(color: VendorPalette.background, fontWeight: FontWeight.w700);
 
     return Material(
       color: orderAccentBackground,
@@ -42,43 +45,31 @@ class FloatingOrderButton extends StatelessWidget {
       child: InkWell(
         borderRadius: AppRadius.large,
         onTap: onTap,
-        child: Container(
-          height: _height,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                totalLabel,
-                style: textTheme.titleSmall
-                    ?.copyWith(color: VendorPalette.background, fontWeight: FontWeight.w700),
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    l10n.viewOrderButtonLabel,
-                    style: textTheme.titleSmall
-                        ?.copyWith(color: VendorPalette.background, fontWeight: FontWeight.w700),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: _height),
+          child: Padding(
+            padding: const EdgeInsetsDirectional.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.xs),
+            child: Center(
+              child: AdaptiveLabelValue(
+                label: l10n.viewOrderButtonLabel,
+                value: totalLabel,
+                valueFirst: true,
+                style: labelStyle,
+                trailingExtent: _badgeSize,
+                // A pill that is a circle for 1–2 digits and widens for more,
+                // rather than a fixed circle that clips "128".
+                trailing: Container(
+                  constraints: const BoxConstraints(minWidth: _badgeSize, minHeight: _badgeSize),
+                  padding: const EdgeInsetsDirectional.symmetric(horizontal: AppSpacing.xs),
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(color: VendorPalette.background, borderRadius: AppRadius.pill),
+                  child: Text(
+                    formatCount(itemCount, Localizations.localeOf(context).toString()),
+                    style: textTheme.labelMedium?.copyWith(color: orderAccentBackground, fontWeight: FontWeight.w700),
                   ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Container(
-                    width: _badgeSize,
-                    height: _badgeSize,
-                    alignment: Alignment.center,
-                    decoration: const BoxDecoration(
-                      color: VendorPalette.background,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text(
-                      '$itemCount',
-                      style: textTheme.labelMedium
-                          ?.copyWith(color: orderAccentBackground, fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ],
+            ),
           ),
         ),
       ),

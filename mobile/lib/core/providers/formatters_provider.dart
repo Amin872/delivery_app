@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../format/display_formatters.dart';
 import 'preferences_provider.dart';
 
 /// Rebuilt only when [localeProvider] changes, instead of on every widget
@@ -20,5 +21,5 @@ final dateTimeFormatProvider = Provider<DateFormat>((ref) {
 /// grouping as [currencyFormatProvider], instead of raw `'$count'`.
 final countFormatProvider = Provider<NumberFormat>((ref) {
   final locale = ref.watch(localeProvider);
-  return NumberFormat.decimalPattern(locale.toString());
+  return countNumberFormat(locale.toString());
 });

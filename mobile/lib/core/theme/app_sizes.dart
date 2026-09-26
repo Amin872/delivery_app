@@ -10,6 +10,10 @@ class AppSizes {
   /// Primary/secondary buttons (filled, outlined, elevated, gradient).
   static const double buttonHeight = 48;
 
+  /// Prominent bottom-bar actions (the product sheet's order bar). A
+  /// minimum: these grow with the text scale rather than clipping.
+  static const double largeButtonHeight = 56;
+
   /// Text buttons and inline actions.
   static const double compactButtonHeight = 44;
 
