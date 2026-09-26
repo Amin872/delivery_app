@@ -318,6 +318,19 @@ class _DeliveryLocationTile extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
+    return LayoutBuilder(
+      builder: (context, constraints) =>
+          _buildTile(context, l10n, colorScheme, textTheme, constraints.maxWidth * 0.35),
+    );
+  }
+
+  Widget _buildTile(
+    BuildContext context,
+    AppLocalizations l10n,
+    ColorScheme colorScheme,
+    TextTheme textTheme,
+    double actionMaxWidth,
+  ) {
     if (address == null) {
       return Material(
         color: colorScheme.errorContainer.withValues(alpha: 0.4),
@@ -334,7 +347,15 @@ class _DeliveryLocationTile extends StatelessWidget {
                 Expanded(
                   child: Text(l10n.noDeliveryLocationMessage, style: textTheme.bodyMedium),
                 ),
-                Text(l10n.addDeliveryLocationButton, style: textTheme.labelLarge),
+                const SizedBox(width: AppSpacing.sm),
+                _TrailingAction(
+                  maxWidth: actionMaxWidth,
+                  child: Text(
+                    l10n.addDeliveryLocationButton,
+                    style: textTheme.labelLarge,
+                    textAlign: TextAlign.end,
+                  ),
+                ),
               ],
             ),
           ),
@@ -388,12 +409,33 @@ class _DeliveryLocationTile extends StatelessWidget {
                   ],
                 ),
               ),
-              TextButton(onPressed: onChange, child: Text(l10n.changeLocationButton)),
+              _TrailingAction(
+                maxWidth: actionMaxWidth,
+                child: TextButton(
+                  onPressed: onChange,
+                  child: Text(l10n.changeLocationButton, textAlign: TextAlign.center),
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+}
+
+/// Caps the tile's trailing action at a share of the tile's width so a long
+/// label (or a large text scale) wraps instead of pushing the Row past its
+/// bounds and squeezing the Expanded address text to nothing.
+class _TrailingAction extends StatelessWidget {
+  const _TrailingAction({required this.maxWidth, required this.child});
+
+  final double maxWidth;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(constraints: BoxConstraints(maxWidth: maxWidth), child: child);
   }
 }
 

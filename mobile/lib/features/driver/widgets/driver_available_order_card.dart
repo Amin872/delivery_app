@@ -50,16 +50,26 @@ class DriverAvailableOrderCard extends ConsumerWidget {
             ),
             DriverOrderLocations(order: order),
             const SizedBox(height: AppSpacing.sm),
+            // The amount (label + value) is the flexible side, aligned to the
+            // end: the label is long in Arabic, so it wraps instead of
+            // pushing the Row past the card's width.
             Row(
               children: [
+                Text(
+                  l10n.orderItemCount(orderItemQuantity(order)),
+                  style: textTheme.bodySmall,
+                ),
+                const SizedBox(width: AppSpacing.sm),
                 Expanded(
-                  child: Text(
-                    l10n.orderItemCount(orderItemQuantity(order)),
-                    style: textTheme.bodySmall,
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text('${l10n.amountToCollectLabel}: ', style: textTheme.bodySmall),
+                      Text(currencyFormat.format(order.total), style: textTheme.titleSmall),
+                    ],
                   ),
                 ),
-                Text('${l10n.amountToCollectLabel}: ', style: textTheme.bodySmall),
-                Text(currencyFormat.format(order.total), style: textTheme.titleSmall),
               ],
             ),
           ],

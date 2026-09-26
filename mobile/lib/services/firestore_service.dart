@@ -501,11 +501,14 @@ class FirestoreService {
         snap.docs.map((doc) => DeliveryOrder.fromMap(doc.id, doc.data())).toList()));
   }
 
+  // A missing drivers/{uid} doc (e.g. a driver account created without one)
+  // is reported as not-found rather than failing a null check.
   Stream<Driver> watchDriver(String driverId) {
-    return guardStream(_drivers
-        .doc(driverId)
-        .snapshots()
-        .map((doc) => Driver.fromMap(doc.id, doc.data()!)));
+    return guardStream(_drivers.doc(driverId).snapshots().map((doc) {
+      final data = doc.data();
+      if (data == null) throw const AppException('not-found');
+      return Driver.fromMap(doc.id, data);
+    }));
   }
 
   // The customer-facing live-tracking feed for one specific order — see the

@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errors/error_messages.dart';
 import '../../../core/location/navigation_launcher.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/responsive_center.dart';
@@ -211,8 +210,9 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
         ],
       ),
       // One scroll for the whole screen: the active delivery (full height,
-      // when there is one) scrolls away above the queue, which fills the
-      // rest of the viewport exactly as it would on its own.
+      // when there is one) comes first and the queue follows it as more
+      // slivers of the same scroll — never a nested list squeezed into
+      // whatever viewport space the card leaves over.
       body: ResponsiveCenter(
         child: CustomScrollView(
           slivers: [
@@ -229,51 +229,71 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                   ),
                 ),
               ),
-            SliverFillRemaining(
-              child: driverSelfAsync == null || driverSelf == null
-                  ? (driverSelfAsync?.hasError ?? false)
-                        ? Center(child: Text(localizedErrorMessage(context, driverSelfAsync!.error!)))
-                        : const ListSkeletonLoader()
-                  : !isApproved
-                  ? _DriverStatusView.approval(driverSelf.approvalStatus)
-                  : isOnline
-                  ? _buildAvailableOrders(context)
-                  : const _DriverStatusView.offline(),
-            ),
+            if (driverSelfAsync == null || driverSelf == null)
+              (driverSelfAsync?.hasError ?? false)
+                  ? _messageSliver(localizedErrorMessage(context, driverSelfAsync!.error!))
+                  : const _SkeletonSliver()
+            else if (!isApproved)
+              _statusSliver(_DriverStatusView.approval(driverSelf.approvalStatus))
+            else if (isOnline)
+              _buildAvailableOrders(context)
+            else
+              _statusSliver(const _DriverStatusView.offline()),
           ],
         ),
       ),
     );
   }
 
+  // Fills the rest of the viewport below the active card (or the whole
+  // viewport without one), and grows past it when its content needs more.
+  static Widget _statusSliver(Widget child) => SliverFillRemaining(hasScrollBody: false, child: child);
+
+  static Widget _messageSliver(String message) => _statusSliver(
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Text(message, textAlign: TextAlign.center),
+          ),
+        ),
+      );
+
   // The unclaimed readyForPickup queue. Only built (and so only queried) for
   // an approved driver — firestore.rules denies the query to anyone else.
   Widget _buildAvailableOrders(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return ref
-        .watch(availableOrdersProvider)
-        .animatedWhen(
+    return ref.watch(availableOrdersProvider).when(
           data: (orders) {
-            if (orders.isEmpty) {
-              return Center(child: Text(l10n.noDeliveriesMessage));
-            }
-            return ListView.builder(
+            if (orders.isEmpty) return _messageSliver(l10n.noDeliveriesMessage);
+            return SliverPadding(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: orders.length,
-              itemBuilder: (context, index) {
-                final order = orders[index];
-                return DriverAvailableOrderCard(
-                  order: order,
-                  isAccepting: _acceptingOrderIds.contains(order.id),
-                  onAccept: () => _accept(order),
-                ).staggeredEntrance(index);
-              },
+              sliver: SliverList.builder(
+                itemCount: orders.length,
+                itemBuilder: (context, index) {
+                  final order = orders[index];
+                  return DriverAvailableOrderCard(
+                    order: order,
+                    isAccepting: _acceptingOrderIds.contains(order.id),
+                    onAccept: () => _accept(order),
+                  ).staggeredEntrance(index);
+                },
+              ),
             );
           },
-          loading: () => const ListSkeletonLoader(),
-          error: (error, _) => Center(child: Text(localizedErrorMessage(context, error))),
+          loading: () => const _SkeletonSliver(),
+          error: (error, _) => _messageSliver(localizedErrorMessage(context, error)),
         );
   }
+}
+
+/// Loading placeholder for the area below the active card. The skeleton is
+/// its own (non-interactive) list, so it takes whatever viewport space is
+/// left rather than adding scroll extent.
+class _SkeletonSliver extends StatelessWidget {
+  const _SkeletonSliver();
+
+  @override
+  Widget build(BuildContext context) => const SliverFillRemaining(child: ListSkeletonLoader());
 }
 
 enum _DriverStatusKind { pending, rejected, offline }
