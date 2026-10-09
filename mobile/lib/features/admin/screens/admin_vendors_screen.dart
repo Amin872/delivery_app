@@ -5,17 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errors/error_messages.dart';
 import '../../../core/format/display_formatters.dart';
 import '../../../core/l10n/enum_labels.dart';
+import '../../../core/paging/paged_list_controller.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_sizes.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/status_badge.dart';
-import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/gradient_button.dart';
-import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/city.dart';
@@ -23,24 +21,19 @@ import '../../../models/vendor.dart';
 import '../../customer/screens/customer_home_screen.dart'
     show allCitiesProvider, firestoreServiceProvider;
 import '../widgets/admin_actions.dart';
+import '../widgets/admin_paged_list.dart';
 import '../widgets/admin_scaffold.dart';
-import '../../../core/widgets/state_views.dart';
-
-/// Full restaurant directory (any approvalStatus/isOpen), unlike
-/// [pendingVendorsProvider] (approval queue only, still used by
-/// AdminDashboardScreen's count card).
-final allVendorsProvider = StreamProvider<List<Vendor>>((ref) {
-  return ref.watch(firestoreServiceProvider).watchAllVendors();
-});
 
 /// Restaurant Management — every vendor regardless of approval/open state,
-/// searchable and filterable. A pending vendor shows Approve / Reject
-/// buttons on its card; an already-decided vendor can be reversed (approve
-/// a rejected one, reject an approved one) from the card's overflow menu,
-/// which also holds the edit-details form (the same `updateVendorDetails`
-/// the vendor's own dashboard uses). Every approval change and closing an
-/// open restaurant asks for confirmation first; firestore.rules is still
-/// what decides whether the write is allowed.
+/// 25 per page with "Load more"; the status chips and the name search run
+/// on the server (and restart the list). A pending vendor shows Approve /
+/// Reject buttons on its card; an already-decided vendor can be reversed
+/// (approve a rejected one, reject an approved one) from the card's
+/// overflow menu, which also holds the edit-details form (the same
+/// `updateVendorDetails` the vendor's own dashboard uses). Every approval
+/// change and closing an open restaurant asks for confirmation first;
+/// firestore.rules is still what decides whether the write is allowed.
+/// After any change, only that vendor's row is re-read.
 class AdminVendorsScreen extends ConsumerStatefulWidget {
   const AdminVendorsScreen({super.key});
 
@@ -55,8 +48,56 @@ class _AdminVendorsScreenState extends ConsumerState<AdminVendorsScreen> {
   // until it settles, so a double tap can't send twice.
   final Set<String> _approvalBusy = {};
 
-  Future<void> _openEditForm(Vendor vendor) {
-    return showModalBottomSheet<void>(
+  late final PagedListController<Vendor> _vendors = PagedListController(
+    idOf: (vendor) => vendor.id,
+    fetchPage: (cursor) => ref
+        .read(firestoreServiceProvider)
+        .fetchVendorsPage(status: _statusFilter, namePrefix: _query, after: cursor),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _vendors.refresh();
+  }
+
+  @override
+  void dispose() {
+    _vendors.dispose();
+    super.dispose();
+  }
+
+  void _setQuery(String query) {
+    if (query == _query) return;
+    setState(() => _query = query);
+    _vendors.refresh();
+  }
+
+  void _setStatusFilter(VendorApprovalStatus? status) {
+    if (status == _statusFilter) return;
+    setState(() => _statusFilter = status);
+    _vendors.refresh();
+  }
+
+  /// Re-reads one vendor after a change and patches its row — or drops it
+  /// when it no longer matches the active status chip. A failed re-read
+  /// leaves the row as it was (the write itself already reported).
+  Future<void> _refreshVendor(String vendorId) async {
+    try {
+      final fresh = await ref.read(firestoreServiceProvider).fetchVendor(vendorId);
+      if (!mounted) return;
+      if (fresh == null || (_statusFilter != null && fresh.approvalStatus != _statusFilter)) {
+        _vendors.remove(vendorId);
+      } else {
+        _vendors.replace(fresh);
+      }
+    } catch (_) {
+      // Keep the row as it was; the write's own outcome was already shown.
+    }
+  }
+
+  Future<void> _openEditForm(Vendor vendor) async {
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (context) => Padding(
@@ -64,6 +105,7 @@ class _AdminVendorsScreenState extends ConsumerState<AdminVendorsScreen> {
         child: _AdminVendorEditForm(vendor: vendor),
       ),
     );
+    if (mounted) await _refreshVendor(vendor.id);
   }
 
   Future<void> _setApproval(Vendor vendor, VendorApprovalStatus status) async {
@@ -80,17 +122,19 @@ class _AdminVendorsScreenState extends ConsumerState<AdminVendorsScreen> {
 
     HapticFeedback.lightImpact();
     setState(() => _approvalBusy.add(vendor.id));
-    await runAdminWrite(
+    final ok = await runAdminWrite(
       context,
       () => ref.read(firestoreServiceProvider).setVendorApprovalStatus(vendor.id, status),
       successMessage: approve ? l10n.vendorApprovedMessage : l10n.vendorRejectedByAdminMessage,
     );
+    if (ok && mounted) await _refreshVendor(vendor.id);
     if (mounted) setState(() => _approvalBusy.remove(vendor.id));
   }
 
   /// Opening is immediate; closing a live restaurant stops its orders, so
   /// it's confirmed first. Resolves false when backed out or failed, so the
-  /// switch rolls back.
+  /// switch rolls back; on success the row is re-read before the switch
+  /// settles, so it shows the stored state.
   Future<bool> _setOpen(Vendor vendor, bool open) async {
     if (!open) {
       final l10n = AppLocalizations.of(context)!;
@@ -98,12 +142,13 @@ class _AdminVendorsScreenState extends ConsumerState<AdminVendorsScreen> {
       if (confirmed != true || !mounted) return false;
     }
     HapticFeedback.selectionClick();
-    return runAdminWrite(context, () => ref.read(firestoreServiceProvider).setVendorOpen(vendor.id, open));
+    final ok = await runAdminWrite(context, () => ref.read(firestoreServiceProvider).setVendorOpen(vendor.id, open));
+    if (ok && mounted) await _refreshVendor(vendor.id);
+    return ok;
   }
 
   @override
   Widget build(BuildContext context) {
-    final vendorsAsync = ref.watch(allVendorsProvider);
     final liveCities = ref.watch(allCitiesProvider).valueOrNull ?? const <CityOption>[];
     final l10n = AppLocalizations.of(context)!;
 
@@ -113,17 +158,10 @@ class _AdminVendorsScreenState extends ConsumerState<AdminVendorsScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextField(
-            style: const TextStyle(color: VendorPalette.textPrimary),
-            decoration: InputDecoration(
-              hintText: l10n.searchVendorsHint,
-              hintStyle: const TextStyle(color: VendorPalette.textMuted),
-              prefixIcon: const Icon(Icons.search, color: VendorPalette.textSecondary),
-              filled: true,
-              fillColor: VendorPalette.surfaceContainer,
-              border: OutlineInputBorder(borderRadius: AppRadius.medium, borderSide: BorderSide.none),
-            ),
-            onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
+          AdminSearchField(
+            hintText: l10n.searchVendorsHint,
+            helperText: l10n.searchStartsWithHelper,
+            onChanged: _setQuery,
           ),
           const SizedBox(height: AppSpacing.md),
           AdminFilterChipBar(
@@ -131,49 +169,30 @@ class _AdminVendorsScreenState extends ConsumerState<AdminVendorsScreen> {
               ChoiceChip(
                 label: Text(l10n.allStatusesLabel),
                 selected: _statusFilter == null,
-                onSelected: (_) => setState(() => _statusFilter = null),
+                onSelected: (_) => _setStatusFilter(null),
               ),
               for (final status in VendorApprovalStatus.values)
                 ChoiceChip(
                   label: Text(vendorApprovalStatusLabel(context, status)),
                   selected: _statusFilter == status,
-                  onSelected: (_) => setState(() => _statusFilter = status),
+                  onSelected: (_) => _setStatusFilter(status),
                 ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
           Expanded(
-            child: vendorsAsync.animatedWhen(
-              data: (vendors) {
-                final filtered = vendors.where((vendor) {
-                  final matchesQuery =
-                      _query.isEmpty || vendor.name.toLowerCase().contains(_query);
-                  final matchesStatus =
-                      _statusFilter == null || vendor.approvalStatus == _statusFilter;
-                  return matchesQuery && matchesStatus;
-                }).toList();
-                if (filtered.isEmpty) {
-                  return EmptyState(message: l10n.noVendorsFoundMessage);
-                }
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) {
-                    final vendor = filtered[index];
-                    return _VendorCard(
-                      key: ValueKey('admin_vendor_${vendor.id}'),
-                      vendor: vendor,
-                      cities: liveCities,
-                      busy: _approvalBusy.contains(vendor.id),
-                      onEdit: () => _openEditForm(vendor),
-                      onSetApproval: (status) => _setApproval(vendor, status),
-                      onSetOpen: (open) => _setOpen(vendor, open),
-                    ).staggeredEntrance(index);
-                  },
-                );
-              },
-              loading: () => const ListSkeletonLoader(),
-              error: (error, _) => ErrorState(error: error, onRetry: () => ref.invalidate(allVendorsProvider)),
+            child: AdminPagedList<Vendor>(
+              controller: _vendors,
+              emptyMessage: l10n.noVendorsFoundMessage,
+              itemBuilder: (context, vendor, index) => _VendorCard(
+                key: ValueKey('admin_vendor_${vendor.id}'),
+                vendor: vendor,
+                cities: liveCities,
+                busy: _approvalBusy.contains(vendor.id),
+                onEdit: () => _openEditForm(vendor),
+                onSetApproval: (status) => _setApproval(vendor, status),
+                onSetOpen: (open) => _setOpen(vendor, open),
+              ).staggeredEntrance(index),
             ),
           ),
         ],

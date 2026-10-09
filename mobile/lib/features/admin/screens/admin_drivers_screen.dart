@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/l10n/enum_labels.dart';
+import '../../../core/paging/paged_list_controller.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/status_badge.dart';
-import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../core/widgets/star_rating.dart';
 import '../../../l10n/app_localizations.dart';
@@ -15,15 +14,11 @@ import '../../../models/approval_status.dart';
 import '../../../models/driver.dart';
 import '../../../routing/page_transitions.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
+import '../../../services/firestore_service.dart' show DriverAccount;
 import '../widgets/admin_actions.dart';
+import '../widgets/admin_paged_list.dart';
 import '../widgets/admin_scaffold.dart';
 import 'admin_driver_detail_screen.dart';
-import 'admin_users_screen.dart' show allUsersProvider;
-import '../../../core/widgets/state_views.dart';
-
-final allDriversProvider = StreamProvider.autoDispose<List<Driver>>((ref) {
-  return ref.watch(firestoreServiceProvider).watchAllDrivers();
-});
 
 class DriverRow {
   const DriverRow({
@@ -82,11 +77,21 @@ List<DriverRow> filterDriverRows(List<DriverRow> rows, {required String query, A
       .toList();
 }
 
-/// Admin driver directory — joins `drivers` (availability/rating/approval)
-/// with `users` (identity) via [buildDriverRows], the same join
-/// `AdminOrderDetailScreen`'s reassignment picker uses. Each row shows the
-/// driver's approval state; approving/rejecting happens on
-/// [AdminDriverDetailScreen]. No enable/disable or suspension here.
+/// The rows for one page of driver accounts — the same join and
+/// driver-role check as [buildDriverRows], over just that page.
+List<DriverRow> driverRowsForAccounts(List<DriverAccount> accounts) => buildDriverRows(
+      [for (final account in accounts) account.driver],
+      [for (final account in accounts) account.user],
+    );
+
+/// Admin driver directory — `drivers` (availability/rating/approval) joined
+/// with `users` (identity), 25 per page with "Load more"
+/// (FirestoreService.fetchDriverAccountsPage). The approval chips filter on
+/// the server; the search is a server-side name prefix (or email prefix
+/// with `@`) on `users`, and when it's combined with a chip that page is
+/// filtered by status here, so it can hold fewer than 25 rows. Approving /
+/// rejecting happens on [AdminDriverDetailScreen]; the row is re-read when
+/// the admin comes back. No enable/disable or suspension here.
 class AdminDriversScreen extends ConsumerStatefulWidget {
   const AdminDriversScreen({super.key});
 
@@ -99,6 +104,62 @@ class _AdminDriversScreenState extends ConsumerState<AdminDriversScreen> {
   // Null = all. Combined with [_query] (both must match).
   ApprovalStatus? _statusFilter;
 
+  late final PagedListController<DriverRow> _drivers = PagedListController(
+    idOf: (row) => row.driverId,
+    fetchPage: (cursor) async {
+      final page = await ref
+          .read(firestoreServiceProvider)
+          .fetchDriverAccountsPage(status: _statusFilter, search: _query, after: cursor);
+      // The search path pages `users`, so its status chip applies here.
+      return page.withItems(filterDriverRows(driverRowsForAccounts(page.items), query: '', status: _statusFilter));
+    },
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _drivers.refresh();
+  }
+
+  @override
+  void dispose() {
+    _drivers.dispose();
+    super.dispose();
+  }
+
+  void _setQuery(String query) {
+    if (query == _query) return;
+    setState(() => _query = query);
+    _drivers.refresh();
+  }
+
+  void _setStatusFilter(ApprovalStatus? status) {
+    if (status == _statusFilter) return;
+    setState(() => _statusFilter = status);
+    _drivers.refresh();
+  }
+
+  // The detail screen can approve or reject the driver: re-read just that
+  // account on return (dropping it if it no longer matches the chip).
+  Future<void> _openDriver(DriverRow row) async {
+    await Navigator.of(context).push(fadeSlideRoute(AdminDriverDetailScreen(driverId: row.driverId)));
+    if (!mounted) return;
+    try {
+      final account = await ref.read(firestoreServiceProvider).fetchDriverAccount(row.driverId);
+      if (!mounted) return;
+      final fresh = account == null
+          ? const <DriverRow>[]
+          : filterDriverRows(driverRowsForAccounts([account]), query: '', status: _statusFilter);
+      if (fresh.isEmpty) {
+        _drivers.remove(row.driverId);
+      } else {
+        _drivers.replace(fresh.single);
+      }
+    } catch (_) {
+      // Keep the row as it was.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -109,121 +170,89 @@ class _AdminDriversScreenState extends ConsumerState<AdminDriversScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextField(
-            style: const TextStyle(color: VendorPalette.textPrimary),
-            decoration: InputDecoration(
-              hintText: l10n.searchDriversHint,
-              hintStyle: const TextStyle(color: VendorPalette.textMuted),
-              prefixIcon: const Icon(Icons.search, color: VendorPalette.textSecondary),
-              filled: true,
-              fillColor: VendorPalette.surfaceContainer,
-              border: OutlineInputBorder(borderRadius: AppRadius.medium, borderSide: BorderSide.none),
-            ),
-            onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
+          AdminSearchField(
+            hintText: l10n.searchDriversHint,
+            helperText: l10n.searchStartsWithHelper,
+            onChanged: _setQuery,
           ),
           const SizedBox(height: AppSpacing.md),
           // Same approval chips as AdminVendorsScreen (same three states and
-          // labels); filtering is client-side over the existing stream.
+          // labels).
           AdminFilterChipBar(
             chips: [
               ChoiceChip(
                 key: const ValueKey('driver_filter_all'),
                 label: Text(l10n.allStatusesLabel),
                 selected: _statusFilter == null,
-                onSelected: (_) => setState(() => _statusFilter = null),
+                onSelected: (_) => _setStatusFilter(null),
               ),
               for (final status in ApprovalStatus.values)
                 ChoiceChip(
                   key: ValueKey('driver_filter_${status.name}'),
                   label: Text(vendorApprovalStatusLabel(context, status)),
                   selected: _statusFilter == status,
-                  onSelected: (_) => setState(() => _statusFilter = status),
+                  onSelected: (_) => _setStatusFilter(status),
                 ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          Expanded(child: _DriverList(query: _query, status: _statusFilter)),
+          Expanded(
+            child: AdminPagedList<DriverRow>(
+              controller: _drivers,
+              emptyMessage: l10n.noDriversFoundMessage,
+              itemBuilder: (context, row, index) => _DriverTile(row: row, onTap: () => _openDriver(row))
+                  .staggeredEntrance(index),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _DriverList extends ConsumerWidget {
-  const _DriverList({required this.query, required this.status});
+class _DriverTile extends StatelessWidget {
+  const _DriverTile({required this.row, required this.onTap});
 
-  final String query;
-  final ApprovalStatus? status;
+  final DriverRow row;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context)!;
-    final driversAsync = ref.watch(allDriversProvider);
-    final usersAsync = ref.watch(allUsersProvider);
-
-    if (driversAsync.isLoading || usersAsync.isLoading) {
-      return const ListSkeletonLoader();
-    }
-    if (driversAsync.hasError) {
-      return ErrorState(error: driversAsync.error!, onRetry: () => ref.invalidate(allDriversProvider));
-    }
-    if (usersAsync.hasError) {
-      return ErrorState(error: usersAsync.error!, onRetry: () => ref.invalidate(allUsersProvider));
-    }
-
-    final filtered = filterDriverRows(
-      buildDriverRows(driversAsync.value!, usersAsync.value!),
-      query: query,
-      status: status,
-    );
-
-    if (filtered.isEmpty) {
-      return EmptyState(message: l10n.noDriversFoundMessage);
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: filtered.length,
-      itemBuilder: (context, index) {
-        final row = filtered[index];
-        return Card(
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: VendorPalette.surfaceElevated,
-              child: Text(
-                row.name.isNotEmpty ? row.name[0].toUpperCase() : '?',
-                style: const TextStyle(color: VendorPalette.textPrimary),
-              ),
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: VendorPalette.surfaceElevated,
+          child: Text(
+            row.name.isNotEmpty ? row.name[0].toUpperCase() : '?',
+            style: const TextStyle(color: VendorPalette.textPrimary),
+          ),
+        ),
+        title: Text(row.name, maxLines: 2, overflow: TextOverflow.ellipsis),
+        // The two status pills sit under the rating rather than stacked in
+        // `trailing`: ListTile caps trailing at the tile's fixed height,
+        // which two pills overflowed; here the tile grows with its content
+        // (and with the user's text scale).
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            StarRatingDisplay(
+              rating: row.averageRating,
+              count: row.ratingCount == 0 ? null : row.ratingCount,
+              size: 14,
             ),
-            title: Text(row.name, maxLines: 2, overflow: TextOverflow.ellipsis),
-            // The two status pills sit under the rating rather than stacked
-            // in `trailing`: ListTile caps trailing at the tile's fixed
-            // height, which two pills overflowed; here the tile grows with
-            // its content (and with the user's text scale).
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: AppSpacing.xs),
+            Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
               children: [
-                StarRatingDisplay(
-                  rating: row.averageRating,
-                  count: row.ratingCount == 0 ? null : row.ratingCount,
-                  size: 14,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Wrap(
-                  spacing: AppSpacing.xs,
-                  runSpacing: AppSpacing.xs,
-                  children: [
-                    DriverApprovalBadge(status: row.approvalStatus),
-                    _AvailabilityBadge(isAvailable: row.isAvailable),
-                  ],
-                ),
+                DriverApprovalBadge(status: row.approvalStatus),
+                _AvailabilityBadge(isAvailable: row.isAvailable),
               ],
             ),
-            onTap: () => Navigator.of(context)
-                .push(fadeSlideRoute(AdminDriverDetailScreen(driverId: row.driverId))),
-          ),
-        ).staggeredEntrance(index);
-      },
+          ],
+        ),
+        onTap: onTap,
+      ),
     );
   }
 }

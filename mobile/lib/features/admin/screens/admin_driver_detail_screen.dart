@@ -10,6 +10,7 @@ import '../../../core/widgets/status_badge.dart';
 import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_spinner.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
@@ -131,7 +132,7 @@ class _DriverDetailBody extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
-              _DriverApprovalActions(driverId: driverId, status: driver.approvalStatus),
+              _DriverApprovalActions(driverId: driverId, driverName: user.displayName, status: driver.approvalStatus),
             ]),
             const SizedBox(height: AppSpacing.md),
             InfoCard(children: [
@@ -185,9 +186,10 @@ class _DriverDetailBody extends ConsumerWidget {
 /// something (no "Approve" on an approved driver). While a write is in
 /// flight both buttons are disabled, so a double tap can't send twice.
 class _DriverApprovalActions extends ConsumerStatefulWidget {
-  const _DriverApprovalActions({required this.driverId, required this.status});
+  const _DriverApprovalActions({required this.driverId, required this.driverName, required this.status});
 
   final String driverId;
+  final String driverName;
   final ApprovalStatus status;
 
   @override
@@ -196,11 +198,28 @@ class _DriverApprovalActions extends ConsumerStatefulWidget {
 
 class _DriverApprovalActionsState extends ConsumerState<_DriverApprovalActions> {
   ApprovalStatus? _submitting;
+  // A confirmation dialog is open — a second tap can't open another.
+  bool _confirming = false;
 
+  /// Asks first (rejecting styled as destructive), the same as a vendor
+  /// decision, then writes with both buttons disabled until it settles.
   Future<void> _set(ApprovalStatus status) async {
-    if (_submitting != null) return;
+    if (_submitting != null || _confirming) return;
+    final approve = status == ApprovalStatus.approved;
+    var l10n = AppLocalizations.of(context)!;
+    _confirming = true;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: approve ? l10n.driverApproveConfirmTitle : l10n.driverRejectConfirmTitle,
+      message: approve
+          ? l10n.driverApproveConfirmMessage(widget.driverName)
+          : l10n.driverRejectConfirmMessage(widget.driverName),
+      isDestructive: !approve,
+    );
+    _confirming = false;
+    if (confirmed != true || !mounted) return;
     setState(() => _submitting = status);
-    final l10n = AppLocalizations.of(context)!;
+    l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     try {

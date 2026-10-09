@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:delivery_app/features/admin/screens/admin_driver_detail_screen.dart';
 import 'package:delivery_app/features/admin/screens/admin_drivers_screen.dart';
+import 'package:delivery_app/features/admin/widgets/admin_actions.dart';
 import 'package:delivery_app/models/approval_status.dart';
 
 import 'admin_test_harness.dart';
@@ -105,7 +106,9 @@ void main() {
       await pumpAdminScreen(tester, const AdminDriversScreen(), await _db(), size: _wide);
 
       await _tapChip(tester, 'driver_filter_pending');
-      await tester.enterText(find.byType(TextField), 'rana');
+      // A server-side name prefix (see FirestoreService.fetchDriverAccountsPage).
+      await tester.enterText(find.byType(TextField), 'Pending R');
+      await tester.pump(AdminSearchField.debounce);
       await tester.pumpAndSettle();
       expect(find.byType(ListTile), findsOneWidget);
       expect(find.text('Pending Rana'), findsOneWidget);

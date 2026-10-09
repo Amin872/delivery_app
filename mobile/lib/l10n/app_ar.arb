@@ -291,7 +291,7 @@
   "totalUsersLabel": "إجمالي المستخدمين",
   "totalVendorsLabel": "إجمالي المتاجر",
   "totalDriversLabel": "إجمالي السائقين",
-  "searchProductsHint": "ابحث باسم المنتج أو المتجر",
+  "searchProductsHint": "ابحث عن منتج بالاسم",
   "unavailableLabel": "غير متوفر",
   "noProductsFoundMessage": "لا توجد منتجات.",
   "confirmReassignMessage": "إعادة تعيين هذا الطلب إلى {name}؟",
@@ -517,5 +517,14 @@
   "ctaVendorUnavailableError": "هذا المتجر غير معتمد. اختر متجرًا معتمدًا أو اترك الحقل فارغًا.",
   "ctaIncompleteError": "حدّد نص الزر والمتجر المرتبط معًا، أو اتركهما فارغين.",
   "countLoadFailedLabel": "تعذّر تحميل العدد.",
-  "disableLocationUsageUnknownWarning": "تعذّر التحقق مما إذا كانت هناك مطاعم تستخدم هذا الموقع. لن يظهر كخيار جديد بعد الآن. هل تريد المتابعة؟"
+  "disableLocationUsageUnknownWarning": "تعذّر التحقق مما إذا كانت هناك مطاعم تستخدم هذا الموقع. لن يظهر كخيار جديد بعد الآن. هل تريد المتابعة؟",
+
+  "loadMoreButton": "تحميل المزيد",
+  "clearSearchTooltip": "مسح البحث",
+  "searchStartsWithHelper": "يعرض الأسماء التي تبدأ بما تكتبه. في الحروف اللاتينية، حالة الأحرف (كبيرة/صغيرة) مهمة.",
+  "ctaChooseVendorButton": "اختيار متجر",
+  "driverApproveConfirmTitle": "الموافقة على السائق؟",
+  "driverApproveConfirmMessage": "هل تريد الموافقة على {name}؟ سيتمكن من رؤية التوصيلات وقبولها.",
+  "driverRejectConfirmTitle": "رفض السائق؟",
+  "driverRejectConfirmMessage": "هل تريد رفض {name}؟ لن يتمكن من استلام توصيلات جديدة. يمكنك الموافقة عليه لاحقًا."
 }

@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:delivery_app/features/admin/screens/admin_locations_screen.dart';
 import 'package:delivery_app/models/city.dart';
 import 'package:delivery_app/models/governorate.dart';
-import 'package:delivery_app/models/vendor.dart';
 
 CityOption _city(String id, {String? governorateId, bool enabled = true, int order = 0}) {
   return CityOption(
@@ -18,18 +17,6 @@ CityOption _city(String id, {String? governorateId, bool enabled = true, int ord
 
 GovernorateOption _governorate(String id, {bool enabled = true, int order = 0}) {
   return GovernorateOption(id: id, nameEn: id, nameAr: id, enabled: enabled, order: order);
-}
-
-Vendor _vendor(String id, {required String city}) {
-  return Vendor(
-    id: id,
-    ownerId: 'owner-$id',
-    name: 'Vendor $id',
-    description: '',
-    isOpen: true,
-    approvalStatus: VendorApprovalStatus.approved,
-    city: city,
-  );
 }
 
 void main() {
@@ -77,46 +64,22 @@ void main() {
     });
   });
 
-  group('vendorCountForCity', () {
-    test('counts only vendors whose city matches', () {
-      final vendors = [
-        _vendor('v1', city: 'damascus'),
-        _vendor('v2', city: 'aleppo'),
-        _vendor('v3', city: 'damascus'),
-      ];
-
-      expect(vendorCountForCity(vendors, 'damascus'), 2);
-      expect(vendorCountForCity(vendors, 'aleppo'), 1);
-      expect(vendorCountForCity(vendors, 'homs'), 0);
-    });
-
-    test('returns 0 for an empty vendor list', () {
-      expect(vendorCountForCity(const [], 'damascus'), 0);
-    });
-  });
-
-  group('vendorCountForGovernorate', () {
-    test('counts vendors across every city assigned to the governorate', () {
-      final vendors = [
-        _vendor('v1', city: 'damascus'),
-        _vendor('v2', city: 'douma'),
-        _vendor('v3', city: 'aleppo'),
-      ];
+  group('cityIdsInGovernorate', () {
+    test('returns every city assigned to the governorate, and only those', () {
       final cities = [
         _city('damascus', governorateId: 'damascus'),
         _city('douma', governorateId: 'damascus'),
         _city('aleppo', governorateId: 'aleppo'),
+        _city('homs', governorateId: null),
       ];
 
-      expect(vendorCountForGovernorate(vendors, cities, 'damascus'), 2);
-      expect(vendorCountForGovernorate(vendors, cities, 'aleppo'), 1);
+      expect(cityIdsInGovernorate(cities, 'damascus'), {'damascus', 'douma'});
+      expect(cityIdsInGovernorate(cities, 'aleppo'), {'aleppo'});
     });
 
-    test('returns 0 when no city is assigned to the governorate', () {
-      final vendors = [_vendor('v1', city: 'damascus')];
-      final cities = [_city('damascus', governorateId: null)];
-
-      expect(vendorCountForGovernorate(vendors, cities, 'damascus'), 0);
+    test('is empty when no city is assigned to the governorate', () {
+      expect(cityIdsInGovernorate([_city('damascus', governorateId: null)], 'damascus'), isEmpty);
+      expect(cityIdsInGovernorate(const [], 'damascus'), isEmpty);
     });
   });
 

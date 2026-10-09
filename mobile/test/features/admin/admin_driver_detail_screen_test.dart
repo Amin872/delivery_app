@@ -67,6 +67,8 @@ Future<_ControlledApprovalService> _pump(WidgetTester tester, ApprovalStatus sta
   return service;
 }
 
+final _l10n = lookupAppLocalizations(const Locale('en'));
+
 void main() {
   testWidgets('pending driver: shows the status and both Approve and Reject', (tester) async {
     await _pump(tester, ApprovalStatus.pending);
@@ -93,14 +95,34 @@ void main() {
     expect(find.byKey(const ValueKey('driver_reject_button')), findsNothing);
   });
 
-  testWidgets('approve: busy blocks a second submission, then confirms', (tester) async {
+  testWidgets('approve asks for confirmation first; Cancel sends nothing', (tester) async {
     final service = await _pump(tester, ApprovalStatus.pending);
 
     await tester.tap(find.byKey(const ValueKey('driver_approve_button')));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(find.text(_l10n.driverApproveConfirmTitle), findsOneWidget);
+    expect(find.text(_l10n.driverApproveConfirmMessage('Driver One')), findsOneWidget);
+
+    await tester.tap(find.text(_l10n.cancelButton));
+    await tester.pumpAndSettle();
+    expect(service.writes, isEmpty);
+  });
+
+  testWidgets('approve: confirmed, busy blocks a second submission, then confirms', (tester) async {
+    final service = await _pump(tester, ApprovalStatus.pending);
+
     await tester.tap(find.byKey(const ValueKey('driver_approve_button')));
-    await tester.tap(find.byKey(const ValueKey('driver_reject_button')));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(_l10n.confirmButton));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(service.writes, [ApprovalStatus.approved]);
+
+    // Both buttons are disabled while the write is in flight.
+    await tester.tap(find.byKey(const ValueKey('driver_approve_button')), warnIfMissed: false);
+    await tester.tap(find.byKey(const ValueKey('driver_reject_button')), warnIfMissed: false);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text(_l10n.driverApproveConfirmTitle), findsNothing);
+    expect(find.text(_l10n.driverRejectConfirmTitle), findsNothing);
     expect(service.writes, [ApprovalStatus.approved]);
 
     service.pending.complete();
@@ -108,11 +130,21 @@ void main() {
     expect(find.text('Driver approved.'), findsOneWidget);
   });
 
-  testWidgets('a failed approval write shows a localized error', (tester) async {
+  testWidgets('reject is confirmed as destructive; a failed write shows a localized error', (tester) async {
     final service = await _pump(tester, ApprovalStatus.pending);
 
     await tester.tap(find.byKey(const ValueKey('driver_reject_button')));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(find.text(_l10n.driverRejectConfirmMessage('Driver One')), findsOneWidget);
+    final confirm = tester.widget<FilledButton>(find.widgetWithText(FilledButton, _l10n.confirmButton));
+    expect(
+      confirm.style?.backgroundColor?.resolve(<WidgetState>{}),
+      Theme.of(tester.element(find.byType(AlertDialog))).colorScheme.error,
+    );
+
+    await tester.tap(find.text(_l10n.confirmButton));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(service.writes, [ApprovalStatus.rejected]);
     service.pending.completeError(Exception('permission-denied'));
     await tester.pumpAndSettle();
 

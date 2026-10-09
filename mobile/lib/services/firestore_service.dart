@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../core/errors/app_exception.dart';
 import '../core/errors/guard.dart';
+import '../core/paging/page_result.dart';
 import '../models/address.dart';
 import '../models/app_user.dart';
 import '../models/approval_status.dart';
@@ -59,12 +62,9 @@ class FirestoreService {
   CollectionReference<Map<String, dynamic>> get _serviceAreas =>
       _db.collection('serviceAreas');
 
-  // AdminUsersScreen's list. NOTE: firestore.rules' users/{userId} read rule
-  // is currently `isSelf(userId)` only — there is no admin read branch yet
-  // (see ADMIN_AUDIT_REPORT.md §2/§15) — so this stream will surface a
-  // permission-denied AppException for every caller, admin included, until
-  // that rule is updated. Left as a plain, correct query rather than a
-  // workaround: the fix belongs in firestore.rules, not here.
+  // Every user doc, live. Readable by an admin (firestore.rules'
+  // users/{userId} read is `isSelf(userId) || hasRole('admin')`). The admin
+  // screens page through users with fetchUsersPage instead.
   Stream<List<AppUser>> watchAllUsers() {
     return guardStream(_users.snapshots().map(
         (snap) => snap.docs.map((doc) => AppUser.fromMap(doc.id, doc.data())).toList()));
@@ -825,4 +825,276 @@ class FirestoreService {
   Future<void> setServiceAreaEnabled(String serviceAreaId, bool enabled) {
     return guardFuture(() => _serviceAreas.doc(serviceAreaId).update({'enabled': enabled}));
   }
+
+  // ---------------------------------------------------------------------
+  // Admin paging, lookups and counts (Phase 2G).
+  //
+  // The admin lists read one bounded page at a time (one-time reads, not
+  // live listeners) via [_fetchPage]: filters are applied on the server
+  // before `limit`, the page asks for one record more than it shows to
+  // know whether another page exists, and the next page starts after the
+  // last document of the previous one. The live `watchAll*` streams above
+  // stay as they are for their other consumers (e.g. the customer feed's
+  // watchAllMenuItems).
+  //
+  // Search is a prefix match on a stored field (Firestore has no substring
+  // or case-insensitive matching): `field >= prefix && field < prefix +
+  // '\uf8ff'`, ordered by that field. It's case-sensitive for Latin
+  // letters, and a document without the field never matches a search.
+  // ---------------------------------------------------------------------
+
+  // Firestore's cap on values in one `whereIn`.
+  static const _whereInLimit = 30;
+
+  Query<Map<String, dynamic>> _startsWith(Query<Map<String, dynamic>> query, String field, String prefix) {
+    return query
+        .orderBy(field)
+        .where(field, isGreaterThanOrEqualTo: prefix)
+        .where(field, isLessThan: '$prefix\uf8ff');
+  }
+
+  Future<PageResult<T>> _fetchPage<T>(
+    Query<Map<String, dynamic>> query, {
+    required Object? after,
+    required int limit,
+    required T Function(String id, Map<String, dynamic> data) fromMap,
+  }) {
+    return guardFuture(() async {
+      var paged = query;
+      if (after != null) paged = paged.startAfterDocument(after as DocumentSnapshot<Object?>);
+      final docs = (await paged.limit(limit + 1).get()).docs;
+      final hasMore = docs.length > limit;
+      final pageDocs = hasMore ? docs.sublist(0, limit) : docs;
+      return PageResult(
+        items: [
+          for (final doc in pageDocs) ?_tryParse(doc.id, doc.data(), fromMap),
+        ],
+        // The cursor is the last document read, even one that failed to
+        // parse, so the next page never re-reads or skips anything.
+        cursor: pageDocs.isEmpty ? after : pageDocs.last,
+        hasMore: hasMore,
+      );
+    });
+  }
+
+  // A single malformed document (e.g. a legacy doc missing a required
+  // field) is left out of an admin page instead of failing the whole page.
+  static T? _tryParse<T>(String id, Map<String, dynamic> data, T Function(String, Map<String, dynamic>) fromMap) {
+    try {
+      return fromMap(id, data);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Bounded batch lookup by document id: one `whereIn` query per 30 ids
+  // rather than one read per id. Missing or malformed documents are absent
+  // from the result.
+  Future<Map<String, T>> _fetchByIds<T>(
+    CollectionReference<Map<String, dynamic>> collection,
+    Iterable<String> ids,
+    T Function(String id, Map<String, dynamic> data) fromMap,
+  ) {
+    return guardFuture(() async {
+      final unique = ids.toSet().toList();
+      final result = <String, T>{};
+      for (var start = 0; start < unique.length; start += _whereInLimit) {
+        final chunk = unique.sublist(start, math.min(start + _whereInLimit, unique.length));
+        final snapshot = await collection.where(FieldPath.documentId, whereIn: chunk).get();
+        for (final doc in snapshot.docs) {
+          final parsed = _tryParse(doc.id, doc.data(), fromMap);
+          if (parsed != null) result[doc.id] = parsed;
+        }
+      }
+      return result;
+    });
+  }
+
+  /// Admin Orders: newest first, optionally one status — the same query
+  /// shape as [watchAllOrders], served by the existing `createdAt` and
+  /// `(status, createdAt)` indexes.
+  Future<PageResult<DeliveryOrder>> fetchOrdersPage({
+    OrderStatus? status,
+    Object? after,
+    int limit = kAdminPageSize,
+  }) {
+    Query<Map<String, dynamic>> query = _orders;
+    if (status != null) query = query.where('status', isEqualTo: status.name);
+    query = query.orderBy('createdAt', descending: true);
+    return _fetchPage(query, after: after, limit: limit, fromMap: DeliveryOrder.fromMap);
+  }
+
+  /// Admin Restaurant Management. Without a search, document-id order
+  /// (Firestore's default, needs no index and includes docs with any
+  /// missing field); with one, `name` prefix order. A status filter is an
+  /// equality on `approvalStatus`, so a legacy doc without that field shows
+  /// under "All" but not under a status chip.
+  Future<PageResult<Vendor>> fetchVendorsPage({
+    ApprovalStatus? status,
+    String namePrefix = '',
+    Object? after,
+    int limit = kAdminPageSize,
+  }) {
+    Query<Map<String, dynamic>> query = _vendors;
+    if (status != null) query = query.where('approvalStatus', isEqualTo: status.name);
+    if (namePrefix.isNotEmpty) query = _startsWith(query, 'name', namePrefix);
+    return _fetchPage(query, after: after, limit: limit, fromMap: Vendor.fromMap);
+  }
+
+  /// Which user field a search runs against: an email when the text has an
+  /// `@`, the display name otherwise (Firestore can't OR two prefix ranges).
+  static String userSearchField(String search) => search.contains('@') ? 'email' : 'displayName';
+
+  /// Admin Users: document-id order, or a prefix search (see
+  /// [userSearchField]).
+  Future<PageResult<AppUser>> fetchUsersPage({
+    String search = '',
+    Object? after,
+    int limit = kAdminPageSize,
+  }) {
+    Query<Map<String, dynamic>> query = _users;
+    if (search.isNotEmpty) query = _startsWith(query, userSearchField(search), search);
+    return _fetchPage(query, after: after, limit: limit, fromMap: AppUser.fromMap);
+  }
+
+  /// Admin Drivers: a page of driver accounts, each `drivers/{uid}` doc
+  /// with its `users/{uid}` identity (joined by a bounded batch read).
+  /// Without a search, pages `drivers` (approval [status] filtered on the
+  /// server, document-id order). With one, the name/email lives on
+  /// `users`, so it pages `users` where role == driver by prefix and joins
+  /// the driver docs — the [status] filter isn't applied on that path (it
+  /// would need the same field on both collections); callers filter the
+  /// returned page. Accounts missing either doc are left out.
+  Future<PageResult<DriverAccount>> fetchDriverAccountsPage({
+    ApprovalStatus? status,
+    String search = '',
+    Object? after,
+    int limit = kAdminPageSize,
+  }) async {
+    if (search.isEmpty) {
+      Query<Map<String, dynamic>> query = _drivers;
+      if (status != null) query = query.where('approvalStatus', isEqualTo: status.name);
+      final page = await _fetchPage(query, after: after, limit: limit, fromMap: Driver.fromMap);
+      final users = await _fetchByIds(_users, page.items.map((driver) => driver.id), AppUser.fromMap);
+      return page.withItems([
+        for (final driver in page.items)
+          if (users[driver.id] case final user?) (driver: driver, user: user),
+      ]);
+    }
+    final query = _startsWith(
+      _users.where('role', isEqualTo: UserRole.driver.name),
+      userSearchField(search),
+      search,
+    );
+    final page = await _fetchPage(query, after: after, limit: limit, fromMap: AppUser.fromMap);
+    final drivers = await _fetchByIds(_drivers, page.items.map((user) => user.id), Driver.fromMap);
+    return page.withItems([
+      for (final user in page.items)
+        if (drivers[user.id] case final driver?) (driver: driver, user: user),
+    ]);
+  }
+
+  /// One driver account, for refreshing a single row after an admin action.
+  Future<DriverAccount?> fetchDriverAccount(String driverId) {
+    return guardFuture(() async {
+      final driverDoc = await _drivers.doc(driverId).get();
+      final userDoc = await _users.doc(driverId).get();
+      final driverData = driverDoc.data();
+      final userData = userDoc.data();
+      if (driverData == null || userData == null) return null;
+      final driver = _tryParse(driverDoc.id, driverData, Driver.fromMap);
+      final user = _tryParse(userDoc.id, userData, AppUser.fromMap);
+      if (driver == null || user == null) return null;
+      return (driver: driver, user: user);
+    });
+  }
+
+  /// Admin Products: every vendor's menu items (a collection-group query,
+  /// isolated from the customer feed's [watchAllMenuItems]), optionally
+  /// only (un)available ones, optionally a `name` prefix. An item without
+  /// an `available` field (read as available) matches no availability
+  /// filter — only "All".
+  Future<PageResult<MenuItem>> fetchMenuItemsPage({
+    bool? available,
+    String namePrefix = '',
+    Object? after,
+    int limit = kAdminPageSize,
+  }) {
+    Query<Map<String, dynamic>> query = _db.collectionGroup('menuItems');
+    if (available != null) query = query.where('available', isEqualTo: available);
+    if (namePrefix.isNotEmpty) query = _startsWith(query, 'name', namePrefix);
+    return _fetchPage(query, after: after, limit: limit, fromMap: MenuItem.fromMap);
+  }
+
+  /// One-time single reads, for refreshing one admin row after an action
+  /// or validating a stored reference. Null when the doc doesn't exist (or
+  /// can't be parsed).
+  Future<Vendor?> fetchVendor(String vendorId) {
+    return guardFuture(() async {
+      final doc = await _vendors.doc(vendorId).get();
+      final data = doc.data();
+      return data == null ? null : _tryParse(doc.id, data, Vendor.fromMap);
+    });
+  }
+
+  Future<DeliveryOrder?> fetchOrder(String orderId) {
+    return guardFuture(() async {
+      final doc = await _orders.doc(orderId).get();
+      final data = doc.data();
+      return data == null ? null : _tryParse(doc.id, data, DeliveryOrder.fromMap);
+    });
+  }
+
+  /// Vendors by id (e.g. the names behind one page of products).
+  Future<Map<String, Vendor>> fetchVendorsByIds(Iterable<String> vendorIds) =>
+      _fetchByIds(_vendors, vendorIds, Vendor.fromMap);
+
+  Future<int> _count(Query<Map<String, dynamic>> query) {
+    return guardFuture(() async => (await query.count().get()).count ?? 0);
+  }
+
+  // Docs with no (or an unrecognized) approvalStatus are read as pending by
+  // Vendor.fromMap/Driver.fromMap, but an equality query can't match a
+  // missing field — so "pending" is everything that is neither approved
+  // nor rejected: three server-side counts, no full download, no data
+  // migration needed.
+  Future<int> _countNotDecided(CollectionReference<Map<String, dynamic>> collection) async {
+    final counts = await Future.wait([
+      _count(collection),
+      _count(collection.where('approvalStatus', isEqualTo: ApprovalStatus.approved.name)),
+      _count(collection.where('approvalStatus', isEqualTo: ApprovalStatus.rejected.name)),
+    ]);
+    return math.max(0, counts[0] - counts[1] - counts[2]);
+  }
+
+  /// Vendors awaiting a decision, legacy docs without a status included.
+  Future<int> countPendingVendors() => _countNotDecided(_vendors);
+
+  /// Drivers awaiting a decision, legacy docs without a status included.
+  Future<int> countPendingDrivers() => _countNotDecided(_drivers);
+
+  /// How many vendors are in any of [cityIds] — the Locations in-use check,
+  /// as server-side counts rather than a download of every vendor.
+  Future<int> countVendorsInCities(Iterable<String> cityIds) async {
+    final unique = cityIds.toSet().toList();
+    var total = 0;
+    for (var start = 0; start < unique.length; start += _whereInLimit) {
+      final chunk = unique.sublist(start, math.min(start + _whereInLimit, unique.length));
+      total += await _count(_vendors.where('city', whereIn: chunk));
+    }
+    return total;
+  }
+
+  /// Saves an existing promotion's editable fields with a field-level
+  /// update. [includeEnabled] false leaves `enabled` exactly as stored, so
+  /// a form opened before someone toggled the promotion in the list can't
+  /// silently revert that toggle.
+  Future<void> updatePromotionDetails(Promotion promotion, {required bool includeEnabled}) {
+    final data = promotion.toMap();
+    if (!includeEnabled) data.remove('enabled');
+    return guardFuture(() => _promotions.doc(promotion.id).update(data));
+  }
 }
+
+/// A driver's `drivers/{uid}` doc together with its `users/{uid}` identity.
+typedef DriverAccount = ({Driver driver, AppUser user});

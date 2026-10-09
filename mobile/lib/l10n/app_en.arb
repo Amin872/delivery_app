@@ -342,7 +342,7 @@
   "totalUsersLabel": "Total users",
   "totalVendorsLabel": "Total vendors",
   "totalDriversLabel": "Total drivers",
-  "searchProductsHint": "Search by product or vendor name",
+  "searchProductsHint": "Search products by name",
   "unavailableLabel": "Unavailable",
   "noProductsFoundMessage": "No products found.",
   "confirmReassignMessage": "Reassign this order to {name}?",
@@ -641,5 +641,22 @@
   "ctaVendorUnavailableError": "This store isn't approved. Choose an approved store or none.",
   "ctaIncompleteError": "Set both the button label and the linked store, or leave both empty.",
   "countLoadFailedLabel": "Couldn't load the count.",
-  "disableLocationUsageUnknownWarning": "Couldn't check whether any restaurants use this location. It will stop appearing as a choice for new selections. Continue?"
+  "disableLocationUsageUnknownWarning": "Couldn't check whether any restaurants use this location. It will stop appearing as a choice for new selections. Continue?",
+
+  "loadMoreButton": "Load more",
+  "clearSearchTooltip": "Clear search",
+  "searchStartsWithHelper": "Finds names that start with what you type. For Latin letters, upper/lower case matters.",
+  "ctaChooseVendorButton": "Choose store",
+  "driverApproveConfirmTitle": "Approve driver?",
+  "driverApproveConfirmMessage": "Approve {name}? They will be able to see and accept deliveries.",
+  "@driverApproveConfirmMessage": {
+    "description": "Admin confirmation before approving a driver account.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "driverRejectConfirmTitle": "Reject driver?",
+  "driverRejectConfirmMessage": "Reject {name}? They won't be able to take new deliveries. You can approve them again later.",
+  "@driverRejectConfirmMessage": {
+    "description": "Admin confirmation before rejecting a driver account (also used to revoke an approval).",
+    "placeholders": {"name": {"type": "String"}}
+  }
 }

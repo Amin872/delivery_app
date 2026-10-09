@@ -1,28 +1,39 @@
+import 'dart:async';
+
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:delivery_app/features/admin/screens/admin_locations_screen.dart';
-import 'package:delivery_app/models/vendor.dart';
 import 'package:delivery_app/services/firestore_service.dart';
 
 import 'admin_test_harness.dart';
 
 const _rawError = 'permission-denied: raw backend detail';
 
+/// How the in-use count behaves: real, failing, or never answering.
+enum _UsageCount { real, fail, stall }
+
 /// Real FirestoreService over an in-memory Firestore, with the three
-/// enable/disable writes optionally failing, and the vendor list
-/// optionally failing to load.
+/// enable/disable writes optionally failing, and the vendor in-use count
+/// optionally failing or never completing.
 class _LocationService extends FirestoreService {
-  _LocationService(this.db, {this.failWrites = false, this.failVendorList = false}) : super(firestore: db);
+  _LocationService(this.db, {this.failWrites = false, this.usageCount = _UsageCount.real}) : super(firestore: db);
 
   final FakeFirebaseFirestore db;
   final bool failWrites;
-  final bool failVendorList;
+  final _UsageCount usageCount;
+  final countRequests = <List<String>>[];
 
   @override
-  Stream<List<Vendor>> watchAllVendors() =>
-      failVendorList ? Stream.error(Exception(_rawError)) : super.watchAllVendors();
+  Future<int> countVendorsInCities(Iterable<String> cityIds) {
+    countRequests.add(cityIds.toList());
+    return switch (usageCount) {
+      _UsageCount.real => super.countVendorsInCities(cityIds),
+      _UsageCount.fail => Future.error(Exception(_rawError)),
+      _UsageCount.stall => Completer<int>().future,
+    };
+  }
 
   @override
   Future<void> setGovernorateEnabled(String governorateId, bool enabled) async {
@@ -72,10 +83,10 @@ Future<void> _pump(
   WidgetTester tester,
   FakeFirebaseFirestore db, {
   bool failWrites = false,
-  bool failVendorList = false,
+  _UsageCount usageCount = _UsageCount.real,
 }) async {
   await pumpAdminScreen(tester, const AdminLocationsScreen(), db,
-      service: _LocationService(db, failWrites: failWrites, failVendorList: failVendorList),
+      service: _LocationService(db, failWrites: failWrites, usageCount: usageCount),
       size: const Size(400, 900));
 }
 
@@ -231,7 +242,7 @@ void main() {
 
   testWidgets('if usage can\'t be checked, disabling still asks first', (tester) async {
     final db = await _db();
-    await _pump(tester, db, failVendorList: true);
+    await _pump(tester, db, usageCount: _UsageCount.fail);
 
     await tester.tap(find.byKey(const ValueKey('admin_governorate_enabled_damascus_gov')));
     await tester.pumpAndSettle();
@@ -240,6 +251,36 @@ void main() {
     await tester.pumpAndSettle();
     expect(await _enabled(db, 'governorates', 'damascus_gov'), isTrue);
     expect(_switchValue(tester, 'admin_governorate_enabled_damascus_gov'), isTrue);
+  });
+
+  testWidgets('a usage check that never answers times out into the same "unknown" warning', (tester) async {
+    final db = await _db();
+    await _pump(tester, db, usageCount: _UsageCount.stall);
+
+    await tester.tap(find.byKey(const ValueKey('admin_governorate_enabled_damascus_gov')));
+    await tester.pump();
+    // Waiting: the switch is busy (disabled), no decision made yet.
+    expect(find.byType(AlertDialog), findsNothing);
+
+    await tester.pump(locationUsageCheckTimeout + const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(find.text(adminTestL10n.disableLocationUsageUnknownWarning), findsOneWidget);
+    await tester.tap(find.text(adminTestL10n.cancelButton));
+    await tester.pumpAndSettle();
+    expect(await _enabled(db, 'governorates', 'damascus_gov'), isTrue);
+    expect(_switchValue(tester, 'admin_governorate_enabled_damascus_gov'), isTrue);
+  });
+
+  testWidgets('the governorate check counts vendors in exactly its cities', (tester) async {
+    final db = await _db();
+    final service = _LocationService(db);
+    await pumpAdminScreen(tester, const AdminLocationsScreen(), db, service: service, size: const Size(400, 900));
+
+    await tester.tap(find.byKey(const ValueKey('admin_governorate_enabled_damascus_gov')));
+    await tester.pumpAndSettle();
+    expect(service.countRequests, [
+      ['damascus'],
+    ]);
   });
 
   testWidgets('with no enabled city, adding a neighborhood is disabled and says why', (tester) async {

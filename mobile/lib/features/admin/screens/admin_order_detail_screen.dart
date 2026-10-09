@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_messages.dart';
 import '../../../core/format/display_formatters.dart';
+import '../../../core/paging/paged_list_controller.dart';
 import '../../../core/providers/formatters_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
@@ -29,7 +30,7 @@ import '../../customer/screens/customer_home_screen.dart' show firestoreServiceP
 import '../../customer/widgets/price_breakdown.dart';
 import '../../driver/screens/driver_home_screen.dart' show functionsServiceProvider;
 import 'admin_drivers_screen.dart' show DriverRow, buildDriverRows;
-import 'admin_users_screen.dart' show allUsersProvider;
+import '../widgets/admin_paged_list.dart';
 
 final _orderProvider = StreamProvider.autoDispose.family<DeliveryOrder, String>((ref, orderId) {
   return ref.watch(firestoreServiceProvider).watchOrder(orderId);
@@ -41,10 +42,6 @@ final _userProvider = StreamProvider.autoDispose.family<AppUser, String>((ref, u
 
 final _vendorProvider = StreamProvider.autoDispose.family<Vendor, String>((ref, vendorId) {
   return ref.watch(firestoreServiceProvider).watchVendor(vendorId);
-});
-
-final _allDriversProvider = StreamProvider.autoDispose<List<Driver>>((ref) {
-  return ref.watch(firestoreServiceProvider).watchAllDrivers();
 });
 
 // Mirrors ADMIN_CANCELLABLE_STATUSES / ADMIN_REASSIGNABLE_STATUSES in
@@ -412,50 +409,70 @@ List<DriverRow> reassignmentCandidates(List<Driver> drivers, List<AppUser> users
     ..sort((a, b) => b.isAvailable == a.isAvailable ? 0 : (b.isAvailable ? 1 : -1));
 }
 
-/// Bottom sheet listing the drivers an order can be reassigned to (see
-/// [reassignmentCandidates]), joined from `drivers` (availability/approval)
-/// and `users` (identity) — see [FirestoreService.watchAllDrivers]'s doc
-/// comment for why the join is client-side rather than a new denormalized
-/// field. [currentDriverId] is accepted for future use (e.g. highlighting
-/// who's currently assigned) but doesn't filter the list — reassigning to
-/// the same driver is harmless.
-class _DriverPickerSheet extends ConsumerWidget {
+/// Bottom sheet listing the drivers an order can be reassigned to:
+/// approved driver accounts, 25 per page with "Load more"
+/// (FirestoreService.fetchDriverAccountsPage — `drivers` filtered by
+/// approval on the server, joined with `users` for the name). Within each
+/// page, available drivers come first ([reassignmentCandidates]).
+/// [currentDriverId] is accepted for future use (e.g. highlighting who's
+/// currently assigned) but doesn't filter the list — reassigning to the
+/// same driver is harmless.
+class _DriverPickerSheet extends ConsumerStatefulWidget {
   const _DriverPickerSheet({this.currentDriverId});
 
   final String? currentDriverId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_DriverPickerSheet> createState() => _DriverPickerSheetState();
+}
+
+class _DriverPickerSheetState extends ConsumerState<_DriverPickerSheet> {
+  late final PagedListController<DriverRow> _candidates = PagedListController(
+    idOf: (row) => row.driverId,
+    fetchPage: (cursor) async {
+      final page = await ref
+          .read(firestoreServiceProvider)
+          .fetchDriverAccountsPage(status: ApprovalStatus.approved, after: cursor);
+      return page.withItems(reassignmentCandidates(
+        [for (final account in page.items) account.driver],
+        [for (final account in page.items) account.user],
+      ));
+    },
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _candidates.refresh();
+  }
+
+  @override
+  void dispose() {
+    _candidates.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final driversAsync = ref.watch(_allDriversProvider);
-    final usersAsync = ref.watch(allUsersProvider);
-
-    Widget body;
-    if (driversAsync.isLoading || usersAsync.isLoading) {
-      body = SizedBox(
-        height: 160,
-        child: Center(child: screenSpinner(context)),
-      );
-    } else if (driversAsync.hasError) {
-      body = ErrorState(error: driversAsync.error!, onRetry: () => ref.invalidate(_allDriversProvider));
-    } else if (usersAsync.hasError) {
-      body = ErrorState(error: usersAsync.error!, onRetry: () => ref.invalidate(allUsersProvider));
-    } else {
-      final options = reassignmentCandidates(driversAsync.value!, usersAsync.value!);
-
-      body = options.isEmpty
-          ? Padding(
-              padding: const EdgeInsets.all(AppSpacing.xxxl),
-              child: Center(child: Text(l10n.noDriversFoundMessage)),
-            )
-          : Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                itemCount: options.length,
-                itemBuilder: (context, index) {
-                  final option = options[index];
-                  return ListTile(
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.6,
+        child: Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                child: Text(l10n.selectDriverTitle, style: Theme.of(context).textTheme.titleMedium),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Expanded(
+                child: AdminPagedList<DriverRow>(
+                  controller: _candidates,
+                  emptyMessage: l10n.noDriversFoundMessage,
+                  itemBuilder: (context, option, index) => ListTile(
                     leading: CircleAvatar(
                       backgroundColor: VendorPalette.surfaceElevated,
                       child: Text(
@@ -463,28 +480,14 @@ class _DriverPickerSheet extends ConsumerWidget {
                         style: const TextStyle(color: VendorPalette.textPrimary),
                       ),
                     ),
-                    title: Text(option.name),
+                    title: Text(option.name, maxLines: 2, overflow: TextOverflow.ellipsis),
                     trailing: _AvailabilityBadge(isAvailable: option.isAvailable),
                     onTap: () => Navigator.of(context).pop(option),
-                  );
-                },
+                  ),
+                ),
               ),
-            );
-    }
-
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.only(top: AppSpacing.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: Text(l10n.selectDriverTitle, style: Theme.of(context).textTheme.titleMedium),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            body,
-          ],
+            ],
+          ),
         ),
       ),
     );

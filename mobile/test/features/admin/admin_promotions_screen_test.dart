@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:delivery_app/features/admin/screens/admin_promotions_screen.dart';
+import 'package:delivery_app/features/admin/widgets/admin_actions.dart';
 import 'package:delivery_app/models/approval_status.dart';
 import 'package:delivery_app/models/vendor.dart';
 import 'package:delivery_app/services/firestore_service.dart';
@@ -12,15 +15,20 @@ import 'admin_test_harness.dart';
 const _rawError = 'permission-denied: raw backend detail';
 
 /// Real FirestoreService over an in-memory Firestore, with the delete and
-/// enable writes optionally failing.
+/// enable writes optionally failing, and the delete optionally held open
+/// until a test releases [deleteGate].
 class _PromotionService extends FirestoreService {
   _PromotionService(this.db, {this.failWrites = false}) : super(firestore: db);
 
   final FakeFirebaseFirestore db;
   final bool failWrites;
+  Completer<void>? deleteGate;
+  var deleteCalls = 0;
 
   @override
   Future<void> deletePromotion(String promotionId) async {
+    deleteCalls++;
+    await deleteGate?.future;
     if (failWrites) throw Exception(_rawError);
     return super.deletePromotion(promotionId);
   }
@@ -86,12 +94,18 @@ Future<void> _save(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-Future<void> _pickCtaVendor(WidgetTester tester, String label) async {
+Future<void> _openCtaPicker(WidgetTester tester) async {
   final field = find.byKey(const ValueKey('admin_promotion_cta_vendor'));
   await tester.scrollUntilVisible(field, 100, scrollable: _formScrollable());
   await tester.tap(field);
   await tester.pumpAndSettle();
-  await tester.tap(find.text(label).last);
+}
+
+/// Opens the store picker and picks the row keyed [tileKey]
+/// (`admin_cta_vendor_<vendorId>` or `admin_cta_vendor_none`).
+Future<void> _pickCtaVendor(WidgetTester tester, String tileKey) async {
+  await _openCtaPicker(tester);
+  await tester.tap(find.byKey(ValueKey(tileKey)));
   await tester.pumpAndSettle();
 }
 
@@ -105,54 +119,46 @@ void _expectLocalizedError() {
 }
 
 void main() {
-  group('ctaVendorChoices / validatePromotionCta', () {
-    final vendors = [
-      _vendor('b', 'beta', ApprovalStatus.approved),
-      _vendor('p', 'pending', ApprovalStatus.pending),
-      _vendor('a', 'Alpha', ApprovalStatus.approved),
-      _vendor('r', 'rejected', ApprovalStatus.rejected),
-    ];
-
-    test('offers approved vendors only, by name', () {
-      expect(ctaVendorChoices(vendors).map((v) => v.id), ['a', 'b']);
-    });
+  group('validatePromotionCta', () {
+    final approved = _vendor('a', 'Alpha', ApprovalStatus.approved);
 
     test('no label and no store is valid', () {
-      expect(validatePromotionCta(label: '  ', vendorId: null, vendors: vendors), isNull);
+      expect(validatePromotionCta(label: '  ', vendorId: null, vendor: null), isNull);
     });
 
     test('label and an approved store is valid', () {
-      expect(validatePromotionCta(label: 'Order now', vendorId: 'a', vendors: vendors), isNull);
+      expect(validatePromotionCta(label: 'Order now', vendorId: 'a', vendor: approved), isNull);
     });
 
     test('a label without a store, or a store without a label, is incomplete', () {
-      expect(validatePromotionCta(label: 'Order now', vendorId: null, vendors: vendors), PromotionCtaError.incomplete);
-      expect(validatePromotionCta(label: '', vendorId: 'a', vendors: vendors), PromotionCtaError.incomplete);
+      expect(validatePromotionCta(label: 'Order now', vendorId: null, vendor: null), PromotionCtaError.incomplete);
+      expect(validatePromotionCta(label: '', vendorId: 'a', vendor: approved), PromotionCtaError.incomplete);
     });
 
-    test('a non-approved, unknown, or unverifiable store is rejected', () {
-      expect(validatePromotionCta(label: 'Go', vendorId: 'p', vendors: vendors), PromotionCtaError.unavailableVendor);
-      expect(validatePromotionCta(label: 'Go', vendorId: 'gone', vendors: vendors), PromotionCtaError.unavailableVendor);
-      expect(validatePromotionCta(label: 'Go', vendorId: 'a', vendors: null), PromotionCtaError.unavailableVendor);
+    test('a non-approved, missing, unverified or mismatched store is rejected', () {
+      for (final status in [ApprovalStatus.pending, ApprovalStatus.rejected]) {
+        expect(validatePromotionCta(label: 'Go', vendorId: 'p', vendor: _vendor('p', 'P', status)),
+            PromotionCtaError.unavailableVendor, reason: status.name);
+      }
+      expect(validatePromotionCta(label: 'Go', vendorId: 'gone', vendor: null), PromotionCtaError.unavailableVendor);
+      expect(validatePromotionCta(label: 'Go', vendorId: 'b', vendor: approved), PromotionCtaError.unavailableVendor);
     });
   });
 
-  group('CTA store selector', () {
+  group('CTA store picker', () {
     testWidgets('lists approved stores only and saves the chosen vendor id', (tester) async {
       final db = await _db();
       await _pump(tester, db);
       await _openMenuAction(tester, adminTestL10n.editTooltip);
 
       await tester.enterText(find.widgetWithText(TextFormField, adminTestL10n.ctaLabelFieldLabel), 'Order now');
-      final field = find.byKey(const ValueKey('admin_promotion_cta_vendor'));
-      await tester.scrollUntilVisible(field, 100, scrollable: _formScrollable());
-      await tester.tap(field);
+      await _openCtaPicker(tester);
+      expect(find.byKey(const ValueKey('admin_cta_vendor_v-zaatar')), findsOneWidget);
+      expect(find.byKey(const ValueKey('admin_cta_vendor_v-burger')), findsOneWidget);
+      expect(find.byKey(const ValueKey('admin_cta_vendor_v-pending')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('admin_cta_vendor_v-zaatar')));
       await tester.pumpAndSettle();
-      expect(find.text('Zaatar House'), findsWidgets);
-      expect(find.text('Burger Spot'), findsWidgets);
-      expect(find.text('Pending Pizza'), findsNothing);
-      await tester.tap(find.text('Zaatar House').last);
-      await tester.pumpAndSettle();
+      expect(find.text('Zaatar House'), findsOneWidget); // shown in the field
 
       await _save(tester);
 
@@ -162,12 +168,27 @@ void main() {
       expect(find.text(adminTestL10n.promotionSavedMessage), findsOneWidget);
     });
 
+    testWidgets('the picker searches stores on the server by name prefix', (tester) async {
+      final db = await _db();
+      await _pump(tester, db);
+      await _openMenuAction(tester, adminTestL10n.editTooltip);
+      await _openCtaPicker(tester);
+
+      final sheetSearch = find.descendant(of: find.byType(BottomSheet).last, matching: find.byType(TextField));
+      await tester.enterText(sheetSearch, 'Bur');
+      await tester.pump(AdminSearchField.debounce);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('admin_cta_vendor_v-burger')), findsOneWidget);
+      expect(find.byKey(const ValueKey('admin_cta_vendor_v-zaatar')), findsNothing);
+    });
+
     testWidgets('a store without a button label is not saved', (tester) async {
       final db = await _db();
       await _pump(tester, db);
       await _openMenuAction(tester, adminTestL10n.editTooltip);
 
-      await _pickCtaVendor(tester, 'Burger Spot');
+      await _pickCtaVendor(tester, 'admin_cta_vendor_v-burger');
       await _save(tester);
 
       expect(find.text(adminTestL10n.ctaIncompleteError, skipOffstage: false), findsOneWidget);
@@ -183,14 +204,44 @@ void main() {
       expect(find.text('Pending Pizza', skipOffstage: false), findsOneWidget);
       await _save(tester);
       expect(find.text(adminTestL10n.ctaVendorUnavailableError, skipOffstage: false), findsOneWidget);
+      expect((await db.collection('promotions').doc('p1').get()).data()!['ctaAction'], 'v-pending');
 
-      await _pickCtaVendor(tester, adminTestL10n.ctaNoVendorOption);
+      await _pickCtaVendor(tester, 'admin_cta_vendor_none');
       await tester.enterText(find.widgetWithText(TextFormField, adminTestL10n.ctaLabelFieldLabel), '');
       await _save(tester);
       final saved = (await db.collection('promotions').doc('p1').get()).data()!;
       expect(saved['ctaAction'], isNull);
       expect(saved['ctaLabel'], isNull);
     });
+
+    testWidgets('a store rejected after it was picked is caught at save time', (tester) async {
+      final db = await _db();
+      await _pump(tester, db);
+      await _openMenuAction(tester, adminTestL10n.editTooltip);
+
+      await tester.enterText(find.widgetWithText(TextFormField, adminTestL10n.ctaLabelFieldLabel), 'Order now');
+      await _pickCtaVendor(tester, 'admin_cta_vendor_v-burger');
+      await db.collection('vendors').doc('v-burger').update({'approvalStatus': 'rejected'});
+      await _save(tester);
+
+      expect(find.text(adminTestL10n.ctaVendorUnavailableError, skipOffstage: false), findsOneWidget);
+      expect((await db.collection('promotions').doc('p1').get()).data()!['ctaAction'], isNull);
+    });
+  });
+
+  testWidgets('saving the form keeps an enable/disable made in the list meanwhile', (tester) async {
+    final db = await _db();
+    await _pump(tester, db);
+    await _openMenuAction(tester, adminTestL10n.editTooltip);
+
+    // Someone disables it while this form (opened as enabled) is open.
+    await db.collection('promotions').doc('p1').update({'enabled': false});
+    await tester.enterText(find.widgetWithText(TextFormField, adminTestL10n.promotionTitleFieldLabel), 'New title');
+    await _save(tester);
+
+    final saved = (await db.collection('promotions').doc('p1').get()).data()!;
+    expect(saved['title'], 'New title');
+    expect(saved['enabled'], isFalse);
   });
 
   group('delete', () {
@@ -205,13 +256,22 @@ void main() {
       expect((await db.collection('promotions').doc('p1').get()).exists, isTrue);
     });
 
-    testWidgets('confirmed: deleted, then success feedback', (tester) async {
+    testWidgets('confirmed: busy until it lands, then deleted with success feedback', (tester) async {
       final db = await _db();
-      await _pump(tester, db);
+      final service = await _pump(tester, db);
+      service.deleteGate = Completer<void>();
       await _openMenuAction(tester, adminTestL10n.deleteTooltip);
       await tester.tap(find.text(adminTestL10n.confirmButton));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
+      // In flight: the actions menu is replaced by a spinner, no success yet.
+      expect(find.byKey(const ValueKey('admin_promotion_busy_p1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('admin_promotion_actions_p1')), findsNothing);
+      expect(find.text(adminTestL10n.promotionDeletedMessage), findsNothing);
+
+      service.deleteGate!.complete();
+      await tester.pumpAndSettle();
+      expect(service.deleteCalls, 1);
       expect((await db.collection('promotions').doc('p1').get()).exists, isFalse);
       expect(find.text(adminTestL10n.promotionDeletedMessage), findsOneWidget);
     });
@@ -226,6 +286,7 @@ void main() {
       _expectLocalizedError();
       expect(find.text(adminTestL10n.promotionDeletedMessage), findsNothing);
       expect(find.byKey(const ValueKey('admin_promotion_p1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('admin_promotion_actions_p1')), findsOneWidget);
     });
   });
 

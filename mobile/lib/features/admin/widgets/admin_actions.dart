@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_sizes.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_snackbar.dart';
@@ -125,6 +129,81 @@ class AdminFilterChipBar extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Search box for the server-searched admin lists. [onChanged] receives the
+/// trimmed text only after typing pauses for [debounce], so a query isn't
+/// sent per keystroke; the clear button resets the search immediately.
+/// [helperText] states the matching rule (these searches match the start
+/// of a field, not any part of it).
+class AdminSearchField extends StatefulWidget {
+  const AdminSearchField({
+    required this.hintText,
+    required this.onChanged,
+    this.helperText,
+    super.key,
+  });
+
+  static const debounce = Duration(milliseconds: 350);
+
+  final String hintText;
+  final String? helperText;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<AdminSearchField> createState() => _AdminSearchFieldState();
+}
+
+class _AdminSearchFieldState extends State<AdminSearchField> {
+  final _controller = TextEditingController();
+  Timer? _debounce;
+
+  void _onChanged(String value) {
+    setState(() {}); // shows/hides the clear button
+    _debounce?.cancel();
+    _debounce = Timer(AdminSearchField.debounce, () => widget.onChanged(value.trim()));
+  }
+
+  void _clear() {
+    _debounce?.cancel();
+    _controller.clear();
+    setState(() {});
+    widget.onChanged('');
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return TextField(
+      controller: _controller,
+      style: const TextStyle(color: VendorPalette.textPrimary),
+      decoration: InputDecoration(
+        hintText: widget.hintText,
+        hintStyle: const TextStyle(color: VendorPalette.textMuted),
+        helperText: widget.helperText,
+        helperMaxLines: 2,
+        prefixIcon: const Icon(Icons.search, color: VendorPalette.textSecondary),
+        suffixIcon: _controller.text.isEmpty
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: l10n.clearSearchTooltip,
+                onPressed: _clear,
+              ),
+        filled: true,
+        fillColor: VendorPalette.surfaceContainer,
+        border: OutlineInputBorder(borderRadius: AppRadius.medium, borderSide: BorderSide.none),
+      ),
+      onChanged: _onChanged,
     );
   }
 }

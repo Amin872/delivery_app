@@ -1,25 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/paging/paged_list_controller.dart';
 import '../../../core/providers/formatters_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../../core/widgets/app_network_image.dart';
-import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
 import '../widgets/admin_actions.dart';
+import '../widgets/admin_paged_list.dart';
 import '../widgets/admin_scaffold.dart';
-import 'admin_vendors_screen.dart' show allVendorsProvider;
-import '../../../core/widgets/state_views.dart';
-
-final allMenuItemsProvider = StreamProvider.autoDispose<List<MenuItem>>((ref) {
-  return ref.watch(firestoreServiceProvider).watchAllMenuItems();
-});
 
 class ProductRow {
   const ProductRow({
@@ -41,13 +36,9 @@ class ProductRow {
   final String vendorName;
 }
 
-/// Joins every product (`FirestoreService.watchAllMenuItems()` — the same
-/// collection-group query CustomerHomeScreen's feed already uses, zero new
-/// reads) with its vendor's name (`watchAllVendors()`, already used by
-/// AdminVendorsScreen, whose `allVendorsProvider` this screen shares).
-/// Pure/Firebase-free so the join is unit-testable
-/// independent of both streams — same reasoning as Drivers'
-/// `buildDriverRows`. A product whose vendor doc is missing is still shown
+/// Joins products (one admin page of them) with their vendors' names.
+/// Pure/Firebase-free so the join is unit-testable independent of the
+/// queries — same reasoning as Drivers' `buildDriverRows`. A product whose vendor doc is missing is still shown
 /// (vendor deletion isn't possible today — `vendors.delete` is `if false`
 /// in firestore.rules — but this stays defensive rather than silently
 /// dropping a real product) with an empty vendor name.
@@ -68,9 +59,19 @@ List<ProductRow> buildProductRows(List<MenuItem> items, List<Vendor> vendors) {
 
 enum _AvailabilityFilter { all, available, unavailable }
 
+bool? _availabilityValue(_AvailabilityFilter filter) => switch (filter) {
+      _AvailabilityFilter.all => null,
+      _AvailabilityFilter.available => true,
+      _AvailabilityFilter.unavailable => false,
+    };
+
 /// Read-only admin product browser across every vendor — no edit/delete/
 /// delist here (Phase 4 Products is read-only; `menuItems` write rules are
-/// unchanged), just visibility the admin panel didn't have before.
+/// unchanged), just visibility the admin panel didn't have before. 25 per
+/// page with "Load more" (FirestoreService.fetchMenuItemsPage, an admin
+/// query separate from the customer feed's); the availability chips and
+/// the product-name prefix search run on the server, and each page's
+/// vendor names come from one batch read of just those vendors.
 class AdminProductsScreen extends ConsumerStatefulWidget {
   const AdminProductsScreen({super.key});
 
@@ -82,9 +83,49 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
   String _query = '';
   _AvailabilityFilter _filter = _AvailabilityFilter.all;
 
+  late final PagedListController<ProductRow> _products = PagedListController(
+    // Item ids are only unique within their vendor's subcollection.
+    idOf: (row) => '${row.vendorId}/${row.itemId}',
+    fetchPage: (cursor) async {
+      final service = ref.read(firestoreServiceProvider);
+      final page = await service.fetchMenuItemsPage(
+        available: _availabilityValue(_filter),
+        namePrefix: _query,
+        after: cursor,
+      );
+      final vendors = await service.fetchVendorsByIds(page.items.map((item) => item.vendorId));
+      return page.withItems(buildProductRows(page.items, vendors.values.toList()));
+    },
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _products.refresh();
+  }
+
+  @override
+  void dispose() {
+    _products.dispose();
+    super.dispose();
+  }
+
+  void _setQuery(String query) {
+    if (query == _query) return;
+    setState(() => _query = query);
+    _products.refresh();
+  }
+
+  void _setFilter(_AvailabilityFilter filter) {
+    if (filter == _filter) return;
+    setState(() => _filter = filter);
+    _products.refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final currencyFormat = ref.watch(currencyFormatProvider);
 
     return AdminScaffold(
       title: l10n.adminNavProducts,
@@ -92,17 +133,10 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextField(
-            style: const TextStyle(color: VendorPalette.textPrimary),
-            decoration: InputDecoration(
-              hintText: l10n.searchProductsHint,
-              hintStyle: const TextStyle(color: VendorPalette.textMuted),
-              prefixIcon: const Icon(Icons.search, color: VendorPalette.textSecondary),
-              filled: true,
-              fillColor: VendorPalette.surfaceContainer,
-              border: OutlineInputBorder(borderRadius: AppRadius.medium, borderSide: BorderSide.none),
-            ),
-            onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
+          AdminSearchField(
+            hintText: l10n.searchProductsHint,
+            helperText: l10n.searchStartsWithHelper,
+            onChanged: _setQuery,
           ),
           const SizedBox(height: AppSpacing.md),
           AdminFilterChipBar(
@@ -110,22 +144,50 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
               _FilterChip(
                 label: l10n.allStatusesLabel,
                 selected: _filter == _AvailabilityFilter.all,
-                onSelected: () => setState(() => _filter = _AvailabilityFilter.all),
+                onSelected: () => _setFilter(_AvailabilityFilter.all),
               ),
               _FilterChip(
                 label: l10n.availableLabel,
                 selected: _filter == _AvailabilityFilter.available,
-                onSelected: () => setState(() => _filter = _AvailabilityFilter.available),
+                onSelected: () => _setFilter(_AvailabilityFilter.available),
               ),
               _FilterChip(
                 label: l10n.unavailableLabel,
                 selected: _filter == _AvailabilityFilter.unavailable,
-                onSelected: () => setState(() => _filter = _AvailabilityFilter.unavailable),
+                onSelected: () => _setFilter(_AvailabilityFilter.unavailable),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Expanded(child: _ProductList(query: _query, filter: _filter)),
+          Expanded(
+            child: AdminPagedList<ProductRow>(
+              controller: _products,
+              emptyMessage: l10n.noProductsFoundMessage,
+              itemBuilder: (context, row, index) => Card(
+                child: ListTile(
+                  leading: ClipRRect(
+                    borderRadius: AppRadius.small,
+                    child: row.imageUrl == null
+                        ? Container(
+                            width: 48,
+                            height: 48,
+                            color: VendorPalette.surfaceElevated,
+                            child: const Icon(Icons.fastfood_outlined, color: VendorPalette.textMuted),
+                          )
+                        : AppNetworkImage(
+                            imageUrl: row.imageUrl!,
+                            width: 48,
+                            height: 48,
+                            borderRadius: AppRadius.small,
+                          ),
+                  ),
+                  title: Text(row.name, maxLines: 2, overflow: TextOverflow.ellipsis),
+                  subtitle: Text('${row.vendorName} · ${currencyFormat.format(row.price)}'),
+                  trailing: _AvailabilityBadge(available: row.available),
+                ),
+              ).staggeredEntrance(index),
+            ),
+          ),
         ],
       ),
     );
@@ -145,81 +207,6 @@ class _FilterChip extends StatelessWidget {
       label: Text(label),
       selected: selected,
       onSelected: (_) => onSelected(),
-    );
-  }
-}
-
-class _ProductList extends ConsumerWidget {
-  const _ProductList({required this.query, required this.filter});
-
-  final String query;
-  final _AvailabilityFilter filter;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context)!;
-    final currencyFormat = ref.watch(currencyFormatProvider);
-    final itemsAsync = ref.watch(allMenuItemsProvider);
-    final vendorsAsync = ref.watch(allVendorsProvider);
-
-    if (itemsAsync.isLoading || vendorsAsync.isLoading) {
-      return const ListSkeletonLoader();
-    }
-    if (itemsAsync.hasError) {
-      return ErrorState(error: itemsAsync.error!, onRetry: () => ref.invalidate(allMenuItemsProvider));
-    }
-    if (vendorsAsync.hasError) {
-      return ErrorState(error: vendorsAsync.error!, onRetry: () => ref.invalidate(allVendorsProvider));
-    }
-
-    var rows = buildProductRows(itemsAsync.value!, vendorsAsync.value!);
-
-    if (query.isNotEmpty) {
-      rows = rows
-          .where((row) =>
-              row.name.toLowerCase().contains(query) ||
-              row.vendorName.toLowerCase().contains(query))
-          .toList();
-    }
-    rows = switch (filter) {
-      _AvailabilityFilter.all => rows,
-      _AvailabilityFilter.available => rows.where((row) => row.available).toList(),
-      _AvailabilityFilter.unavailable => rows.where((row) => !row.available).toList(),
-    };
-
-    if (rows.isEmpty) {
-      return EmptyState(message: l10n.noProductsFoundMessage);
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: rows.length,
-      itemBuilder: (context, index) {
-        final row = rows[index];
-        return Card(
-          child: ListTile(
-            leading: ClipRRect(
-              borderRadius: AppRadius.small,
-              child: row.imageUrl == null
-                  ? Container(
-                      width: 48,
-                      height: 48,
-                      color: VendorPalette.surfaceElevated,
-                      child: const Icon(Icons.fastfood_outlined, color: VendorPalette.textMuted),
-                    )
-                  : AppNetworkImage(
-                      imageUrl: row.imageUrl!,
-                      width: 48,
-                      height: 48,
-                      borderRadius: AppRadius.small,
-                    ),
-            ),
-            title: Text(row.name, maxLines: 2, overflow: TextOverflow.ellipsis),
-            subtitle: Text('${row.vendorName} · ${currencyFormat.format(row.price)}'),
-            trailing: _AvailabilityBadge(available: row.available),
-          ),
-        ).staggeredEntrance(index);
-      },
     );
   }
 }

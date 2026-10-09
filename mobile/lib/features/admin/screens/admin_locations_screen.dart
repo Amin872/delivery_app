@@ -18,12 +18,10 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/city.dart';
 import '../../../models/governorate.dart';
 import '../../../models/neighborhood.dart';
-import '../../../models/vendor.dart';
 import '../../customer/screens/customer_home_screen.dart'
     show allCitiesProvider, allGovernoratesProvider, allNeighborhoodsProvider, firestoreServiceProvider;
 import '../widgets/admin_actions.dart';
 import '../widgets/admin_scaffold.dart';
-import 'admin_vendors_screen.dart' show allVendorsProvider;
 import '../../../core/widgets/state_views.dart';
 
 /// One city joined with its resolved governorate (or null — "unassigned",
@@ -55,36 +53,34 @@ List<CityRow> buildCityRows(List<CityOption> cities, List<GovernorateOption> gov
       .toList();
 }
 
-/// How many vendors currently have `city == cityId` — used to warn before
-/// disabling a city (see AdminLocationsScreen's Switch handlers). Reuses
-/// the vendor list AdminVendorsScreen's `allVendorsProvider` already
-/// fetches, rather than issuing a new count query.
-int vendorCountForCity(List<Vendor> vendors, String cityId) {
-  return vendors.where((vendor) => vendor.city == cityId).length;
+/// The cities assigned to [governorateId] — a governorate is "in use"
+/// when any vendor sits in one of them (vendors carry a city, not a
+/// governorate). Pure, so the grouping is unit-testable.
+Set<String> cityIdsInGovernorate(List<CityOption> cities, String governorateId) {
+  return cities.where((city) => city.governorateId == governorateId).map((city) => city.id).toSet();
 }
 
-/// How many vendors currently sit in any city assigned to [governorateId] —
-/// one join deeper than [vendorCountForCity] (vendors don't carry a
-/// governorate directly, only a city). Pure, same reasoning.
-int vendorCountForGovernorate(
-  List<Vendor> vendors,
-  List<CityOption> cities,
-  String governorateId,
-) {
-  final cityIdsInGovernorate = cities
-      .where((city) => city.governorateId == governorateId)
-      .map((city) => city.id)
-      .toSet();
-  return vendors.where((vendor) => cityIdsInGovernorate.contains(vendor.city)).length;
-}
+/// How long an in-use check may take before it's treated as unknown, so a
+/// stalled request never leaves a switch waiting indefinitely.
+const locationUsageCheckTimeout = Duration(seconds: 10);
 
-/// The current value of a list stream for an in-use check: waits for the
-/// first snapshot if it hasn't arrived yet (so a check made right after the
-/// screen opens never sees a falsely empty list), and null if it can't be
-/// loaded — callers then can't rule out that the location is in use.
-Future<List<T>?> _loadedList<T>(WidgetRef ref, ProviderListenable<Future<List<T>>> future) async {
+/// How many vendors are in any of [cityIds] — a server-side count (no
+/// vendor list downloaded). Null when it fails or times out: callers then
+/// can't rule out that the location is in use.
+Future<int?> _vendorsInCitiesOrNull(WidgetRef ref, Iterable<String> cityIds) async {
   try {
-    return await ref.read(future);
+    return await ref.read(firestoreServiceProvider).countVendorsInCities(cityIds).timeout(locationUsageCheckTimeout);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// The current city list for a governorate's in-use check: waits (bounded
+/// by [locationUsageCheckTimeout]) for the first snapshot if it hasn't
+/// arrived yet, and null if it can't be loaded.
+Future<List<CityOption>?> _loadedCities(WidgetRef ref) async {
+  try {
+    return await ref.read(allCitiesProvider.future).timeout(locationUsageCheckTimeout);
   } catch (_) {
     return null;
   }
@@ -264,15 +260,13 @@ class _GovernoratesTabState extends ConsumerState<_GovernoratesTab>
   // Resolves false when backed out or failed, so the switch rolls back.
   Future<bool> _setEnabled(GovernorateOption governorate, bool enabled) async {
     if (!enabled) {
-      final vendors = await _loadedList<Vendor>(ref, allVendorsProvider.future);
-      final cities = await _loadedList<CityOption>(ref, allCitiesProvider.future);
+      final cities = await _loadedCities(ref);
+      final affected =
+          cities == null ? null : await _vendorsInCitiesOrNull(ref, cityIdsInGovernorate(cities, governorate.id));
       if (!mounted) return false;
       final l10n = AppLocalizations.of(context)!;
-      // Usage unknown (a list failed to load): still ask, rather than
+      // Usage unknown (a check failed or timed out): still ask, rather than
       // silently disabling something restaurants may depend on.
-      final affected = vendors == null || cities == null
-          ? null
-          : vendorCountForGovernorate(vendors, cities, governorate.id);
       if (affected != 0) {
         final confirmed = await showConfirmDialog(
           context,
@@ -295,10 +289,8 @@ class _GovernoratesTabState extends ConsumerState<_GovernoratesTab>
     super.build(context);
     final l10n = AppLocalizations.of(context)!;
     final governoratesAsync = ref.watch(allGovernoratesProvider);
-    // Keeps the vendor and city lists loaded and live for _setEnabled's
-    // in-use warning (which also waits for their first snapshot), so it's
-    // decided on real data even when Locations is the first admin screen.
-    ref.watch(allVendorsProvider);
+    // Keeps the city list loaded for _setEnabled's in-use check (which also
+    // waits, bounded, for its first snapshot).
     ref.watch(allCitiesProvider);
 
     return Column(
@@ -397,11 +389,10 @@ class _CitiesTabState extends ConsumerState<_CitiesTab> with AutomaticKeepAliveC
   // Resolves false when backed out or failed, so the switch rolls back.
   Future<bool> _setEnabled(CityOption city, bool enabled) async {
     if (!enabled) {
-      final vendors = await _loadedList<Vendor>(ref, allVendorsProvider.future);
+      final affected = await _vendorsInCitiesOrNull(ref, [city.id]);
       if (!mounted) return false;
       final l10n = AppLocalizations.of(context)!;
       // Same "unknown usage still asks" rule as the governorate switch.
-      final affected = vendors == null ? null : vendorCountForCity(vendors, city.id);
       if (affected != 0) {
         final confirmed = await showConfirmDialog(
           context,
@@ -421,7 +412,6 @@ class _CitiesTabState extends ConsumerState<_CitiesTab> with AutomaticKeepAliveC
     super.build(context);
     final l10n = AppLocalizations.of(context)!;
     final citiesAsync = ref.watch(allCitiesProvider);
-    ref.watch(allVendorsProvider); // see _GovernoratesTabState.build
     final governorates = ref.watch(allGovernoratesProvider).valueOrNull ?? const <GovernorateOption>[];
 
     return Column(

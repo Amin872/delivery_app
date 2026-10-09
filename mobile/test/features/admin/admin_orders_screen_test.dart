@@ -92,4 +92,44 @@ void main() {
     expect(find.byType(AdminOrderDetailScreen), findsNothing);
     expect(find.byType(AdminOrdersScreen), findsOneWidget);
   });
+
+  testWidgets('pages 25 orders at a time; "Load more" appends the rest, then disappears', (tester) async {
+    final db = FakeFirebaseFirestore();
+    for (var i = 0; i < 30; i++) {
+      await db.collection('orders').doc('order-$i').set(DeliveryOrder(
+            id: 'order-$i',
+            customerId: 'customer-1',
+            vendorId: 'vendor-1',
+            items: const [],
+            status: OrderStatus.pending,
+            total: 1000,
+            deliveryAddress: 'Mezzeh',
+            createdAt: DateTime(2026, 9, 1).add(Duration(minutes: i)),
+          ).toMap());
+    }
+    await pumpAdminScreen(tester, const AdminOrdersScreen(), db, size: const Size(400, 900));
+
+    final list = find.byType(Scrollable).last;
+    final loadMore = find.byKey(const ValueKey('admin_load_more'));
+    await tester.scrollUntilVisible(loadMore, 300, scrollable: list);
+    // Newest first: order-29 … order-5 on the first page, nothing older yet.
+    expect(find.text(adminTestL10n.orderLabel(displayOrderId('order-5')), skipOffstage: false), findsOneWidget);
+    expect(find.text(adminTestL10n.orderLabel(displayOrderId('order-4')), skipOffstage: false), findsNothing);
+
+    await tester.tap(loadMore);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text(adminTestL10n.orderLabel(displayOrderId('order-0'))), 300, scrollable: list);
+    expect(find.text(adminTestL10n.orderLabel(displayOrderId('order-0'))), findsOneWidget);
+    expect(find.byKey(const ValueKey('admin_load_more'), skipOffstage: false), findsNothing);
+  });
+
+  testWidgets('changing the status chip restarts the list from the first page', (tester) async {
+    await pumpAdminScreen(tester, const AdminOrdersScreen(), await _db(), size: const Size(400, 2400));
+    final context = tester.element(find.byType(AdminOrdersScreen));
+
+    await _selectChip(tester, orderStatusLabel(context, OrderStatus.delivered));
+    expect(find.byType(ListTile), findsOneWidget);
+    expect(_row('o-delivered'), findsOneWidget);
+    expect(find.byKey(const ValueKey('admin_load_more')), findsNothing);
+  });
 }

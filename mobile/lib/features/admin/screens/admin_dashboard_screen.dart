@@ -5,14 +5,20 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../models/approval_status.dart';
-import '../../../models/vendor.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
 import '../widgets/admin_scaffold.dart';
-import 'admin_drivers_screen.dart' show allDriversProvider;
 
-final pendingVendorsProvider = StreamProvider<List<Vendor>>((ref) {
-  return ref.watch(firestoreServiceProvider).watchPendingVendors();
+/// Vendors awaiting a decision — a server-side count (no vendor docs
+/// downloaded). Legacy docs without an approvalStatus count as pending,
+/// matching how Restaurant Management shows them (see
+/// FirestoreService.countPendingVendors).
+final pendingVendorCountProvider = FutureProvider.autoDispose<int>((ref) {
+  return ref.watch(firestoreServiceProvider).countPendingVendors();
+});
+
+/// Drivers awaiting a decision — same server-side counting as vendors.
+final pendingDriverCountProvider = FutureProvider.autoDispose<int>((ref) {
+  return ref.watch(firestoreServiceProvider).countPendingDrivers();
 });
 
 /// Admin's landing page — reached at the app's single `/` route once
@@ -22,25 +28,59 @@ final pendingVendorsProvider = StreamProvider<List<Vendor>>((ref) {
 /// itself lives in [AdminVendorsScreen] / the driver detail screen — this
 /// screen only shows the counts and a way to get there, through the same
 /// [navigateToAdminDestination] the admin nav uses.
-class AdminDashboardScreen extends ConsumerWidget {
+///
+/// The counts are one-time server aggregates, so they're re-read whenever
+/// the admin comes back to this screen (approvals happen elsewhere) and on
+/// pull-to-refresh.
+class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context)!;
-    final pendingCount = ref.watch(pendingVendorsProvider).whenData((vendors) => vendors.length);
-    // Counted client-side from the same drivers stream AdminDriversScreen
-    // lists (no extra query). A legacy driver doc without approvalStatus
-    // parses as pending there too, so both screens agree.
-    final pendingDriverCount = ref
-        .watch(allDriversProvider)
-        .whenData((drivers) => drivers.where((driver) => driver.approvalStatus == ApprovalStatus.pending).length);
+  ConsumerState<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+}
 
-    // Real, live counts — never shown as a number until one has actually
-    // loaded (so never a fabricated "0"), and a failed stream says so
-    // (with a retry) instead of "Loading…" forever.
-    // A retry reloads with the old error still attached, so "failed" means
-    // errored and not currently reloading.
+class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
+  bool _wasCurrent = true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final isCurrent = ModalRoute.isCurrentOf(context) ?? true;
+    if (isCurrent && !_wasCurrent) {
+      // Back on top: another admin screen may have changed what's pending.
+      // After this frame, not mid-build.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _invalidateCounts();
+      });
+    }
+    _wasCurrent = isCurrent;
+  }
+
+  void _invalidateCounts() {
+    ref.invalidate(pendingVendorCountProvider);
+    ref.invalidate(pendingDriverCountProvider);
+  }
+
+  Future<void> _refresh() async {
+    _invalidateCounts();
+    // A failed count shows its own error + Retry on the card.
+    await Future.wait([
+      ref.read(pendingVendorCountProvider.future).then<void>((_) {}, onError: (Object _) {}),
+      ref.read(pendingDriverCountProvider.future).then<void>((_) {}, onError: (Object _) {}),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final pendingCount = ref.watch(pendingVendorCountProvider);
+    final pendingDriverCount = ref.watch(pendingDriverCountProvider);
+
+    // Real counts — never shown as a number until one has actually loaded
+    // (so never a fabricated "0"), and a failed count says so (with a
+    // retry) instead of "Loading…" forever. A retry reloads with the old
+    // error still attached, so "failed" means errored and not currently
+    // reloading.
     bool failed(AsyncValue<int> count) => count.hasError && !count.isLoading;
     String countSubtitle(AsyncValue<int> count, String Function(int) label) {
       if (failed(count)) return l10n.countLoadFailedLabel;
@@ -51,40 +91,44 @@ class AdminDashboardScreen extends ConsumerWidget {
     return AdminScaffold(
       title: l10n.adminDashboardTitle,
       selected: AdminDestination.dashboard,
-      body: ListView(
-        children: [
-          _QuickAccessCard(
-            key: const ValueKey('dashboard_pending_vendors'),
-            icon: Icons.storefront_outlined,
-            title: l10n.vendorApprovalsTitle,
-            subtitle: countSubtitle(pendingCount, l10n.pendingApprovalsCountLabel),
-            onRetry: failed(pendingCount) ? () => ref.invalidate(pendingVendorsProvider) : null,
-            onTap: () => navigateToAdminDestination(context, AdminDestination.dashboard, AdminDestination.vendors),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _QuickAccessCard(
-            key: const ValueKey('dashboard_pending_drivers'),
-            icon: Icons.two_wheeler_outlined,
-            title: l10n.driverApprovalsTitle,
-            subtitle: countSubtitle(pendingDriverCount, l10n.pendingDriverApprovalsCountLabel),
-            onRetry: failed(pendingDriverCount) ? () => ref.invalidate(allDriversProvider) : null,
-            onTap: () => navigateToAdminDestination(context, AdminDestination.dashboard, AdminDestination.drivers),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _QuickAccessCard(
-            icon: Icons.receipt_long_outlined,
-            title: l10n.adminOrdersTitle,
-            subtitle: l10n.adminOrdersSubtitle,
-            onTap: () => navigateToAdminDestination(context, AdminDestination.dashboard, AdminDestination.orders),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _QuickAccessCard(
-            icon: Icons.campaign_outlined,
-            title: l10n.adminPromotionsTitle,
-            subtitle: l10n.adminPromotionsSubtitle,
-            onTap: () => navigateToAdminDestination(context, AdminDestination.dashboard, AdminDestination.promotions),
-          ),
-        ],
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            _QuickAccessCard(
+              key: const ValueKey('dashboard_pending_vendors'),
+              icon: Icons.storefront_outlined,
+              title: l10n.vendorApprovalsTitle,
+              subtitle: countSubtitle(pendingCount, l10n.pendingApprovalsCountLabel),
+              onRetry: failed(pendingCount) ? () => ref.invalidate(pendingVendorCountProvider) : null,
+              onTap: () => navigateToAdminDestination(context, AdminDestination.dashboard, AdminDestination.vendors),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _QuickAccessCard(
+              key: const ValueKey('dashboard_pending_drivers'),
+              icon: Icons.two_wheeler_outlined,
+              title: l10n.driverApprovalsTitle,
+              subtitle: countSubtitle(pendingDriverCount, l10n.pendingDriverApprovalsCountLabel),
+              onRetry: failed(pendingDriverCount) ? () => ref.invalidate(pendingDriverCountProvider) : null,
+              onTap: () => navigateToAdminDestination(context, AdminDestination.dashboard, AdminDestination.drivers),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _QuickAccessCard(
+              icon: Icons.receipt_long_outlined,
+              title: l10n.adminOrdersTitle,
+              subtitle: l10n.adminOrdersSubtitle,
+              onTap: () => navigateToAdminDestination(context, AdminDestination.dashboard, AdminDestination.orders),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _QuickAccessCard(
+              icon: Icons.campaign_outlined,
+              title: l10n.adminPromotionsTitle,
+              subtitle: l10n.adminPromotionsSubtitle,
+              onTap: () => navigateToAdminDestination(context, AdminDestination.dashboard, AdminDestination.promotions),
+            ),
+          ],
+        ),
       ),
     );
   }
