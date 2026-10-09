@@ -182,7 +182,7 @@
   "promotionTitleFieldLabel": "Title (optional)",
   "promotionDescriptionFieldLabel": "Description (optional)",
   "ctaLabelFieldLabel": "Button label (optional)",
-  "ctaActionFieldLabel": "Linked vendor ID (optional)",
+  "ctaActionFieldLabel": "Linked store (optional)",
   "promotionOrderFieldLabel": "Display order",
   "promotionEnabledLabel": "Enabled",
   "mediaTypeLabel": "Media type",
@@ -610,5 +610,36 @@
   "proofPickFailedMessage": "Couldn't get the photo. Please try again.",
   "proofStaleMessage": "That photo was for a different delivery. Please attach a new one.",
   "confirmDeliveredTitle": "Complete delivery?",
-  "confirmDeliveredMessage": "Mark this delivery as delivered? This can't be undone."
+  "confirmDeliveredMessage": "Mark this delivery as delivered? This can't be undone.",
+
+  "vendorApproveConfirmTitle": "Approve restaurant?",
+  "vendorApproveConfirmMessage": "Approve {name}? Customers will be able to see it and order from it.",
+  "@vendorApproveConfirmMessage": {
+    "description": "Admin confirmation before approving a restaurant.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "vendorRejectConfirmTitle": "Reject restaurant?",
+  "vendorRejectConfirmMessage": "Reject {name}? It will stop appearing to customers and can't receive new orders. You can approve it again later.",
+  "@vendorRejectConfirmMessage": {
+    "description": "Admin confirmation before rejecting a restaurant (also used to revoke an approval).",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "vendorApprovedMessage": "Restaurant approved.",
+  "vendorRejectedByAdminMessage": "Restaurant rejected.",
+  "vendorCloseConfirmMessage": "Close {name}? Customers won't be able to order from it until it's opened again.",
+  "@vendorCloseConfirmMessage": {
+    "description": "Admin confirmation before closing an approved restaurant.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "promotionSavedMessage": "Promotion saved.",
+  "promotionDeletedMessage": "Promotion deleted.",
+  "locationSavedMessage": "Location saved.",
+  "disableNeighborhoodConfirmMessage": "Disable this neighborhood? It will stop appearing as a choice for new selections, but nothing existing will break.",
+  "addNeighborhoodNeedsCityMessage": "Enable at least one city before adding a neighborhood.",
+  "ctaNoVendorOption": "No linked store",
+  "unknownVendorOption": "Unavailable store",
+  "ctaVendorUnavailableError": "This store isn't approved. Choose an approved store or none.",
+  "ctaIncompleteError": "Set both the button label and the linked store, or leave both empty.",
+  "countLoadFailedLabel": "Couldn't load the count.",
+  "disableLocationUsageUnknownWarning": "Couldn't check whether any restaurants use this location. It will stop appearing as a choice for new selections. Continue?"
 }

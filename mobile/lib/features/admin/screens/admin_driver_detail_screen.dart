@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/errors/error_messages.dart';
+import '../../../core/format/display_formatters.dart';
 import '../../../core/providers/formatters_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -14,6 +14,7 @@ import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/star_rating.dart';
+import '../../../core/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/app_user.dart';
 import '../../../models/approval_status.dart';
@@ -58,18 +59,20 @@ class AdminDriverDetailScreen extends ConsumerWidget {
         appBar: AppBar(
           backgroundColor: VendorPalette.background,
           foregroundColor: VendorPalette.textPrimary,
-          title: Text(userAsync.valueOrNull?.displayName ?? l10n.adminNavDrivers),
+          title: Text(
+            userAsync.valueOrNull?.displayName ?? l10n.adminNavDrivers,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           actions: const [LanguageToggleButton()],
         ),
         body: ResponsiveCenter(
           child: userAsync.animatedWhen(
             data: (user) => _DriverDetailBody(driverId: driverId, user: user),
             loading: () => const ListSkeletonLoader(),
-            error: (error, _) => Center(
-              child: Text(
-                localizedErrorMessage(context, error),
-                style: const TextStyle(color: VendorPalette.textSecondary),
-              ),
+            error: (error, _) => ErrorState(
+              error: error,
+              onRetry: () => ref.invalidate(_driverUserProvider(driverId)),
             ),
           ),
         ),
@@ -88,6 +91,7 @@ class _DriverDetailBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final dateFormat = ref.watch(dateTimeFormatProvider);
+    final countFormat = ref.watch(countFormatProvider);
     final driverAsync = ref.watch(_driverProvider(driverId));
     final deliveryCountAsync = ref.watch(_driverDeliveryCountProvider(driverId));
 
@@ -96,10 +100,15 @@ class _DriverDetailBody extends ConsumerWidget {
         return ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
-            Row(
+            // Wraps onto two lines rather than overflowing on a narrow,
+            // large-text screen.
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
               children: [
                 _AvailabilityBadge(isAvailable: driver.isAvailable),
-                const Spacer(),
                 StarRatingDisplay(
                   rating: driver.averageRating,
                   count: driver.ratingCount == 0 ? null : driver.ratingCount,
@@ -111,11 +120,13 @@ class _DriverDetailBody extends ConsumerWidget {
             InfoCard(children: [
               Row(
                 children: [
-                  Text(
-                    l10n.approvalStatusFieldLabel,
-                    style: const TextStyle(color: VendorPalette.textSecondary),
+                  Expanded(
+                    child: Text(
+                      l10n.approvalStatusFieldLabel,
+                      style: const TextStyle(color: VendorPalette.textSecondary),
+                    ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: AppSpacing.md),
                   DriverApprovalBadge(status: driver.approvalStatus),
                 ],
               ),
@@ -127,13 +138,15 @@ class _DriverDetailBody extends ConsumerWidget {
               _InfoRow(label: l10n.emailLabel, value: user.email),
               _InfoRow(
                 label: l10n.phoneNumberLabel,
-                value: user.phoneNumber ?? l10n.noPhoneNumberPlaceholder,
+                value: (user.phoneNumber?.trim().isEmpty ?? true)
+                    ? l10n.noPhoneNumberPlaceholder
+                    : formatPhone(user.phoneNumber!),
               ),
             ]),
             const SizedBox(height: AppSpacing.md),
             InfoCard(children: [
               deliveryCountAsync.when(
-                data: (count) => _InfoRow(label: l10n.deliveredOrdersLabel, value: '$count'),
+                data: (count) => _InfoRow(label: l10n.deliveredOrdersLabel, value: countFormat.format(count)),
                 loading: () => _InfoRow(label: l10n.deliveredOrdersLabel, value: l10n.loadingLabel),
                 error: (_, __) => _InfoRow(label: l10n.deliveredOrdersLabel, value: '—'),
               ),
@@ -151,8 +164,7 @@ class _DriverDetailBody extends ConsumerWidget {
               else ...[
                 _InfoRow(
                   label: l10n.lastKnownLocationLabel,
-                  value:
-                      '${driver.lastKnownLocation!.latitude.toStringAsFixed(5)}, ${driver.lastKnownLocation!.longitude.toStringAsFixed(5)}',
+                  value: formatCoordinates(driver.lastKnownLocation!.latitude, driver.lastKnownLocation!.longitude),
                 ),
                 _InfoRow(
                   label: l10n.locationUpdatedAtLabel,
@@ -164,12 +176,7 @@ class _DriverDetailBody extends ConsumerWidget {
         );
       },
       loading: () => const ListSkeletonLoader(),
-      error: (error, _) => Center(
-        child: Text(
-          localizedErrorMessage(context, error),
-          style: const TextStyle(color: VendorPalette.textSecondary),
-        ),
-      ),
+      error: (error, _) => ErrorState(error: error, onRetry: () => ref.invalidate(_driverProvider(driverId))),
     );
   }
 }
@@ -274,10 +281,14 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      // Label and value both wrap rather than overflow on a narrow screen
+      // (long Arabic labels, 1.3× text) — same row as the order detail's.
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: VendorPalette.textSecondary)),
-          const Spacer(),
+          Flexible(child: Text(label, style: const TextStyle(color: VendorPalette.textSecondary))),
+          const SizedBox(width: AppSpacing.md),
           Flexible(
             child: Text(
               value,

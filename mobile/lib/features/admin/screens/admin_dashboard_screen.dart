@@ -28,15 +28,25 @@ class AdminDashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final pendingCount = ref.watch(pendingVendorsProvider).valueOrNull?.length;
+    final pendingCount = ref.watch(pendingVendorsProvider).whenData((vendors) => vendors.length);
     // Counted client-side from the same drivers stream AdminDriversScreen
     // lists (no extra query). A legacy driver doc without approvalStatus
     // parses as pending there too, so both screens agree.
     final pendingDriverCount = ref
         .watch(allDriversProvider)
-        .valueOrNull
-        ?.where((driver) => driver.approvalStatus == ApprovalStatus.pending)
-        .length;
+        .whenData((drivers) => drivers.where((driver) => driver.approvalStatus == ApprovalStatus.pending).length);
+
+    // Real, live counts — never shown as a number until one has actually
+    // loaded (so never a fabricated "0"), and a failed stream says so
+    // (with a retry) instead of "Loading…" forever.
+    // A retry reloads with the old error still attached, so "failed" means
+    // errored and not currently reloading.
+    bool failed(AsyncValue<int> count) => count.hasError && !count.isLoading;
+    String countSubtitle(AsyncValue<int> count, String Function(int) label) {
+      if (failed(count)) return l10n.countLoadFailedLabel;
+      final value = count.valueOrNull;
+      return value == null || count.hasError ? l10n.loadingLabel : label(value);
+    }
 
     return AdminScaffold(
       title: l10n.adminDashboardTitle,
@@ -44,14 +54,11 @@ class AdminDashboardScreen extends ConsumerWidget {
       body: ListView(
         children: [
           _QuickAccessCard(
+            key: const ValueKey('dashboard_pending_vendors'),
             icon: Icons.storefront_outlined,
             title: l10n.vendorApprovalsTitle,
-            // Real, live count from the same stream AdminVendorsScreen
-            // watches — never shown as a number until it has actually
-            // loaded, so this never displays a fabricated "0".
-            subtitle: pendingCount == null
-                ? l10n.loadingLabel
-                : l10n.pendingApprovalsCountLabel(pendingCount),
+            subtitle: countSubtitle(pendingCount, l10n.pendingApprovalsCountLabel),
+            onRetry: failed(pendingCount) ? () => ref.invalidate(pendingVendorsProvider) : null,
             onTap: () => navigateToAdminDestination(context, AdminDestination.dashboard, AdminDestination.vendors),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -59,10 +66,8 @@ class AdminDashboardScreen extends ConsumerWidget {
             key: const ValueKey('dashboard_pending_drivers'),
             icon: Icons.two_wheeler_outlined,
             title: l10n.driverApprovalsTitle,
-            // Same "never a fabricated 0" rule as the vendor card above.
-            subtitle: pendingDriverCount == null
-                ? l10n.loadingLabel
-                : l10n.pendingDriverApprovalsCountLabel(pendingDriverCount),
+            subtitle: countSubtitle(pendingDriverCount, l10n.pendingDriverApprovalsCountLabel),
+            onRetry: failed(pendingDriverCount) ? () => ref.invalidate(allDriversProvider) : null,
             onTap: () => navigateToAdminDestination(context, AdminDestination.dashboard, AdminDestination.drivers),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -91,6 +96,7 @@ class _QuickAccessCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.onRetry,
     super.key,
   });
 
@@ -98,9 +104,13 @@ class _QuickAccessCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  // Set when the card's count failed to load: the subtitle reads as an
+  // error and a Retry button replaces the chevron.
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Material(
       color: VendorPalette.surfaceContainer,
       borderRadius: AppRadius.large,
@@ -136,19 +146,26 @@ class _QuickAccessCard extends StatelessWidget {
                       style: Theme.of(context)
                           .textTheme
                           .bodySmall
-                          ?.copyWith(color: VendorPalette.textSecondary),
+                          ?.copyWith(color: onRetry == null ? VendorPalette.textSecondary : colorScheme.error),
                     ),
                   ],
                 ),
               ),
-              Transform.flip(
-                flipX: Directionality.of(context) != TextDirection.rtl,
-                child: const Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: 14,
-                  color: VendorPalette.textMuted,
+              if (onRetry != null)
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  tooltip: AppLocalizations.of(context)!.retryButton,
+                  onPressed: onRetry,
+                )
+              else
+                Transform.flip(
+                  flipX: Directionality.of(context) != TextDirection.rtl,
+                  child: const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 14,
+                    color: VendorPalette.textMuted,
+                  ),
                 ),
-              ),
             ],
           ),
         ),

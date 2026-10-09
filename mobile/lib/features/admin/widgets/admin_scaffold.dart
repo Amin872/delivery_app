@@ -17,12 +17,12 @@ import '../screens/admin_promotions_screen.dart';
 import '../screens/admin_users_screen.dart';
 import '../screens/admin_vendors_screen.dart';
 
-/// Every destination the admin nav (sidebar/drawer) can reach. Categories,
-/// Notifications and Settings have no real screen yet — they open
-/// [AdminScaffold] again with a "coming soon" body,
-/// so later phases (see ADMIN_AUDIT_REPORT.md) can wire in a real screen one
-/// destination at a time without touching this enum's shape or the nav
-/// list itself.
+/// Every admin destination. Categories, Notifications and Settings have no
+/// real screen yet: they're hidden from the nav (see [isInNav]) and, if
+/// reached anyway, open [AdminScaffold] with a "coming soon" body — so a
+/// later phase (see ADMIN_AUDIT_REPORT.md) can wire in a real screen one
+/// destination at a time by adding it here and dropping it from [isInNav]'s
+/// exclusions, without touching this enum's shape or the nav list itself.
 enum AdminDestination {
   dashboard,
   users,
@@ -39,6 +39,12 @@ enum AdminDestination {
 }
 
 extension AdminDestinationX on AdminDestination {
+  /// Whether the nav lists this destination: every one with a real screen.
+  bool get isInNav => switch (this) {
+        AdminDestination.categories || AdminDestination.notifications || AdminDestination.settings => false,
+        _ => true,
+      };
+
   IconData get icon => switch (this) {
         AdminDestination.dashboard => Icons.dashboard_outlined,
         AdminDestination.users => Icons.people_outline,
@@ -124,9 +130,8 @@ void navigateToAdminDestination(BuildContext context, AdminDestination current, 
 /// Shared shell for every admin page: an AppBar (page title, language
 /// toggle, sign-out) plus the same [AdminDestination] list rendered as a
 /// persistent sidebar on wide viewports or a [Drawer] on narrow ones.
-/// Applies [VendorPalette] — this app's existing dark-navy/cyan identity
-/// (already used by Home, the vendor menu screen, cart, ...) — rather than
-/// inventing a separate admin color scheme.
+/// Uses the app's one shared theme ([VendorPalette] is an alias of
+/// AppPalette) rather than a separate admin color scheme.
 class AdminScaffold extends ConsumerWidget {
   const AdminScaffold({
     required this.title,
@@ -216,7 +221,7 @@ class _AdminNavList extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       children: [
-        for (final destination in AdminDestination.values)
+        for (final destination in AdminDestination.values.where((d) => d.isInNav))
           ListTile(
             leading: Icon(
               destination.icon,

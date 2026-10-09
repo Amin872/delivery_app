@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/format/display_formatters.dart';
 import '../../../core/l10n/enum_labels.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
@@ -73,7 +74,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                   return EmptyState(message: l10n.noUsersFoundMessage);
                 }
                 return ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                   itemCount: filtered.length,
                   itemBuilder: (context, index) {
                     final user = filtered[index];
@@ -86,9 +87,16 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                             style: const TextStyle(color: VendorPalette.textPrimary),
                           ),
                         ),
-                        title: Text(user.displayName),
-                        subtitle: Text(
-                          user.phoneNumber == null ? user.email : '${user.email} · ${user.phoneNumber}',
+                        title: Text(user.displayName, maxLines: 2, overflow: TextOverflow.ellipsis),
+                        // Email and phone on their own lines: both are long
+                        // LTR runs, and the phone is bidi-isolated so its
+                        // "+" stays put inside Arabic text.
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(user.email, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            if (user.phoneNumber?.trim().isNotEmpty ?? false) Text(formatPhone(user.phoneNumber!)),
+                          ],
                         ),
                         trailing: _RoleBadge(role: user.role),
                       ),
@@ -97,7 +105,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                 );
               },
               loading: () => const ListSkeletonLoader(),
-              error: (error, _) => ErrorState(error: error),
+              error: (error, _) => ErrorState(error: error, onRetry: () => ref.invalidate(allUsersProvider)),
             ),
           ),
         ],

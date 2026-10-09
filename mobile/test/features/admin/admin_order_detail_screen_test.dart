@@ -7,6 +7,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:delivery_app/core/format/display_formatters.dart';
 import 'package:delivery_app/core/providers/formatters_provider.dart';
 import 'package:delivery_app/core/widgets/app_network_image.dart';
 import 'package:delivery_app/features/admin/screens/admin_order_detail_screen.dart';
@@ -190,7 +191,7 @@ void main() {
       expect(find.descendant(of: delivery, matching: find.text(_l10n.orderDeliveryInstructionsLabel)), findsOneWidget);
       expect(find.descendant(of: delivery, matching: find.text('Call on arrival')), findsOneWidget);
       expect(find.descendant(of: delivery, matching: find.text(_l10n.orderDriverNoteLabel)), findsOneWidget);
-      expect(find.descendant(of: delivery, matching: find.text('33.50000, 36.25000')), findsOneWidget);
+      expect(find.descendant(of: delivery, matching: find.text(formatCoordinates(33.5, 36.25))), findsOneWidget);
 
       expect(find.byKey(const ValueKey('admin_order_proof')), findsNothing);
     });

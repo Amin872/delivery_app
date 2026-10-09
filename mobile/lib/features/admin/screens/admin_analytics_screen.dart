@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/errors/error_messages.dart';
 import '../../../core/providers/formatters_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/animated_async.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/stat_card.dart';
+import '../../../core/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
 import '../widgets/admin_scaffold.dart';
@@ -72,6 +72,7 @@ class AdminAnalyticsScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final statsAsync = ref.watch(marketplaceStatsProvider);
     final currencyFormat = ref.watch(currencyFormatProvider);
+    final countFormat = ref.watch(countFormatProvider);
 
     return AdminScaffold(
       title: l10n.adminNavAnalytics,
@@ -89,14 +90,14 @@ class AdminAnalyticsScreen extends ConsumerWidget {
                 children: [
                   StatCard(
                     label: l10n.totalUsersLabel,
-                    value: '${stats.userCount}',
+                    value: countFormat.format(stats.userCount),
                     icon: Icons.people_outline,
                     gradient: _analyticsGradient,
                   ),
                   const SizedBox(width: AppSpacing.md),
                   StatCard(
                     label: l10n.totalVendorsLabel,
-                    value: '${stats.vendorCount}',
+                    value: countFormat.format(stats.vendorCount),
                     icon: Icons.storefront_outlined,
                     gradient: _analyticsGradient,
                   ),
@@ -107,14 +108,14 @@ class AdminAnalyticsScreen extends ConsumerWidget {
                 children: [
                   StatCard(
                     label: l10n.totalDriversLabel,
-                    value: '${stats.driverCount}',
+                    value: countFormat.format(stats.driverCount),
                     icon: Icons.two_wheeler_outlined,
                     gradient: _analyticsGradient,
                   ),
                   const SizedBox(width: AppSpacing.md),
                   StatCard(
                     label: l10n.totalOrdersLabel,
-                    value: '${stats.orderCount}',
+                    value: countFormat.format(stats.orderCount),
                     icon: Icons.receipt_long_outlined,
                     gradient: _analyticsGradient,
                   ),
@@ -144,12 +145,7 @@ class AdminAnalyticsScreen extends ConsumerWidget {
             ],
           ),
         ),
-        error: (error, _) => Center(
-          child: Text(
-            localizedErrorMessage(context, error),
-            style: const TextStyle(color: VendorPalette.textSecondary),
-          ),
-        ),
+        error: (error, _) => ErrorState(error: error, onRetry: () => ref.invalidate(marketplaceStatsProvider)),
       ),
     );
   }

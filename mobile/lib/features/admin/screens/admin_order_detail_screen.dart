@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_messages.dart';
+import '../../../core/format/display_formatters.dart';
 import '../../../core/providers/formatters_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
@@ -17,6 +18,7 @@ import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/responsive_center.dart';
 import '../../../core/widgets/skeleton_loader.dart';
+import '../../../core/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/app_user.dart';
 import '../../../models/approval_status.dart';
@@ -166,7 +168,7 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
         appBar: AppBar(
           backgroundColor: VendorPalette.background,
           foregroundColor: VendorPalette.textPrimary,
-          title: Text(l10n.orderLabel(widget.orderId)),
+          title: Text(l10n.orderLabel(displayOrderId(widget.orderId))),
           actions: const [LanguageToggleButton()],
         ),
         body: ResponsiveCenter(
@@ -299,8 +301,10 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
                     if (order.deliveryCoordinates != null)
                       _InfoRow(
                         label: l10n.deliveryLocationLabel,
-                        value: '${order.deliveryCoordinates!.latitude.toStringAsFixed(5)}, '
-                            '${order.deliveryCoordinates!.longitude.toStringAsFixed(5)}',
+                        value: formatCoordinates(
+                          order.deliveryCoordinates!.latitude,
+                          order.deliveryCoordinates!.longitude,
+                        ),
                       ),
                     if (_hasText(order.deliveryInstructions))
                       _InfoRow(
@@ -346,11 +350,9 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
               );
             },
             loading: () => const ListSkeletonLoader(),
-            error: (error, _) => Center(
-              child: Text(
-                localizedErrorMessage(context, error),
-                style: const TextStyle(color: VendorPalette.textSecondary),
-              ),
+            error: (error, _) => ErrorState(
+              error: error,
+              onRetry: () => ref.invalidate(_orderProvider(widget.orderId)),
             ),
           ),
         ),
@@ -435,15 +437,9 @@ class _DriverPickerSheet extends ConsumerWidget {
         child: Center(child: screenSpinner(context)),
       );
     } else if (driversAsync.hasError) {
-      body = Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxxl),
-        child: Text(localizedErrorMessage(context, driversAsync.error!)),
-      );
+      body = ErrorState(error: driversAsync.error!, onRetry: () => ref.invalidate(_allDriversProvider));
     } else if (usersAsync.hasError) {
-      body = Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxxl),
-        child: Text(localizedErrorMessage(context, usersAsync.error!)),
-      );
+      body = ErrorState(error: usersAsync.error!, onRetry: () => ref.invalidate(allUsersProvider));
     } else {
       final options = reassignmentCandidates(driversAsync.value!, usersAsync.value!);
 

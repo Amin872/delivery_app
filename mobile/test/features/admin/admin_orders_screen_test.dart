@@ -2,6 +2,7 @@ import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:delivery_app/core/format/display_formatters.dart';
 import 'package:delivery_app/core/l10n/enum_labels.dart';
 import 'package:delivery_app/features/admin/screens/admin_order_detail_screen.dart';
 import 'package:delivery_app/features/admin/screens/admin_orders_screen.dart';
@@ -28,7 +29,8 @@ Future<FakeFirebaseFirestore> _db() async {
   return db;
 }
 
-Finder _row(String id) => find.text(adminTestL10n.orderLabel(id));
+// Rows show the short, bidi-isolated reference, not the raw document id.
+Finder _row(String id) => find.text(adminTestL10n.orderLabel(displayOrderId(id)));
 
 /// Selects the filter chip labelled [label] (scrolling the chip row to it).
 Future<void> _selectChip(WidgetTester tester, String label, {bool backwards = false}) async {

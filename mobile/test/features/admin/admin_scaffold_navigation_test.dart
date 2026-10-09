@@ -36,6 +36,24 @@ Future<FakeFirebaseFirestore> _db() async {
 }
 
 void main() {
+  testWidgets('the nav lists every implemented destination and hides the unfinished ones', (tester) async {
+    await pumpAdminScreen(tester, const AdminDashboardScreen(), await _db());
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+
+    final drawer = find.byType(Drawer);
+    for (final destination in AdminDestination.values) {
+      final hidden = {AdminDestination.categories, AdminDestination.notifications, AdminDestination.settings}
+          .contains(destination);
+      expect(destination.isInNav, !hidden, reason: destination.name);
+      expect(
+        find.descendant(of: drawer, matching: find.text(destination.label(adminTestL10n))),
+        hidden ? findsNothing : findsOneWidget,
+        reason: destination.name,
+      );
+    }
+  });
+
   testWidgets('Orders and Promotions render inside AdminScaffold with their own destination', (tester) async {
     await pumpAdminScreen(tester, const AdminDashboardScreen(), await _db());
 

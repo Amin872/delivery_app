@@ -15,6 +15,7 @@ import '../../../models/approval_status.dart';
 import '../../../models/driver.dart';
 import '../../../routing/page_transitions.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
+import '../widgets/admin_actions.dart';
 import '../widgets/admin_scaffold.dart';
 import 'admin_driver_detail_screen.dart';
 import 'admin_users_screen.dart' show allUsersProvider;
@@ -123,32 +124,22 @@ class _AdminDriversScreenState extends ConsumerState<AdminDriversScreen> {
           const SizedBox(height: AppSpacing.md),
           // Same approval chips as AdminVendorsScreen (same three states and
           // labels); filtering is client-side over the existing stream.
-          SizedBox(
-            height: 40,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                Padding(
-                  padding: const EdgeInsetsDirectional.only(end: 8),
-                  child: ChoiceChip(
-                    key: const ValueKey('driver_filter_all'),
-                    label: Text(l10n.allStatusesLabel),
-                    selected: _statusFilter == null,
-                    onSelected: (_) => setState(() => _statusFilter = null),
-                  ),
+          AdminFilterChipBar(
+            chips: [
+              ChoiceChip(
+                key: const ValueKey('driver_filter_all'),
+                label: Text(l10n.allStatusesLabel),
+                selected: _statusFilter == null,
+                onSelected: (_) => setState(() => _statusFilter = null),
+              ),
+              for (final status in ApprovalStatus.values)
+                ChoiceChip(
+                  key: ValueKey('driver_filter_${status.name}'),
+                  label: Text(vendorApprovalStatusLabel(context, status)),
+                  selected: _statusFilter == status,
+                  onSelected: (_) => setState(() => _statusFilter = status),
                 ),
-                for (final status in ApprovalStatus.values)
-                  Padding(
-                    padding: const EdgeInsetsDirectional.only(end: 8),
-                    child: ChoiceChip(
-                      key: ValueKey('driver_filter_${status.name}'),
-                      label: Text(vendorApprovalStatusLabel(context, status)),
-                      selected: _statusFilter == status,
-                      onSelected: (_) => setState(() => _statusFilter = status),
-                    ),
-                  ),
-              ],
-            ),
+            ],
           ),
           const SizedBox(height: AppSpacing.md),
           Expanded(child: _DriverList(query: _query, status: _statusFilter)),
@@ -174,10 +165,10 @@ class _DriverList extends ConsumerWidget {
       return const ListSkeletonLoader();
     }
     if (driversAsync.hasError) {
-      return ErrorState(error: driversAsync.error!);
+      return ErrorState(error: driversAsync.error!, onRetry: () => ref.invalidate(allDriversProvider));
     }
     if (usersAsync.hasError) {
-      return ErrorState(error: usersAsync.error!);
+      return ErrorState(error: usersAsync.error!, onRetry: () => ref.invalidate(allUsersProvider));
     }
 
     final filtered = filterDriverRows(
@@ -204,7 +195,7 @@ class _DriverList extends ConsumerWidget {
                 style: const TextStyle(color: VendorPalette.textPrimary),
               ),
             ),
-            title: Text(row.name),
+            title: Text(row.name, maxLines: 2, overflow: TextOverflow.ellipsis),
             // The two status pills sit under the rating rather than stacked
             // in `trailing`: ListTile caps trailing at the tile's fixed
             // height, which two pills overflowed; here the tile grows with

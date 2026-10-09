@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/animated_async.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_spinner.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/gradient_button.dart';
@@ -20,6 +21,7 @@ import '../../../models/neighborhood.dart';
 import '../../../models/vendor.dart';
 import '../../customer/screens/customer_home_screen.dart'
     show allCitiesProvider, allGovernoratesProvider, allNeighborhoodsProvider, firestoreServiceProvider;
+import '../widgets/admin_actions.dart';
 import '../widgets/admin_scaffold.dart';
 import 'admin_vendors_screen.dart' show allVendorsProvider;
 import '../../../core/widgets/state_views.dart';
@@ -76,6 +78,18 @@ int vendorCountForGovernorate(
   return vendors.where((vendor) => cityIdsInGovernorate.contains(vendor.city)).length;
 }
 
+/// The current value of a list stream for an in-use check: waits for the
+/// first snapshot if it hasn't arrived yet (so a check made right after the
+/// screen opens never sees a falsely empty list), and null if it can't be
+/// loaded — callers then can't rule out that the location is in use.
+Future<List<T>?> _loadedList<T>(WidgetRef ref, ProviderListenable<Future<List<T>>> future) async {
+  try {
+    return await ref.read(future);
+  } catch (_) {
+    return null;
+  }
+}
+
 final _idPattern = RegExp(r'^[a-z][a-z0-9_]*$');
 
 /// Validation outcome for a governorate/city id field — a pure enum rather
@@ -129,7 +143,11 @@ class AdminLocationsScreen extends StatelessWidget {
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Scrollable: three fixed-width tabs clip "Neighborhoods" on a
+            // 320px phone at a large text scale.
             TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
               labelColor: VendorPalette.primaryCyan,
               unselectedLabelColor: VendorPalette.textSecondary,
               indicatorColor: VendorPalette.primaryCyan,
@@ -162,16 +180,20 @@ class _SearchRow extends StatelessWidget {
     required this.addTooltip,
     required this.onChanged,
     required this.onAdd,
+    this.addDisabledReason,
   });
 
   final String hintText;
   final String addTooltip;
   final ValueChanged<String> onChanged;
-  final VoidCallback onAdd;
+  // Null disables "Add"; [addDisabledReason] then says why (as the
+  // button's tooltip and as a line under the row).
+  final VoidCallback? onAdd;
+  final String? addDisabledReason;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final row = Row(
       children: [
         Expanded(
           child: TextField(
@@ -190,8 +212,21 @@ class _SearchRow extends StatelessWidget {
         const SizedBox(width: AppSpacing.sm),
         IconButton.filled(
           icon: const Icon(Icons.add),
-          tooltip: addTooltip,
+          tooltip: onAdd == null ? (addDisabledReason ?? addTooltip) : addTooltip,
           onPressed: onAdd,
+        ),
+      ],
+    );
+    if (onAdd != null || addDisabledReason == null) return row;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        row,
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          addDisabledReason!,
+          key: const ValueKey('admin_location_add_disabled_reason'),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: VendorPalette.textSecondary),
         ),
       ],
     );
@@ -226,25 +261,33 @@ class _GovernoratesTabState extends ConsumerState<_GovernoratesTab>
     );
   }
 
-  Future<void> _setEnabled(GovernorateOption governorate, bool enabled) async {
-    if (enabled) {
-      HapticFeedback.selectionClick();
-      await ref.read(firestoreServiceProvider).setGovernorateEnabled(governorate.id, enabled);
-      return;
-    }
-    final vendors = ref.read(allVendorsProvider).valueOrNull ?? const <Vendor>[];
-    final cities = ref.read(allCitiesProvider).valueOrNull ?? const <CityOption>[];
-    final affected = vendorCountForGovernorate(vendors, cities, governorate.id);
-    if (affected > 0) {
+  // Resolves false when backed out or failed, so the switch rolls back.
+  Future<bool> _setEnabled(GovernorateOption governorate, bool enabled) async {
+    if (!enabled) {
+      final vendors = await _loadedList<Vendor>(ref, allVendorsProvider.future);
+      final cities = await _loadedList<CityOption>(ref, allCitiesProvider.future);
+      if (!mounted) return false;
       final l10n = AppLocalizations.of(context)!;
-      final confirmed = await showConfirmDialog(
-        context,
-        message: l10n.disableLocationInUseWarning(affected),
-      );
-      if (confirmed != true) return;
+      // Usage unknown (a list failed to load): still ask, rather than
+      // silently disabling something restaurants may depend on.
+      final affected = vendors == null || cities == null
+          ? null
+          : vendorCountForGovernorate(vendors, cities, governorate.id);
+      if (affected != 0) {
+        final confirmed = await showConfirmDialog(
+          context,
+          message: affected == null
+              ? l10n.disableLocationUsageUnknownWarning
+              : l10n.disableLocationInUseWarning(affected),
+        );
+        if (confirmed != true || !mounted) return false;
+      }
     }
     HapticFeedback.selectionClick();
-    await ref.read(firestoreServiceProvider).setGovernorateEnabled(governorate.id, false);
+    return runAdminWrite(
+      context,
+      () => ref.read(firestoreServiceProvider).setGovernorateEnabled(governorate.id, enabled),
+    );
   }
 
   @override
@@ -252,6 +295,11 @@ class _GovernoratesTabState extends ConsumerState<_GovernoratesTab>
     super.build(context);
     final l10n = AppLocalizations.of(context)!;
     final governoratesAsync = ref.watch(allGovernoratesProvider);
+    // Keeps the vendor and city lists loaded and live for _setEnabled's
+    // in-use warning (which also waits for their first snapshot), so it's
+    // decided on real data even when Locations is the first admin screen.
+    ref.watch(allVendorsProvider);
+    ref.watch(allCitiesProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -292,8 +340,10 @@ class _GovernoratesTabState extends ConsumerState<_GovernoratesTab>
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Switch(
+                          AdminAsyncSwitch(
+                            key: ValueKey('admin_governorate_enabled_${governorate.id}'),
                             value: governorate.enabled,
+                            tooltip: l10n.locationEnabledLabel,
                             onChanged: (value) => _setEnabled(governorate, value),
                           ),
                           IconButton(
@@ -309,7 +359,7 @@ class _GovernoratesTabState extends ConsumerState<_GovernoratesTab>
               );
             },
             loading: () => const ListSkeletonLoader(),
-            error: (error, _) => ErrorState(error: error),
+            error: (error, _) => ErrorState(error: error, onRetry: () => ref.invalidate(allGovernoratesProvider)),
           ),
         ),
       ],
@@ -344,24 +394,26 @@ class _CitiesTabState extends ConsumerState<_CitiesTab> with AutomaticKeepAliveC
     );
   }
 
-  Future<void> _setEnabled(CityOption city, bool enabled) async {
-    if (enabled) {
-      HapticFeedback.selectionClick();
-      await ref.read(firestoreServiceProvider).setCityEnabled(city.id, enabled);
-      return;
-    }
-    final vendors = ref.read(allVendorsProvider).valueOrNull ?? const <Vendor>[];
-    final affected = vendorCountForCity(vendors, city.id);
-    if (affected > 0) {
+  // Resolves false when backed out or failed, so the switch rolls back.
+  Future<bool> _setEnabled(CityOption city, bool enabled) async {
+    if (!enabled) {
+      final vendors = await _loadedList<Vendor>(ref, allVendorsProvider.future);
+      if (!mounted) return false;
       final l10n = AppLocalizations.of(context)!;
-      final confirmed = await showConfirmDialog(
-        context,
-        message: l10n.disableLocationInUseWarning(affected),
-      );
-      if (confirmed != true) return;
+      // Same "unknown usage still asks" rule as the governorate switch.
+      final affected = vendors == null ? null : vendorCountForCity(vendors, city.id);
+      if (affected != 0) {
+        final confirmed = await showConfirmDialog(
+          context,
+          message: affected == null
+              ? l10n.disableLocationUsageUnknownWarning
+              : l10n.disableLocationInUseWarning(affected),
+        );
+        if (confirmed != true || !mounted) return false;
+      }
     }
     HapticFeedback.selectionClick();
-    await ref.read(firestoreServiceProvider).setCityEnabled(city.id, false);
+    return runAdminWrite(context, () => ref.read(firestoreServiceProvider).setCityEnabled(city.id, enabled));
   }
 
   @override
@@ -369,6 +421,7 @@ class _CitiesTabState extends ConsumerState<_CitiesTab> with AutomaticKeepAliveC
     super.build(context);
     final l10n = AppLocalizations.of(context)!;
     final citiesAsync = ref.watch(allCitiesProvider);
+    ref.watch(allVendorsProvider); // see _GovernoratesTabState.build
     final governorates = ref.watch(allGovernoratesProvider).valueOrNull ?? const <GovernorateOption>[];
 
     return Column(
@@ -381,30 +434,20 @@ class _CitiesTabState extends ConsumerState<_CitiesTab> with AutomaticKeepAliveC
           onAdd: () => _openForm(),
         ),
         const SizedBox(height: AppSpacing.md),
-        SizedBox(
-          height: 40,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
-                  label: Text(l10n.allStatusesLabel),
-                  selected: _governorateFilter == null,
-                  onSelected: (_) => setState(() => _governorateFilter = null),
-                ),
+        AdminFilterChipBar(
+          chips: [
+            ChoiceChip(
+              label: Text(l10n.allStatusesLabel),
+              selected: _governorateFilter == null,
+              onSelected: (_) => setState(() => _governorateFilter = null),
+            ),
+            for (final governorate in governorates)
+              ChoiceChip(
+                label: Text(governorateLabel(context, governorate)),
+                selected: _governorateFilter == governorate.id,
+                onSelected: (_) => setState(() => _governorateFilter = governorate.id),
               ),
-              for (final governorate in governorates)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(governorateLabel(context, governorate)),
-                    selected: _governorateFilter == governorate.id,
-                    onSelected: (_) => setState(() => _governorateFilter = governorate.id),
-                  ),
-                ),
-            ],
-          ),
+          ],
         ),
         const SizedBox(height: AppSpacing.md),
         Expanded(
@@ -441,8 +484,10 @@ class _CitiesTabState extends ConsumerState<_CitiesTab> with AutomaticKeepAliveC
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Switch(
+                          AdminAsyncSwitch(
+                            key: ValueKey('admin_city_enabled_${row.city.id}'),
                             value: row.city.enabled,
+                            tooltip: l10n.locationEnabledLabel,
                             onChanged: (value) => _setEnabled(row.city, value),
                           ),
                           IconButton(
@@ -458,7 +503,7 @@ class _CitiesTabState extends ConsumerState<_CitiesTab> with AutomaticKeepAliveC
               );
             },
             loading: () => const ListSkeletonLoader(),
-            error: (error, _) => ErrorState(error: error),
+            error: (error, _) => ErrorState(error: error, onRetry: () => ref.invalidate(allCitiesProvider)),
           ),
         ),
       ],
@@ -538,6 +583,9 @@ class _GovernorateFormState extends ConsumerState<_GovernorateForm> {
       _isSubmitting = true;
       _errorMessage = null;
     });
+    final messenger = ScaffoldMessenger.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    final savedMessage = AppLocalizations.of(context)!.locationSavedMessage;
     try {
       final governorate = GovernorateOption(
         id: widget.existing?.id ?? _idController.text.trim(),
@@ -552,6 +600,7 @@ class _GovernorateFormState extends ConsumerState<_GovernorateForm> {
       } else {
         await firestore.updateGovernorate(governorate);
       }
+      messenger.showSnackBar(buildAppSnackBar(colorScheme, savedMessage));
       if (mounted) Navigator.of(context).pop();
     } catch (error) {
       if (mounted) setState(() => _errorMessage = localizedErrorMessage(context, error));
@@ -700,6 +749,9 @@ class _CityFormState extends ConsumerState<_CityForm> {
       _isSubmitting = true;
       _errorMessage = null;
     });
+    final messenger = ScaffoldMessenger.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    final savedMessage = AppLocalizations.of(context)!.locationSavedMessage;
     try {
       final city = CityOption(
         id: widget.existing?.id ?? _idController.text.trim(),
@@ -715,6 +767,7 @@ class _CityFormState extends ConsumerState<_CityForm> {
       } else {
         await firestore.updateCity(city);
       }
+      messenger.showSnackBar(buildAppSnackBar(colorScheme, savedMessage));
       if (mounted) Navigator.of(context).pop();
     } catch (error) {
       if (mounted) setState(() => _errorMessage = localizedErrorMessage(context, error));
@@ -846,9 +899,20 @@ class _NeighborhoodsTabState extends ConsumerState<_NeighborhoodsTab>
     );
   }
 
-  Future<void> _setEnabled(NeighborhoodOption neighborhood, bool enabled) async {
+  // Disabling always asks first (neighborhoods carry no vendor count to
+  // decide on). Resolves false when backed out or failed, so the switch
+  // rolls back.
+  Future<bool> _setEnabled(NeighborhoodOption neighborhood, bool enabled) async {
+    if (!enabled) {
+      final l10n = AppLocalizations.of(context)!;
+      final confirmed = await showConfirmDialog(context, message: l10n.disableNeighborhoodConfirmMessage);
+      if (confirmed != true || !mounted) return false;
+    }
     HapticFeedback.selectionClick();
-    await ref.read(firestoreServiceProvider).setNeighborhoodEnabled(neighborhood.id, enabled);
+    return runAdminWrite(
+      context,
+      () => ref.read(firestoreServiceProvider).setNeighborhoodEnabled(neighborhood.id, enabled),
+    );
   }
 
   @override
@@ -865,33 +929,26 @@ class _NeighborhoodsTabState extends ConsumerState<_NeighborhoodsTab>
           hintText: l10n.searchNeighborhoodsHint,
           addTooltip: l10n.addNeighborhoodTitle,
           onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
-          onAdd: cities.isEmpty ? () {} : () => _openForm(),
+          // A neighborhood must belong to an enabled city (see
+          // _NeighborhoodForm), so with none there's nothing to add to.
+          onAdd: visibleCities(cities).isEmpty ? null : () => _openForm(),
+          addDisabledReason: l10n.addNeighborhoodNeedsCityMessage,
         ),
         const SizedBox(height: AppSpacing.md),
-        SizedBox(
-          height: 40,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
-                  label: Text(l10n.allStatusesLabel),
-                  selected: _cityFilter == null,
-                  onSelected: (_) => setState(() => _cityFilter = null),
-                ),
+        AdminFilterChipBar(
+          chips: [
+            ChoiceChip(
+              label: Text(l10n.allStatusesLabel),
+              selected: _cityFilter == null,
+              onSelected: (_) => setState(() => _cityFilter = null),
+            ),
+            for (final city in cities)
+              ChoiceChip(
+                label: Text(cityLabel(context, city.id, cities)),
+                selected: _cityFilter == city.id,
+                onSelected: (_) => setState(() => _cityFilter = city.id),
               ),
-              for (final city in cities)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(cityLabel(context, city.id, cities)),
-                    selected: _cityFilter == city.id,
-                    onSelected: (_) => setState(() => _cityFilter = city.id),
-                  ),
-                ),
-            ],
-          ),
+          ],
         ),
         const SizedBox(height: AppSpacing.md),
         Expanded(
@@ -927,8 +984,10 @@ class _NeighborhoodsTabState extends ConsumerState<_NeighborhoodsTab>
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Switch(
+                          AdminAsyncSwitch(
+                            key: ValueKey('admin_neighborhood_enabled_${neighborhood.id}'),
                             value: neighborhood.enabled,
+                            tooltip: l10n.locationEnabledLabel,
                             onChanged: (value) => _setEnabled(neighborhood, value),
                           ),
                           IconButton(
@@ -944,7 +1003,7 @@ class _NeighborhoodsTabState extends ConsumerState<_NeighborhoodsTab>
               );
             },
             loading: () => const ListSkeletonLoader(),
-            error: (error, _) => ErrorState(error: error),
+            error: (error, _) => ErrorState(error: error, onRetry: () => ref.invalidate(allNeighborhoodsProvider)),
           ),
         ),
       ],
@@ -1029,6 +1088,9 @@ class _NeighborhoodFormState extends ConsumerState<_NeighborhoodForm> {
       _isSubmitting = true;
       _errorMessage = null;
     });
+    final messenger = ScaffoldMessenger.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    final savedMessage = AppLocalizations.of(context)!.locationSavedMessage;
     try {
       final neighborhood = NeighborhoodOption(
         id: widget.existing?.id ?? _idController.text.trim(),
@@ -1045,6 +1107,7 @@ class _NeighborhoodFormState extends ConsumerState<_NeighborhoodForm> {
       } else {
         await firestore.updateNeighborhood(neighborhood);
       }
+      messenger.showSnackBar(buildAppSnackBar(colorScheme, savedMessage));
       if (mounted) Navigator.of(context).pop();
     } catch (error) {
       if (mounted) setState(() => _errorMessage = localizedErrorMessage(context, error));

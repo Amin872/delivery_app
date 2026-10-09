@@ -12,15 +12,13 @@ import '../../../core/widgets/staggered_list_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/vendor.dart';
 import '../../customer/screens/customer_home_screen.dart' show firestoreServiceProvider;
+import '../widgets/admin_actions.dart';
 import '../widgets/admin_scaffold.dart';
+import 'admin_vendors_screen.dart' show allVendorsProvider;
 import '../../../core/widgets/state_views.dart';
 
 final allMenuItemsProvider = StreamProvider.autoDispose<List<MenuItem>>((ref) {
   return ref.watch(firestoreServiceProvider).watchAllMenuItems();
-});
-
-final allVendorsProvider = StreamProvider.autoDispose<List<Vendor>>((ref) {
-  return ref.watch(firestoreServiceProvider).watchAllVendors();
 });
 
 class ProductRow {
@@ -46,7 +44,8 @@ class ProductRow {
 /// Joins every product (`FirestoreService.watchAllMenuItems()` — the same
 /// collection-group query CustomerHomeScreen's feed already uses, zero new
 /// reads) with its vendor's name (`watchAllVendors()`, already used by
-/// AdminVendorsScreen). Pure/Firebase-free so the join is unit-testable
+/// AdminVendorsScreen, whose `allVendorsProvider` this screen shares).
+/// Pure/Firebase-free so the join is unit-testable
 /// independent of both streams — same reasoning as Drivers'
 /// `buildDriverRows`. A product whose vendor doc is missing is still shown
 /// (vendor deletion isn't possible today — `vendors.delete` is `if false`
@@ -106,30 +105,24 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
             onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
           ),
           const SizedBox(height: AppSpacing.md),
-          SizedBox(
-            height: 40,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                _FilterChip(
-                  label: l10n.allStatusesLabel,
-                  selected: _filter == _AvailabilityFilter.all,
-                  onSelected: () => setState(() => _filter = _AvailabilityFilter.all),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                _FilterChip(
-                  label: l10n.availableLabel,
-                  selected: _filter == _AvailabilityFilter.available,
-                  onSelected: () => setState(() => _filter = _AvailabilityFilter.available),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                _FilterChip(
-                  label: l10n.unavailableLabel,
-                  selected: _filter == _AvailabilityFilter.unavailable,
-                  onSelected: () => setState(() => _filter = _AvailabilityFilter.unavailable),
-                ),
-              ],
-            ),
+          AdminFilterChipBar(
+            chips: [
+              _FilterChip(
+                label: l10n.allStatusesLabel,
+                selected: _filter == _AvailabilityFilter.all,
+                onSelected: () => setState(() => _filter = _AvailabilityFilter.all),
+              ),
+              _FilterChip(
+                label: l10n.availableLabel,
+                selected: _filter == _AvailabilityFilter.available,
+                onSelected: () => setState(() => _filter = _AvailabilityFilter.available),
+              ),
+              _FilterChip(
+                label: l10n.unavailableLabel,
+                selected: _filter == _AvailabilityFilter.unavailable,
+                onSelected: () => setState(() => _filter = _AvailabilityFilter.unavailable),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.sm),
           Expanded(child: _ProductList(query: _query, filter: _filter)),
@@ -173,10 +166,10 @@ class _ProductList extends ConsumerWidget {
       return const ListSkeletonLoader();
     }
     if (itemsAsync.hasError) {
-      return ErrorState(error: itemsAsync.error!);
+      return ErrorState(error: itemsAsync.error!, onRetry: () => ref.invalidate(allMenuItemsProvider));
     }
     if (vendorsAsync.hasError) {
-      return ErrorState(error: vendorsAsync.error!);
+      return ErrorState(error: vendorsAsync.error!, onRetry: () => ref.invalidate(allVendorsProvider));
     }
 
     var rows = buildProductRows(itemsAsync.value!, vendorsAsync.value!);
@@ -221,7 +214,7 @@ class _ProductList extends ConsumerWidget {
                       borderRadius: AppRadius.small,
                     ),
             ),
-            title: Text(row.name),
+            title: Text(row.name, maxLines: 2, overflow: TextOverflow.ellipsis),
             subtitle: Text('${row.vendorName} · ${currencyFormat.format(row.price)}'),
             trailing: _AvailabilityBadge(available: row.available),
           ),

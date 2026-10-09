@@ -4,10 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:delivery_app/features/admin/screens/admin_dashboard_screen.dart';
 import 'package:delivery_app/features/admin/screens/admin_drivers_screen.dart';
+import 'package:delivery_app/models/vendor.dart';
 
 import 'admin_test_harness.dart';
 
 Finder _card() => find.byKey(const ValueKey('dashboard_pending_drivers'));
+Finder _vendorCard() => find.byKey(const ValueKey('dashboard_pending_vendors'));
 
 void main() {
   testWidgets('counts pending drivers (legacy docs without a status count as pending)', (tester) async {
@@ -44,6 +46,28 @@ void main() {
 
     expect(find.text(adminTestL10n.vendorApprovalsTitle), findsOneWidget);
     expect(find.text(adminTestL10n.pendingApprovalsCountLabel(0)), findsOneWidget);
+  });
+
+  testWidgets('a failed count says so with a Retry, instead of "Loading…" forever', (tester) async {
+    var attempts = 0;
+    await pumpAdminScreen(tester, const AdminDashboardScreen(), FakeFirebaseFirestore(), overrides: [
+      pendingVendorsProvider.overrideWith((ref) {
+        attempts++;
+        return attempts == 1 ? Stream<List<Vendor>>.error(Exception('unavailable')) : Stream.value(const <Vendor>[]);
+      }),
+    ]);
+
+    expect(find.descendant(of: _vendorCard(), matching: find.text(adminTestL10n.countLoadFailedLabel)), findsOneWidget);
+    expect(find.descendant(of: _vendorCard(), matching: find.text(adminTestL10n.loadingLabel)), findsNothing);
+    // The drivers card is unaffected.
+    expect(find.descendant(of: _card(), matching: find.text(adminTestL10n.pendingDriverApprovalsCountLabel(0))),
+        findsOneWidget);
+
+    await tester.tap(find.descendant(of: _vendorCard(), matching: find.byTooltip(adminTestL10n.retryButton)));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: _vendorCard(), matching: find.text(adminTestL10n.pendingApprovalsCountLabel(0))),
+        findsOneWidget);
+    expect(find.descendant(of: _vendorCard(), matching: find.byTooltip(adminTestL10n.retryButton)), findsNothing);
   });
 
   testWidgets('tapping the card opens the Drivers destination; back returns to the dashboard', (tester) async {

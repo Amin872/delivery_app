@@ -14,7 +14,9 @@ import 'package:delivery_app/services/firestore_service.dart';
 /// Shared setup for the admin screen tests: the real FirestoreService over
 /// an in-memory Firestore (so every admin stream runs its real query),
 /// English, and a phone-width view by default (below AdminScaffold's
-/// 840dp breakpoint, so the nav is the drawer).
+/// 840dp breakpoint, so the nav is the drawer). Pass [service] to swap in a
+/// FirestoreService subclass (e.g. one whose writes fail) and [overrides]
+/// for any other provider.
 final adminTestL10n = lookupAppLocalizations(const Locale('en'));
 
 Future<void> pumpAdminScreen(
@@ -22,6 +24,8 @@ Future<void> pumpAdminScreen(
   Widget home,
   FakeFirebaseFirestore db, {
   Size size = const Size(400, 900),
+  FirestoreService? service,
+  List<Override> overrides = const [],
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -34,9 +38,10 @@ Future<void> pumpAdminScreen(
       key: UniqueKey(),
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
-        firestoreServiceProvider.overrideWithValue(FirestoreService(firestore: db)),
+        firestoreServiceProvider.overrideWithValue(service ?? FirestoreService(firestore: db)),
         currencyFormatProvider.overrideWithValue(NumberFormat.currency(locale: 'en', name: 'SYP')),
         dateTimeFormatProvider.overrideWithValue(DateFormat('yyyy-MM-dd HH:mm')),
+        ...overrides,
       ],
       child: MaterialApp(
         locale: const Locale('en'),
