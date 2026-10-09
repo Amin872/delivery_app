@@ -89,9 +89,24 @@ Future<void> _seedVendorIn(FakeFirebaseFirestore db, String cityId) =>
       'city': cityId,
     });
 
+/// Selects the tab labelled [label]. The tab bar scrolls, so in a narrow
+/// view the last tab can start off-screen (the test font is wider than real
+/// text): bring it into view first, as a user would by scrolling, then
+/// confirm the selection really changed so a missed tap fails here.
 Future<void> _openTab(WidgetTester tester, String label) async {
-  await tester.tap(find.widgetWithText(Tab, label));
+  final tab = find.widgetWithText(Tab, label);
+  await tester.ensureVisible(tab);
   await tester.pumpAndSettle();
+  await tester.tap(tab);
+  await tester.pumpAndSettle();
+
+  final labels = [
+    adminTestL10n.governoratesTabLabel,
+    adminTestL10n.citiesTabLabel,
+    adminTestL10n.neighborhoodsTabLabel,
+  ];
+  final controller = DefaultTabController.of(tester.element(find.byType(TabBar)));
+  expect(controller.index, labels.indexOf(label), reason: 'tab "$label" was not selected');
 }
 
 bool _switchValue(WidgetTester tester, String key) => tester
