@@ -382,7 +382,17 @@ void main() {
       );
 
       expect(find.byIcon(Icons.add_a_photo_outlined), findsOneWidget);
-      await tester.tap(find.text('Move to Delivered'));
+      // The proof picker pushes the button below the 600px test view: scroll
+      // it into view so the tap really reaches it (otherwise it lands
+      // off-screen and `advanced == 0` proves nothing).
+      final advance = find.text('Move to Delivered');
+      await tester.ensureVisible(advance);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<FilledButton>(find.byKey(const ValueKey('driver_advance_button'))).onPressed,
+        isNull,
+      );
+      await tester.tap(advance);
       expect(advanced, 0);
     });
 
