@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/providers/preferences_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/app_snackbar.dart';
+import 'features/customer/providers/cart_session_sync.dart';
 import 'features/notifications/providers/push_notification_provider.dart';
 import 'l10n/app_localizations.dart';
 import 'routing/app_router.dart';
@@ -25,6 +26,10 @@ class DeliveryApp extends ConsumerWidget {
     // push_notification_provider.dart.
     ref.watch(pushNotificationSyncProvider);
     ref.watch(pushNotificationTapProvider);
+    // Keeps the in-memory cart with the account that filled it: a guest's
+    // cart survives sign-in, but sign-out or another account empties it —
+    // see cart_session_sync.dart.
+    ref.watch(cartSessionSyncProvider);
     ref.listen(pushForegroundMessageProvider, (previous, next) {
       next.whenData((message) {
         final title = message.notification?.title;
