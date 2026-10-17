@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/error_messages.dart';
 import '../../../core/l10n/enum_labels.dart';
@@ -14,6 +13,7 @@ import '../../../core/widgets/responsive_center.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/app_user.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/auth_navigation.dart';
 
 // Admin accounts are promoted out-of-band (see the comment on UserRole in
 // app_user.dart) — never offer `admin` as a self-service signup choice.
@@ -164,9 +164,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     : Text(l10n.createAccountTitle),
               ),
               TextButton(
-                onPressed: () => context.go('/login'),
+                onPressed: () => goToAuthScreen(context, '/login'),
                 child: Text(l10n.alreadyHaveAccountButton),
               ),
+              // Only when opened over a guest's browsing.
+              const ContinueBrowsingButton(),
                 ],
               ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.05, end: 0),
             ),

@@ -17,12 +17,14 @@ import 'package:delivery_app/features/auth/providers/session_provider.dart';
 import 'package:delivery_app/features/auth/screens/forgot_password_screen.dart';
 import 'package:delivery_app/features/auth/screens/login_screen.dart';
 import 'package:delivery_app/features/auth/screens/signup_screen.dart';
+import 'package:delivery_app/features/customer/providers/cart_provider.dart';
 import 'package:delivery_app/features/customer/screens/customer_home_screen.dart'
     show CustomerHomeScreen, firestoreServiceProvider;
 import 'package:delivery_app/features/customer/screens/order_tracking_screen.dart';
 import 'package:delivery_app/features/notifications/providers/push_notification_provider.dart';
 import 'package:delivery_app/l10n/app_localizations.dart';
 import 'package:delivery_app/models/app_user.dart';
+import 'package:delivery_app/models/vendor.dart';
 import 'package:delivery_app/routing/app_router.dart';
 import 'package:delivery_app/routing/session_redirect.dart';
 import 'package:delivery_app/services/auth_service.dart';
@@ -163,6 +165,16 @@ Future<_Harness> _pumpRouter(
   await harness.settle();
   return harness;
 }
+
+/// Scrolls [finder] into view on the current screen, taps it and settles.
+Future<void> _tapVisible(_Harness harness, Finder finder) async {
+  await harness.tester.ensureVisible(finder);
+  await harness.tester.pump();
+  await harness.tester.tap(finder);
+  await harness.settle();
+}
+
+final _continueBrowsing = find.byKey(const ValueKey('auth_continue_browsing_button'));
 
 /// Pushes a plain screen over the current one, the way role homes open
 /// their detail screens (Navigator.push, not go_router).
@@ -541,6 +553,194 @@ void main() {
         await harness.setSession(session);
         expect(identical(harness.router, router), isTrue, reason: '$session');
       }
+    });
+  });
+
+  group('auth screens over a guest\'s browsing (G1-E4.1)', () {
+    const falafel =
+        MenuItem(id: 'falafel', vendorId: 'v1', name: 'Falafel wrap', price: 2000, available: true);
+
+    /// A guest browsing a store with something in the cart, who then opens
+    /// sign-in the way a sign-in prompt does (a push over the browsing).
+    Future<_Harness> openSignInOverBrowsing(WidgetTester tester) async {
+      final harness =
+          await _pumpRouter(tester, initial: const SessionGuest(), guestBrowsing: true);
+      harness.container.read(cartProvider.notifier).addItem('v1', 'Falafel House', falafel);
+      _pushOver(tester, find.text(_guestHomeLabel), 'store menu');
+      await harness.settle();
+      harness.router.push(loginPath);
+      await harness.settle();
+      expect(find.byType(LoginScreen), findsOneWidget);
+      return harness;
+    }
+
+    void expectBackOnBrowsing(_Harness harness) {
+      expect(find.text('store menu'), findsOneWidget);
+      expect(harness.topLocation, homePath);
+      expect(find.byType(LoginScreen, skipOffstage: false), findsNothing);
+      expect(find.byType(SignupScreen, skipOffstage: false), findsNothing);
+      expect(find.byType(ForgotPasswordScreen, skipOffstage: false), findsNothing);
+      expect(harness.container.read(cartProvider).itemCount, 1);
+    }
+
+    testWidgets('sign-in offers Continue browsing, which returns to the store', (tester) async {
+      final harness = await openSignInOverBrowsing(tester);
+      expect(_continueBrowsing, findsOneWidget);
+
+      await _tapVisible(harness, _continueBrowsing);
+
+      expectBackOnBrowsing(harness);
+    });
+
+    testWidgets('sign-in → create account keeps the browsing, and can return to it',
+        (tester) async {
+      final harness = await openSignInOverBrowsing(tester);
+
+      await _tapVisible(harness, find.byKey(const ValueKey('login_create_account_button')));
+
+      expect(find.byType(SignupScreen), findsOneWidget);
+      expect(harness.topLocation, signupPath);
+      // Swapped, not stacked: the sign-in screen is gone, the browsing kept.
+      expect(find.byType(LoginScreen, skipOffstage: false), findsNothing);
+      expect(_inTree('store menu'), findsOneWidget);
+      expect(harness.container.read(cartProvider).itemCount, 1);
+      expect(_continueBrowsing, findsOneWidget);
+
+      await _tapVisible(harness, _continueBrowsing);
+
+      expectBackOnBrowsing(harness);
+    });
+
+    testWidgets('create account → already have an account → back to browsing', (tester) async {
+      final harness = await openSignInOverBrowsing(tester);
+      await _tapVisible(harness, find.byKey(const ValueKey('login_create_account_button')));
+
+      await _tapVisible(harness, find.text(harness.l10n.alreadyHaveAccountButton));
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(find.byType(SignupScreen, skipOffstage: false), findsNothing);
+      expect(harness.topLocation, loginPath);
+
+      await _tapVisible(harness, _continueBrowsing);
+
+      expectBackOnBrowsing(harness);
+    });
+
+    testWidgets('forgot password → back to sign-in keeps the browsing reachable',
+        (tester) async {
+      final harness = await openSignInOverBrowsing(tester);
+
+      await _tapVisible(harness, find.text(harness.l10n.forgotPasswordButton));
+      expect(find.byType(ForgotPasswordScreen), findsOneWidget);
+      expect(_inTree('store menu'), findsOneWidget);
+
+      await _tapVisible(harness, find.text(harness.l10n.backToSignInButton));
+      expect(find.byType(LoginScreen), findsOneWidget);
+
+      await _tapVisible(harness, _continueBrowsing);
+
+      expectBackOnBrowsing(harness);
+    });
+
+    testWidgets('signing up from there still lands a customer back on their browsing',
+        (tester) async {
+      final harness = await openSignInOverBrowsing(tester);
+      await _tapVisible(harness, find.byKey(const ValueKey('login_create_account_button')));
+
+      // Sign-up succeeds: loading, a briefly missing profile is skipped here,
+      // then a ready customer.
+      await harness.setSession(const SessionProfileLoading('new'));
+      expect(harness.topLocation, signingInPath);
+      expect(find.byType(SignupScreen, skipOffstage: false), findsNothing);
+
+      await harness.setSession(SessionReady(_appUser('new', UserRole.customer)));
+      expect(find.text('store menu'), findsOneWidget);
+      expect(harness.container.read(cartProvider).itemCount, 1);
+    });
+
+    testWidgets('Continue browsing never bypasses the session: a signed-in user is moved on',
+        (tester) async {
+      final harness = await openSignInOverBrowsing(tester);
+      await harness.setSession(const SessionProfileLoading('u1'));
+
+      // The auth screens are gone with their button; nothing to tap.
+      expect(_continueBrowsing, findsNothing);
+      expect(harness.topLocation, signingInPath);
+    });
+  });
+
+  group('auth screens with guest browsing on but nothing to return to', () {
+    testWidgets('a guest sent to /login with go gets no Continue browsing, and links use go',
+        (tester) async {
+      final harness =
+          await _pumpRouter(tester, initial: const SessionGuest(), guestBrowsing: true);
+
+      harness.router.go(loginPath);
+      await harness.settle();
+
+      expect(harness.router.canPop(), isFalse);
+      expect(_continueBrowsing, findsNothing);
+
+      await _tapVisible(harness, find.byKey(const ValueKey('login_create_account_button')));
+      expect(harness.location, signupPath);
+      expect(harness.router.canPop(), isFalse);
+      expect(_continueBrowsing, findsNothing);
+    });
+  });
+
+  group('auth screens with guest browsing off (unchanged)', () {
+    testWidgets('cold start: unresolved on / → guest → /login, with no Continue browsing',
+        (tester) async {
+      // The real startup flow: `/` (spinner) first, then the redirect to
+      // /login replaces it — nothing is left underneath to pop.
+      final harness = await _pumpRouter(tester);
+      expect(harness.location, homePath);
+
+      await harness.setSession(const SessionGuest());
+
+      expect(harness.location, loginPath);
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(harness.router.canPop(), isFalse);
+      expect(_continueBrowsing, findsNothing);
+
+      // Moving on still replaces the page, as before.
+      await _tapVisible(harness, find.byKey(const ValueKey('login_create_account_button')));
+      expect(harness.location, signupPath);
+      expect(harness.router.canPop(), isFalse);
+      expect(_continueBrowsing, findsNothing);
+    });
+
+    testWidgets('sign-out over pushed screens → /login, with no Continue browsing',
+        (tester) async {
+      final user = _appUser('u1', UserRole.customer);
+      final harness = await _pumpRouter(tester, initial: SessionReady(user));
+      _pushOver(tester, find.text(_homeLabel(user)), 'private screen');
+      await harness.settle();
+
+      await harness.setSession(const SessionGuest());
+
+      expect(harness.location, loginPath);
+      expect(_inTree('private screen'), findsNothing);
+      expect(harness.router.canPop(), isFalse);
+      expect(_continueBrowsing, findsNothing);
+    });
+
+    testWidgets('no Continue browsing, and moving between auth screens replaces the page',
+        (tester) async {
+      final harness = await _pumpRouter(tester, initial: const SessionGuest());
+      expect(harness.location, loginPath);
+      expect(_continueBrowsing, findsNothing);
+
+      await _tapVisible(harness, find.byKey(const ValueKey('login_create_account_button')));
+
+      expect(harness.location, signupPath);
+      expect(find.byType(SignupScreen), findsOneWidget);
+      expect(find.byType(LoginScreen, skipOffstage: false), findsNothing);
+      expect(_continueBrowsing, findsNothing);
+      expect(harness.router.canPop(), isFalse);
+
+      await _tapVisible(harness, find.text(harness.l10n.alreadyHaveAccountButton));
+      expect(harness.location, loginPath);
+      expect(harness.router.canPop(), isFalse);
     });
   });
 

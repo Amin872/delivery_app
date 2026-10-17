@@ -16,6 +16,8 @@
   "passwordLabel": "Password",
   "createAccountNavButton": "Create an account",
   "@createAccountNavButton": {"description": "Link on the login screen that navigates to sign-up."},
+  "continueBrowsingButton": "Continue browsing",
+  "@continueBrowsingButton": {"description": "On the sign-in and sign-up screens, when they were opened from a guest's sign-in prompt: closes them and returns to what the guest was browsing."},
 
   "createAccountTitle": "Create account",
   "@createAccountTitle": {"description": "Sign-up screen title and submit button label."},

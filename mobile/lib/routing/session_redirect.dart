@@ -16,11 +16,20 @@ const signingInPath = '/signing-in';
 /// Routes reachable without a signed-in user.
 const authPaths = {loginPath, signupPath, forgotPasswordPath};
 
+/// The `--dart-define` that turns guest browsing on for local testing:
+/// `flutter run --dart-define=GUEST_BROWSING=true`.
+const guestBrowsingDefine = 'GUEST_BROWSING';
+
 /// Whether a signed-out guest may browse the customer home at `/` instead of
-/// being sent to `/login`. Off until the customer screens prompt guests to
-/// sign in for protected actions (G1-E2); the router reads it through
+/// being sent to `/login`; the router reads it through
 /// `guestBrowsingEnabledProvider`, which tests can override.
-const guestBrowsingEnabledByDefault = false;
+///
+/// Off unless [guestBrowsingDefine] is passed as `true`, and always off in a
+/// release build — so a normal build (no define) behaves exactly as before,
+/// and no production build can turn it on by accident. Turning it on for
+/// real is a separate, deliberate change once guest browsing is validated.
+const guestBrowsingEnabledByDefault =
+    !kReleaseMode && bool.fromEnvironment(guestBrowsingDefine);
 
 /// Which [SessionState] case a [SessionRouteKey] stands for. An auth error
 /// and a profile error are kept apart: only the latter has a known uid.

@@ -2,7 +2,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_messages.dart';
@@ -14,6 +13,7 @@ import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/responsive_center.dart';
 import '../../../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/auth_navigation.dart';
 
 final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
@@ -120,7 +120,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                         : Text(l10n.sendResetLinkButton),
                   ),
                   TextButton(
-                    onPressed: () => context.go('/login'),
+                    onPressed: () => goToAuthScreen(context, '/login'),
                     child: Text(l10n.backToSignInButton),
                   ),
                 ],

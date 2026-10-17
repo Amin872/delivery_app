@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/error_messages.dart';
 import '../../../core/theme/app_theme.dart';
@@ -12,6 +11,7 @@ import '../../../core/widgets/language_toggle_button.dart';
 import '../../../core/widgets/responsive_center.dart';
 import '../../../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/auth_navigation.dart';
 
 final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
@@ -101,7 +101,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     Align(
                       alignment: AlignmentDirectional.centerEnd,
                       child: TextButton(
-                        onPressed: () => context.go('/forgot-password'),
+                        onPressed: () => goToAuthScreen(context, '/forgot-password'),
                         child: Text(l10n.forgotPasswordButton),
                       ),
                     ),
@@ -120,9 +120,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     TextButton(
                       key: const ValueKey('login_create_account_button'),
-                      onPressed: () => context.go('/signup'),
+                      onPressed: () => goToAuthScreen(context, '/signup'),
                       child: Text(l10n.createAccountNavButton),
                     ),
+                    // Only when opened over a guest's browsing.
+                    const ContinueBrowsingButton(),
                   ],
                 ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.05, end: 0),
               ),
