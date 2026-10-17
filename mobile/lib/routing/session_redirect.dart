@@ -8,8 +8,19 @@ const signupPath = '/signup';
 const forgotPasswordPath = '/forgot-password';
 const homePath = '/';
 
+/// Shown while a signed-in user's profile loads, but only with guest browsing
+/// on: a child of `/`, so it sits above any screens a guest had open (keeping
+/// them for later) instead of being hidden underneath them.
+const signingInPath = '/signing-in';
+
 /// Routes reachable without a signed-in user.
 const authPaths = {loginPath, signupPath, forgotPasswordPath};
+
+/// Whether a signed-out guest may browse the customer home at `/` instead of
+/// being sent to `/login`. Off until the customer screens prompt guests to
+/// sign in for protected actions (G1-E2); the router reads it through
+/// `guestBrowsingEnabledProvider`, which tests can override.
+const guestBrowsingEnabledByDefault = false;
 
 /// Which [SessionState] case a [SessionRouteKey] stands for. An auth error
 /// and a profile error are kept apart: only the latter has a known uid.
@@ -66,14 +77,21 @@ class SessionRouteKey {
 /// - Unresolved: stay put. `/` shows a spinner (it's the initial location),
 ///   so a returning user never flashes the login screen while Firebase Auth
 ///   restores their session.
-/// - Guest: only the auth routes (G1-D keeps guests on `/login`; there is
-///   no guest browsing yet).
+/// - Guest: only the auth routes; sent to `/login` from anywhere else.
 /// - Anything else — signed in (profile loading, ready, missing, profile
 ///   error) or an auth error — belongs on `/`, where the role gate shows the
 ///   role's home, a spinner, or an error screen with Retry and Sign out.
 ///   An error is never treated as a guest.
-String? sessionRedirect(SessionRouteKey session, String location) {
+///
+/// With [guestBrowsing] on, see [_guestBrowsingRedirect] instead; off (the
+/// default) is exactly the behaviour above.
+String? sessionRedirect(
+  SessionRouteKey session,
+  String location, {
+  bool guestBrowsing = guestBrowsingEnabledByDefault,
+}) {
   final onAuthRoute = authPaths.contains(location);
+  if (guestBrowsing) return _guestBrowsingRedirect(session, location, onAuthRoute);
   switch (session.kind) {
     case SessionRouteKind.unresolved:
       return null;
@@ -85,5 +103,36 @@ String? sessionRedirect(SessionRouteKey session, String location) {
     case SessionRouteKind.authError:
     case SessionRouteKind.profileError:
       return onAuthRoute ? homePath : null;
+  }
+}
+
+/// The redirect with guest browsing on. Only a confirmed [SessionGuest] is a
+/// guest — unresolved, loading, missing and error states never are.
+///
+/// - Unresolved: stay put, as with it off.
+/// - Guest: `/` (the guest home) and the auth routes; `/signing-in` returns
+///   to `/`; anywhere else goes to `/login`.
+/// - Profile loading: `/signing-in`, from anywhere. It's pushed above `/`,
+///   so whatever a guest was browsing stays underneath while the loading
+///   state stays visible.
+/// - Ready, missing profile, or an error: `/`, leaving the auth routes and
+///   `/signing-in`. For a customer that reveals the screens a guest had open;
+///   the role gate clears them for any other role, and for a missing profile
+///   or an error, so they never cover its Retry / Sign out screen.
+String? _guestBrowsingRedirect(SessionRouteKey session, String location, bool onAuthRoute) {
+  final onSigningIn = location == signingInPath;
+  switch (session.kind) {
+    case SessionRouteKind.unresolved:
+      return null;
+    case SessionRouteKind.guest:
+      if (onAuthRoute || location == homePath) return null;
+      return onSigningIn ? homePath : loginPath;
+    case SessionRouteKind.profileLoading:
+      return onSigningIn ? null : signingInPath;
+    case SessionRouteKind.ready:
+    case SessionRouteKind.profileMissing:
+    case SessionRouteKind.authError:
+    case SessionRouteKind.profileError:
+      return onAuthRoute || onSigningIn ? homePath : null;
   }
 }

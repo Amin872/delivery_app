@@ -125,4 +125,80 @@ void main() {
       }
     });
   });
+
+  group('sessionRedirect with guest browsing (G1-E1)', () {
+    final guest = SessionRouteKey.of(const SessionGuest());
+
+    test('is off by default, and off keeps the G1-D redirect exactly', () {
+      expect(guestBrowsingEnabledByDefault, isFalse);
+      for (final MapEntry(key: kind, value: session) in _sessions.entries) {
+        final key = SessionRouteKey.of(session);
+        for (final path in _allPaths) {
+          expect(
+            sessionRedirect(key, path, guestBrowsing: false),
+            sessionRedirect(key, path),
+            reason: '$kind at $path',
+          );
+        }
+      }
+      expect(sessionRedirect(guest, homePath), loginPath);
+    });
+
+    test('on: a confirmed guest may stay on / and on every auth route', () {
+      expect(sessionRedirect(guest, homePath, guestBrowsing: true), isNull);
+      for (final path in authPaths) {
+        expect(sessionRedirect(guest, path, guestBrowsing: true), isNull, reason: path);
+      }
+    });
+
+    test('on: a guest leaves /signing-in for /, and anywhere unknown for /login', () {
+      expect(sessionRedirect(guest, signingInPath, guestBrowsing: true), homePath);
+      expect(sessionRedirect(guest, '/not-a-route', guestBrowsing: true), loginPath);
+    });
+
+    test('on: a loading profile always shows /signing-in, from anywhere', () {
+      final loading = SessionRouteKey.of(const SessionProfileLoading('u1'));
+      for (final path in _allPaths) {
+        expect(sessionRedirect(loading, path, guestBrowsing: true), signingInPath, reason: path);
+      }
+      expect(sessionRedirect(loading, signingInPath, guestBrowsing: true), isNull);
+    });
+
+    test('on: ready, missing and error states leave auth routes and /signing-in for /', () {
+      for (final kind in [
+        SessionRouteKind.ready,
+        SessionRouteKind.profileMissing,
+        SessionRouteKind.authError,
+        SessionRouteKind.profileError,
+      ]) {
+        final key = SessionRouteKey.of(_sessions[kind]!);
+        expect(sessionRedirect(key, homePath, guestBrowsing: true), isNull, reason: '$kind');
+        expect(sessionRedirect(key, signingInPath, guestBrowsing: true), homePath,
+            reason: '$kind');
+        for (final path in authPaths) {
+          expect(sessionRedirect(key, path, guestBrowsing: true), homePath, reason: '$kind');
+        }
+      }
+    });
+
+    test('on: unresolved never redirects', () {
+      final unresolved = SessionRouteKey.of(const SessionUnresolved());
+      for (final path in [..._allPaths, signingInPath]) {
+        expect(sessionRedirect(unresolved, path, guestBrowsing: true), isNull, reason: path);
+      }
+    });
+
+    test('on: only a confirmed guest is ever allowed to stay on / as a guest', () {
+      // Every non-guest state on an auth route is sent away from it, so none
+      // of them can sit where a guest may.
+      for (final MapEntry(key: kind, value: session) in _sessions.entries) {
+        if (kind == SessionRouteKind.guest || kind == SessionRouteKind.unresolved) continue;
+        final key = SessionRouteKey.of(session);
+        for (final path in authPaths) {
+          expect(sessionRedirect(key, path, guestBrowsing: true), isNotNull,
+              reason: '$kind at $path');
+        }
+      }
+    });
+  });
 }

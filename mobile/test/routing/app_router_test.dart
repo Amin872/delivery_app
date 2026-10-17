@@ -18,7 +18,7 @@ import 'package:delivery_app/features/auth/screens/forgot_password_screen.dart';
 import 'package:delivery_app/features/auth/screens/login_screen.dart';
 import 'package:delivery_app/features/auth/screens/signup_screen.dart';
 import 'package:delivery_app/features/customer/screens/customer_home_screen.dart'
-    show firestoreServiceProvider;
+    show CustomerHomeScreen, firestoreServiceProvider;
 import 'package:delivery_app/features/customer/screens/order_tracking_screen.dart';
 import 'package:delivery_app/features/notifications/providers/push_notification_provider.dart';
 import 'package:delivery_app/l10n/app_localizations.dart';
@@ -61,6 +61,14 @@ AppUser _appUser(
 
 String _homeLabel(AppUser user) => 'home:${user.role.name}:${user.id}';
 
+const _guestHomeLabel = 'guest home';
+
+final _signingInScreen = find.byKey(const ValueKey('signing_in_screen'));
+
+/// Whether [label] is still anywhere in the navigator, covered or not — to
+/// tell "kept underneath" apart from "actually removed".
+Finder _inTree(String label) => find.text(label, skipOffstage: false);
+
 const _authError = AppException('network-error');
 const _profileError = AppException('permission-denied');
 
@@ -93,7 +101,11 @@ class _Harness {
   AppLocalizations get l10n => lookupAppLocalizations(const Locale('en'));
 }
 
-Future<_Harness> _pumpRouter(WidgetTester tester, {SessionState? initial}) async {
+Future<_Harness> _pumpRouter(
+  WidgetTester tester, {
+  SessionState? initial,
+  bool guestBrowsing = false,
+}) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
   final authService = _RecordingAuthService();
@@ -113,6 +125,10 @@ Future<_Harness> _pumpRouter(WidgetTester tester, {SessionState? initial}) async
     }),
     roleHomeProvider.overrideWithValue(
       (user) => Scaffold(body: Center(child: Text(_homeLabel(user)))),
+    ),
+    guestBrowsingEnabledProvider.overrideWithValue(guestBrowsing),
+    guestHomeProvider.overrideWithValue(
+      () => const Scaffold(body: Center(child: Text(_guestHomeLabel))),
     ),
     // For the real OrderTrackingScreen a notification tap opens.
     firestoreServiceProvider.overrideWithValue(
@@ -185,7 +201,21 @@ void main() {
     });
   });
 
-  group('guest (G1-D: still sent to /login)', () {
+  group('guest, with guest browsing off (the default; G1-D behaviour)', () {
+    test('guest browsing is off by default and the guest home is the customer home', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      expect(container.read(guestBrowsingEnabledProvider), isFalse);
+      expect(guestHome(), isA<CustomerHomeScreen>());
+    });
+
+    testWidgets('the guest home is never shown', (tester) async {
+      final harness = await _pumpRouter(tester, initial: const SessionGuest());
+
+      expect(harness.location, loginPath);
+      expect(find.text(_guestHomeLabel), findsNothing);
+    });
+
     testWidgets('/ redirects to /login', (tester) async {
       final harness = await _pumpRouter(tester, initial: const SessionGuest());
       expect(harness.location, loginPath);
@@ -221,6 +251,281 @@ void main() {
       expect(find.byType(OrderTrackingScreen), findsNothing);
       expect(harness.container.read(pendingNotificationTargetProvider), target);
       expect(harness.location, loginPath);
+    });
+  });
+
+  group('guest browsing on (G1-E1)', () {
+    testWidgets('a confirmed guest stays on / and sees the guest home', (tester) async {
+      final harness = await _pumpRouter(tester, guestBrowsing: true);
+      expect(find.text(_guestHomeLabel), findsNothing);
+
+      await harness.setSession(const SessionGuest());
+
+      expect(harness.location, homePath);
+      expect(find.text(_guestHomeLabel), findsOneWidget);
+      expect(find.byType(LoginScreen), findsNothing);
+      expect(find.textContaining('home:'), findsNothing);
+    });
+
+    testWidgets('the auth routes stay reachable, and / brings the guest home back',
+        (tester) async {
+      final harness =
+          await _pumpRouter(tester, initial: const SessionGuest(), guestBrowsing: true);
+
+      harness.router.go(loginPath);
+      await harness.settle();
+      expect(harness.location, loginPath);
+      expect(find.byType(LoginScreen), findsOneWidget);
+
+      harness.router.go(signupPath);
+      await harness.settle();
+      expect(find.byType(SignupScreen), findsOneWidget);
+
+      harness.router.go(forgotPasswordPath);
+      await harness.settle();
+      expect(find.byType(ForgotPasswordScreen), findsOneWidget);
+
+      harness.router.go(homePath);
+      await harness.settle();
+      expect(harness.location, homePath);
+      expect(find.text(_guestHomeLabel), findsOneWidget);
+    });
+
+    for (final (label, session, location) in <(String, SessionState, String)>[
+      ('unresolved auth', const SessionUnresolved(), homePath),
+      ('a loading profile', const SessionProfileLoading('u1'), signingInPath),
+      ('a missing profile', const SessionProfileMissing('u1'), homePath),
+      ('an auth error', const SessionError(_authError, StackTrace.empty), homePath),
+      (
+        'a profile error',
+        const SessionError(_profileError, StackTrace.empty, uid: 'u1'),
+        homePath,
+      ),
+    ]) {
+      testWidgets('$label never shows the guest home', (tester) async {
+        final harness = await _pumpRouter(tester, initial: session, guestBrowsing: true);
+
+        expect(harness.location, location);
+        expect(find.text(_guestHomeLabel), findsNothing);
+      });
+    }
+
+    testWidgets('a guest who hits an auth error gets the error screen, uncovered',
+        (tester) async {
+      final harness =
+          await _pumpRouter(tester, initial: const SessionGuest(), guestBrowsing: true);
+      _pushOver(tester, find.text(_guestHomeLabel), 'store menu');
+      await harness.settle();
+
+      await harness.setSession(const SessionError(_authError, StackTrace.empty));
+
+      expect(_inTree('store menu'), findsNothing);
+      expect(find.text(_guestHomeLabel), findsNothing);
+      expect(find.text(harness.l10n.retryButton), findsOneWidget);
+      expect(find.text(harness.l10n.signOutButton), findsOneWidget);
+    });
+
+    testWidgets('a guest sign-in ending in a missing profile clears the guest screens',
+        (tester) async {
+      final harness =
+          await _pumpRouter(tester, initial: const SessionGuest(), guestBrowsing: true);
+      _pushOver(tester, find.text(_guestHomeLabel), 'store menu');
+      await harness.settle();
+
+      // While the profile loads, the loading screen covers the browsing
+      // context, which is kept underneath…
+      await harness.setSession(const SessionProfileLoading('u1'));
+      expect(_signingInScreen, findsOneWidget);
+      expect(find.text('store menu'), findsNothing);
+      expect(_inTree('store menu'), findsOneWidget);
+
+      // …and removed once the sign-in ends in a missing profile, so it can't
+      // cover that screen.
+      await harness.setSession(const SessionProfileMissing('u1'));
+      expect(harness.location, homePath);
+      expect(_signingInScreen, findsNothing);
+      expect(_inTree('store menu'), findsNothing);
+      expect(find.text(harness.l10n.noProfileFoundMessage), findsOneWidget);
+    });
+
+    testWidgets('a guest sign-in ending in a profile error clears the guest screens',
+        (tester) async {
+      final harness =
+          await _pumpRouter(tester, initial: const SessionGuest(), guestBrowsing: true);
+      _pushOver(tester, find.text(_guestHomeLabel), 'store menu');
+      await harness.settle();
+
+      await harness.setSession(const SessionProfileLoading('u1'));
+      expect(_signingInScreen, findsOneWidget);
+      await harness.setSession(const SessionError(_profileError, StackTrace.empty, uid: 'u1'));
+
+      expect(harness.location, homePath);
+      expect(_signingInScreen, findsNothing);
+      expect(_inTree('store menu'), findsNothing);
+      expect(find.text(harness.l10n.retryButton), findsOneWidget);
+      expect(find.text(_guestHomeLabel), findsNothing);
+    });
+
+    testWidgets('a guest who signs in as a customer keeps what they were browsing',
+        (tester) async {
+      final harness =
+          await _pumpRouter(tester, initial: const SessionGuest(), guestBrowsing: true);
+      _pushOver(tester, find.text(_guestHomeLabel), 'store menu');
+      await harness.settle();
+
+      await harness.setSession(const SessionProfileLoading('u1'));
+      expect(harness.location, signingInPath);
+      expect(_signingInScreen, findsOneWidget);
+      expect(find.text('store menu'), findsNothing);
+      expect(_inTree('store menu'), findsOneWidget);
+
+      final user = _appUser('u1', UserRole.customer);
+      await harness.setSession(SessionReady(user));
+
+      expect(harness.location, homePath);
+      expect(_signingInScreen, findsNothing);
+      expect(find.text('store menu'), findsOneWidget);
+    });
+
+    testWidgets('back cannot dismiss the loading screen', (tester) async {
+      final harness =
+          await _pumpRouter(tester, initial: const SessionGuest(), guestBrowsing: true);
+      _pushOver(tester, find.text(_guestHomeLabel), 'store menu');
+      await harness.settle();
+      await harness.setSession(const SessionProfileLoading('u1'));
+      expect(_signingInScreen, findsOneWidget);
+
+      await harness.router.routerDelegate.popRoute();
+      await harness.settle();
+
+      expect(harness.location, signingInPath);
+      expect(_signingInScreen, findsOneWidget);
+      expect(find.text('store menu'), findsNothing);
+    });
+
+    for (final role in [UserRole.vendor, UserRole.driver, UserRole.admin]) {
+      testWidgets('a guest who signs in as $role has the guest screens cleared',
+          (tester) async {
+        final harness =
+            await _pumpRouter(tester, initial: const SessionGuest(), guestBrowsing: true);
+        _pushOver(tester, find.text(_guestHomeLabel), 'store menu');
+        await harness.settle();
+
+        await harness.setSession(const SessionProfileLoading('u1'));
+        final user = _appUser('u1', role);
+        await harness.setSession(SessionReady(user));
+
+        expect(_inTree('store menu'), findsNothing);
+        expect(_signingInScreen, findsNothing);
+        expect(find.text(_homeLabel(user)), findsOneWidget);
+        expect(find.text(_guestHomeLabel), findsNothing);
+      });
+    }
+
+    testWidgets('signing out clears private screens and shows the guest home', (tester) async {
+      final user = _appUser('u1', UserRole.customer);
+      final harness =
+          await _pumpRouter(tester, initial: SessionReady(user), guestBrowsing: true);
+      _pushOver(tester, find.text(_homeLabel(user)), 'private screen');
+      await harness.settle();
+      expect(find.text('private screen'), findsOneWidget);
+
+      await harness.setSession(const SessionGuest());
+
+      expect(_inTree('private screen'), findsNothing);
+      expect(harness.location, homePath);
+      expect(find.text(_guestHomeLabel), findsOneWidget);
+      expect(find.text(_homeLabel(user)), findsNothing);
+    });
+
+    testWidgets('a pushed login followed by a customer sign-in returns to the guest screen',
+        (tester) async {
+      final harness =
+          await _pumpRouter(tester, initial: const SessionGuest(), guestBrowsing: true);
+      _pushOver(tester, find.text(_guestHomeLabel), 'store menu');
+      await harness.settle();
+
+      harness.router.push(loginPath);
+      await harness.settle();
+      expect(harness.location, loginPath);
+      expect(find.byType(LoginScreen), findsOneWidget);
+
+      await harness.setSession(const SessionProfileLoading('u1'));
+      expect(harness.location, signingInPath);
+      expect(find.byType(LoginScreen), findsNothing);
+      expect(_signingInScreen, findsOneWidget);
+      expect(find.text('store menu'), findsNothing);
+
+      await harness.setSession(SessionReady(_appUser('u1', UserRole.customer)));
+      expect(harness.location, homePath);
+      expect(find.text('store menu'), findsOneWidget);
+      expect(find.byType(LoginScreen), findsNothing);
+      expect(_signingInScreen, findsNothing);
+    });
+
+    testWidgets('a pushed login followed by a vendor sign-in clears the guest screens',
+        (tester) async {
+      final harness =
+          await _pumpRouter(tester, initial: const SessionGuest(), guestBrowsing: true);
+      _pushOver(tester, find.text(_guestHomeLabel), 'store menu');
+      await harness.settle();
+      harness.router.push(loginPath);
+      await harness.settle();
+
+      await harness.setSession(const SessionProfileLoading('u1'));
+      final vendor = _appUser('u1', UserRole.vendor);
+      await harness.setSession(SessionReady(vendor));
+
+      expect(_inTree('store menu'), findsNothing);
+      expect(find.byType(LoginScreen), findsNothing);
+      expect(_signingInScreen, findsNothing);
+      expect(find.text(_homeLabel(vendor)), findsOneWidget);
+    });
+
+    testWidgets('a different uid after signing out and back in still starts clean',
+        (tester) async {
+      final u1 = _appUser('u1', UserRole.customer);
+      final harness = await _pumpRouter(tester, initial: SessionReady(u1), guestBrowsing: true);
+      _pushOver(tester, find.text(_homeLabel(u1)), "u1's order");
+      await harness.settle();
+
+      await harness.setSession(const SessionGuest());
+      expect(find.text("u1's order"), findsNothing);
+
+      final u2 = _appUser('u2', UserRole.customer);
+      await harness.setSession(const SessionProfileLoading('u2'));
+      await harness.setSession(SessionReady(u2));
+      expect(find.text("u1's order"), findsNothing);
+      expect(find.text(_homeLabel(u2)), findsOneWidget);
+    });
+
+    testWidgets('a pending notification tap never opens for a guest', (tester) async {
+      final harness =
+          await _pumpRouter(tester, initial: const SessionGuest(), guestBrowsing: true);
+      const target = NotificationOrderTarget(type: 'order_status', orderId: 'order-9');
+
+      harness.container.read(pendingNotificationTargetProvider.notifier).state = target;
+      await harness.settle();
+
+      expect(find.byType(OrderTrackingScreen), findsNothing);
+      expect(harness.container.read(pendingNotificationTargetProvider), target);
+      expect(find.text(_guestHomeLabel), findsOneWidget);
+    });
+
+    testWidgets('one GoRouter instance across guest and signed-in states', (tester) async {
+      final harness = await _pumpRouter(tester, guestBrowsing: true);
+      final router = harness.router;
+
+      for (final session in <SessionState>[
+        const SessionGuest(),
+        const SessionProfileLoading('u1'),
+        SessionReady(_appUser('u1', UserRole.customer)),
+        const SessionGuest(),
+        SessionReady(_appUser('u2', UserRole.vendor)),
+      ]) {
+        await harness.setSession(session);
+        expect(identical(harness.router, router), isTrue, reason: '$session');
+      }
     });
   });
 

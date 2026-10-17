@@ -42,6 +42,19 @@ Widget roleHome(AppUser user) => switch (user.role) {
       UserRole.admin => const AdminDashboardScreen(),
     };
 
+/// Whether a confirmed guest may browse the customer home at `/` (see
+/// [guestBrowsingEnabledByDefault]). A provider so tests can turn it on.
+final guestBrowsingEnabledProvider = Provider<bool>((ref) => guestBrowsingEnabledByDefault);
+
+/// The home a guest browses when guest browsing is on: the customer home,
+/// with no [NotificationTapHandler] — a guest never gets a notification
+/// destination. A provider only so router tests can stand in a lightweight
+/// home; it can only ever yield the customer home, never a vendor, driver or
+/// admin one.
+final guestHomeProvider = Provider<Widget Function()>((ref) => guestHome);
+
+Widget guestHome() => const CustomerHomeScreen();
+
 /// The routing-relevant part of [sessionProvider], as a [Listenable] for
 /// [GoRouter.refreshListenable]. [ValueNotifier] only notifies when the
 /// [SessionRouteKey] actually changes, so profile-only updates never re-run
@@ -61,13 +74,18 @@ final sessionRouteKeyProvider = Provider<ValueNotifier<SessionRouteKey>>((ref) {
 /// rebuilt — so auth/profile events don't reset navigation.
 final appRouterProvider = Provider<GoRouter>((ref) {
   final sessionKey = ref.watch(sessionRouteKeyProvider);
+  final guestBrowsing = ref.watch(guestBrowsingEnabledProvider);
 
   final router = GoRouter(
     // `/` rather than `/login`: while auth is unresolved the role gate shows
     // a spinner there, and a returning user goes straight to their home.
     initialLocation: homePath,
     refreshListenable: sessionKey,
-    redirect: (context, state) => sessionRedirect(sessionKey.value, state.matchedLocation),
+    redirect: (context, state) => sessionRedirect(
+      sessionKey.value,
+      state.matchedLocation,
+      guestBrowsing: guestBrowsing,
+    ),
     routes: [
       GoRoute(
         path: loginPath,
@@ -84,6 +102,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: homePath,
         pageBuilder: (context, state) => _fadeSlidePage(state, const _RoleGate()),
+        routes: [
+          // Only with guest browsing on, so the route table with it off is
+          // exactly G1-D's. A child of `/`, so it's stacked above `/` and any
+          // screens a guest pushed there, which stay put underneath.
+          if (guestBrowsing)
+            GoRoute(
+              path: signingInPath.substring(1),
+              pageBuilder: (context, state) => _fadeSlidePage(state, const _SigningInScreen()),
+            ),
+        ],
       ),
     ],
   );
@@ -104,27 +132,63 @@ class _RoleGate extends ConsumerStatefulWidget {
 
 class _RoleGateState extends ConsumerState<_RoleGate> {
   // The router is no longer rebuilt per auth event, which used to discard
-  // every screen pushed over a role's home. Keep that guarantee for a change
-  // of signed-in account: nothing opened by one uid stays on top for
-  // another. The uid is remembered across states that carry none (an auth
-  // error, a guest, unresolved), so ready(A) → auth error → ready(B) still
-  // counts as a switch. Signing out drops pushed screens on its own: the
-  // redirect to /login replaces this page, disposing this state with it.
+  // every screen pushed over a role's home. Keep that guarantee here:
+  // - a change of signed-in account pops back to this gate, so nothing
+  //   opened by one uid stays on top for another. The uid is remembered
+  //   across states that carry none (an auth error, unresolved), so
+  //   ready(A) → auth error → ready(B) still counts as a switch;
+  // - signing out: with guest browsing off, the redirect to /login replaces
+  //   this page (disposing this state with it). With it on, this page stays
+  //   for the guest home, so it pops back here itself;
+  // - a guest who signs in keeps what they were browsing if they turn out to
+  //   be a customer, and has it cleared if they're a vendor, driver or admin
+  //   (decided once the role is known, i.e. at ready) — or if the sign-in
+  //   ends in a missing profile or an error, whose screen it would cover.
   String? _lastSignedInUid;
+  bool _browsedAsGuest = false;
   bool _popToRootScheduled = false;
 
   @override
   void initState() {
     super.initState();
-    _lastSignedInUid = SessionRouteKey.of(ref.read(sessionProvider)).uid;
+    final session = ref.read(sessionProvider);
+    _lastSignedInUid = SessionRouteKey.of(session).uid;
+    _browsedAsGuest = session is SessionGuest && ref.read(guestBrowsingEnabledProvider);
   }
 
   void _onSessionChanged(SessionState? previous, SessionState next) {
+    if (next is SessionGuest) {
+      // With guest browsing off, the redirect to /login handles sign-out
+      // exactly as before.
+      if (!ref.read(guestBrowsingEnabledProvider)) return;
+      if (_lastSignedInUid != null) _schedulePopToRoot();
+      _lastSignedInUid = null;
+      _browsedAsGuest = true;
+      return;
+    }
+
+    // While a sign-in's profile loads, the guest's screens wait under
+    // /signing-in. They must never cover a missing-profile or error screen
+    // (Retry / Sign out) — including an auth error, which carries no uid.
+    if (_browsedAsGuest && (next is SessionProfileMissing || next is SessionError)) {
+      _browsedAsGuest = false;
+      _schedulePopToRoot();
+    }
+
     final uid = SessionRouteKey.of(next).uid;
     if (uid == null) return;
     final lastUid = _lastSignedInUid;
     _lastSignedInUid = uid;
-    if (lastUid != null && lastUid != uid) _schedulePopToRoot();
+    if (lastUid != null && lastUid != uid) {
+      _browsedAsGuest = false;
+      _schedulePopToRoot();
+      return;
+    }
+    if (_browsedAsGuest && next is SessionReady) {
+      _browsedAsGuest = false;
+      // Only customers may keep the customer screens a guest opened.
+      if (next.user.role != UserRole.customer) _schedulePopToRoot();
+    }
   }
 
   /// Pops back to this role gate after the current frame rather than from
@@ -149,8 +213,11 @@ class _RoleGateState extends ConsumerState<_RoleGate> {
     final l10n = AppLocalizations.of(context)!;
 
     final Widget child = switch (session) {
-      // A guest is redirected to /login; the spinner only covers the frame
-      // before that redirect lands.
+      // With guest browsing on, a confirmed guest browses the customer home
+      // (no notification handler). Otherwise a guest is redirected to
+      // /login, and the spinner only covers the frame before that lands.
+      SessionGuest() when ref.watch(guestBrowsingEnabledProvider) =>
+        ref.watch(guestHomeProvider)(),
       SessionUnresolved() || SessionGuest() || SessionProfileLoading() =>
         Scaffold(body: Center(child: screenSpinner(context))),
       SessionReady(:final user) => NotificationTapHandler(
@@ -181,6 +248,25 @@ class _RoleGateState extends ConsumerState<_RoleGate> {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
       child: KeyedSubtree(key: ValueKey(SessionRouteKey.of(session)), child: child),
+    );
+  }
+}
+
+/// Profile loading after a sign-in, with guest browsing on: covers whatever
+/// a guest was browsing so the loading state is always visible, and back
+/// can't dismiss it. The redirect replaces it with `/` once the session is
+/// ready, missing or failed.
+class _SigningInScreen extends StatelessWidget {
+  const _SigningInScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        key: const ValueKey('signing_in_screen'),
+        body: Center(child: screenSpinner(context)),
+      ),
     );
   }
 }
