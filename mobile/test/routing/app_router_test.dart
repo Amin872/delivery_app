@@ -85,6 +85,12 @@ class _Harness {
 
   String get location => router.routerDelegate.currentConfiguration.uri.path;
 
+  /// The location of the top-most route. Unlike [location], this reflects a
+  /// route opened with `router.push`: go_router keeps the configuration's
+  /// `uri` at the base location for a push (`RouteMatchList.push` doesn't
+  /// change it, and `GoRouter.optionURLReflectsImperativeAPIs` is false).
+  String get topLocation => router.routerDelegate.currentConfiguration.last.matchedLocation;
+
   Future<void> setSession(SessionState session) async {
     container.read(_session.notifier).state = session;
     await settle();
@@ -447,19 +453,25 @@ void main() {
 
       harness.router.push(loginPath);
       await harness.settle();
-      expect(harness.location, loginPath);
+      // A pushed route is on top while the base location stays /.
+      expect(harness.topLocation, loginPath);
+      expect(harness.location, homePath);
       expect(find.byType(LoginScreen), findsOneWidget);
+      expect(_inTree('store menu'), findsOneWidget);
 
       await harness.setSession(const SessionProfileLoading('u1'));
       expect(harness.location, signingInPath);
-      expect(find.byType(LoginScreen), findsNothing);
+      expect(harness.topLocation, signingInPath);
+      expect(find.byType(LoginScreen, skipOffstage: false), findsNothing);
       expect(_signingInScreen, findsOneWidget);
       expect(find.text('store menu'), findsNothing);
+      expect(_inTree('store menu'), findsOneWidget);
 
       await harness.setSession(SessionReady(_appUser('u1', UserRole.customer)));
       expect(harness.location, homePath);
+      expect(harness.topLocation, homePath);
       expect(find.text('store menu'), findsOneWidget);
-      expect(find.byType(LoginScreen), findsNothing);
+      expect(find.byType(LoginScreen, skipOffstage: false), findsNothing);
       expect(_signingInScreen, findsNothing);
     });
 
@@ -471,14 +483,17 @@ void main() {
       await harness.settle();
       harness.router.push(loginPath);
       await harness.settle();
+      expect(harness.topLocation, loginPath);
 
       await harness.setSession(const SessionProfileLoading('u1'));
+      expect(harness.topLocation, signingInPath);
       final vendor = _appUser('u1', UserRole.vendor);
       await harness.setSession(SessionReady(vendor));
 
       expect(_inTree('store menu'), findsNothing);
-      expect(find.byType(LoginScreen), findsNothing);
+      expect(find.byType(LoginScreen, skipOffstage: false), findsNothing);
       expect(_signingInScreen, findsNothing);
+      expect(harness.topLocation, homePath);
       expect(find.text(_homeLabel(vendor)), findsOneWidget);
     });
 
