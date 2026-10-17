@@ -15,6 +15,7 @@ import '../../../models/review.dart';
 import '../../../models/vendor.dart';
 import '../../../routing/page_transitions.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../auth/widgets/require_sign_in.dart';
 import '../providers/cart_provider.dart';
 import '../widgets/cart_add_flow.dart';
 import '../widgets/floating_order_button.dart';
@@ -194,7 +195,13 @@ class _VendorMenuScreenState extends ConsumerState<VendorMenuScreen> {
             if (_selectedTabIndex >= sections.length) {
               _selectedTabIndex = sections.isEmpty ? 0 : sections.length - 1;
             }
-            final reviewsAsync = ref.watch(vendorReviewsProvider(vendor.id));
+            // Detailed reviews are readable only when signed in
+            // (firestore.rules: reviews `allow read: if isSignedIn()`), so a
+            // guest never queries them — they see a sign-in prompt instead,
+            // while the aggregate rating from the public vendor doc stays
+            // on StoreInfoSection.
+            final reviewsAsync =
+                currentUser == null ? null : ref.watch(vendorReviewsProvider(vendor.id));
 
             return CustomScrollView(
               controller: _scrollController,
@@ -240,8 +247,10 @@ class _VendorMenuScreenState extends ConsumerState<VendorMenuScreen> {
                       icon: isFavorite ? Icons.favorite : Icons.favorite_border,
                       color: isFavorite ? colorScheme.error : VendorPalette.textPrimary,
                       tooltip: isFavorite ? l10n.unfavoriteTooltip : l10n.favoriteTooltip,
+                      // A guest is asked to sign in rather than getting a
+                      // dead button.
                       onPressed: currentUser == null
-                          ? null
+                          ? () => requireSignIn(context, ref)
                           : () => ref
                               .read(firestoreServiceProvider)
                               .toggleFavoriteVendor(currentUser.id, vendor.id, !isFavorite),
@@ -365,29 +374,32 @@ class _VendorMenuScreenState extends ConsumerState<VendorMenuScreen> {
                       children: [
                         const Divider(),
                         Text(l10n.reviewsTitle, style: Theme.of(context).textTheme.titleMedium),
-                        reviewsAsync.animatedWhen(
-                          data: (reviews) => reviews.isEmpty
-                              ? Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 8),
-                                  child: Text(l10n.noReviewsMessage),
-                                )
-                              : Column(
-                                  children: [
-                                    for (final review in reviews)
-                                      ListTile(
-                                        contentPadding: EdgeInsets.zero,
-                                        title: StarRatingDisplay(
-                                          rating: review.vendorRating.toDouble(),
-                                          size: 14,
+                        if (reviewsAsync == null)
+                          _ReviewsSignInPrompt(onSignIn: () => requireSignIn(context, ref))
+                        else
+                          reviewsAsync.animatedWhen(
+                            data: (reviews) => reviews.isEmpty
+                                ? Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    child: Text(l10n.noReviewsMessage),
+                                  )
+                                : Column(
+                                    children: [
+                                      for (final review in reviews)
+                                        ListTile(
+                                          contentPadding: EdgeInsets.zero,
+                                          title: StarRatingDisplay(
+                                            rating: review.vendorRating.toDouble(),
+                                            size: 14,
+                                          ),
+                                          subtitle:
+                                              review.comment == null ? null : Text(review.comment!),
                                         ),
-                                        subtitle:
-                                            review.comment == null ? null : Text(review.comment!),
-                                      ),
-                                  ],
-                                ),
-                          loading: () => const SizedBox.shrink(),
-                          error: (_, __) => const SizedBox.shrink(),
-                        ),
+                                    ],
+                                  ),
+                            loading: () => const SizedBox.shrink(),
+                            error: (_, __) => const SizedBox.shrink(),
+                          ),
                       ],
                     ),
                   ),
@@ -413,6 +425,32 @@ class _VendorMenuScreenState extends ConsumerState<VendorMenuScreen> {
               totalLabel: currencyFormat.format(cart.total),
               onTap: () => Navigator.of(context).push(fadeSlideRoute(const CartScreen())),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Stands in for a store's detailed reviews when no one is signed in.
+class _ReviewsSignInPrompt extends StatelessWidget {
+  const _ReviewsSignInPrompt({required this.onSignIn});
+
+  final VoidCallback onSignIn;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      key: const ValueKey('reviews_sign_in_prompt'),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(child: Text(l10n.reviewsSignInMessage)),
+          TextButton(
+            key: const ValueKey('reviews_sign_in_button'),
+            onPressed: onSignIn,
+            child: Text(l10n.signInTitle),
           ),
         ],
       ),

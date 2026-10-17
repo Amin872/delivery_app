@@ -18,6 +18,7 @@ import '../../../models/vendor.dart';
 import '../../../routing/page_transitions.dart';
 import '../../../services/firestore_service.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../auth/widgets/require_sign_in.dart';
 import '../../notifications/screens/notifications_screen.dart';
 import '../providers/cart_provider.dart';
 import '../widgets/category_section.dart';
@@ -233,8 +234,10 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                   onLocationTap: () => _openCityPicker(selectedCity),
                   onNotificationsTap: () =>
                       Navigator.of(context).push(fadeSlideRoute(const NotificationsScreen())),
+                  // A guest is asked to sign in rather than getting a dead
+                  // button.
                   onAccountTap: customerId == null
-                      ? null
+                      ? () => requireSignIn(context, ref)
                       : () => Navigator.of(context)
                           .push(fadeSlideRoute(AccountScreen(customerId: customerId))),
                 ),

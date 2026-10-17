@@ -4,6 +4,9 @@
   "appTitle": "تطبيق التوصيل",
 
   "signInTitle": "تسجيل الدخول",
+  "signInRequiredTitle": "سجّل الدخول للمتابعة",
+  "signInRequiredMessage": "سجّل الدخول أو أنشئ حسابًا للقيام بذلك.",
+  "reviewsSignInMessage": "سجّل الدخول لقراءة تقييمات العملاء.",
   "emailLabel": "البريد الإلكتروني",
   "passwordLabel": "كلمة المرور",
   "createAccountNavButton": "إنشاء حساب",

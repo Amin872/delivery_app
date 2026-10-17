@@ -6,6 +6,12 @@
 
   "signInTitle": "Sign in",
   "@signInTitle": {"description": "Login screen title and submit button label."},
+  "signInRequiredTitle": "Sign in to continue",
+  "@signInRequiredTitle": {"description": "Title of the prompt shown when a guest tries an action that needs an account (ordering, addresses, favorites, account)."},
+  "signInRequiredMessage": "Sign in or create an account to do this.",
+  "@signInRequiredMessage": {"description": "Body of the sign-in prompt shown to a guest; its confirm button reuses signInTitle."},
+  "reviewsSignInMessage": "Sign in to read customer reviews.",
+  "@reviewsSignInMessage": {"description": "Shown to a guest instead of a store's detailed reviews; the store's average rating stays visible."},
   "emailLabel": "Email",
   "passwordLabel": "Password",
   "createAccountNavButton": "Create an account",

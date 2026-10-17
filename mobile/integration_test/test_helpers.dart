@@ -91,6 +91,7 @@ Future<void> signUp(
   required String phone,
   UserRole role = UserRole.customer,
 }) async {
+  await openSignIn(tester);
   await tester.tap(find.byKey(const ValueKey('login_create_account_button')));
   await tester.pumpAndSettle();
 
@@ -117,9 +118,24 @@ Future<void> signUp(
   await _settleForBackend(tester);
 }
 
-/// Drives the real sign-in form. Assumes `LoginScreen` is already showing
-/// (true right after `signOut`, or on a fresh app start with no session).
+/// Brings up `LoginScreen` if it isn't already showing. With guest browsing
+/// off it always is when signed out (fresh start or after `signOut`). With it
+/// on, a signed-out app shows the guest home instead, so this opens sign-in
+/// the way a guest would: the account button, then the sign-in prompt.
+Future<void> openSignIn(WidgetTester tester) async {
+  await tester.pumpAndSettle();
+  if (find.byKey(const ValueKey('login_email_field')).evaluate().isNotEmpty) return;
+  await tester.tap(find.byTooltip('Account'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('sign_in_prompt_confirm')));
+  await tester.pumpAndSettle();
+}
+
+/// Drives the real sign-in form, opening it first if needed (see
+/// [openSignIn]) — a fresh app start with no session, or right after
+/// `signOut`.
 Future<void> signIn(WidgetTester tester, {required String email, required String password}) async {
+  await openSignIn(tester);
   await tester.enterText(find.byKey(const ValueKey('login_email_field')), email);
   await tester.enterText(find.byKey(const ValueKey('login_password_field')), password);
   await tester.pumpAndSettle();

@@ -20,6 +20,7 @@ import '../../../models/address.dart';
 import '../../../models/vendor.dart';
 import '../../../routing/page_transitions.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../auth/widgets/require_sign_in.dart';
 import '../../driver/screens/driver_home_screen.dart' show functionsServiceProvider;
 import '../providers/cart_provider.dart';
 import '../widgets/cart_quantity_control.dart';
@@ -53,6 +54,9 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   bool _addressPrefilled = false;
 
   Future<void> _changeAddress() async {
+    // Addresses belong to an account: a guest is asked to sign in first.
+    if (!await requireSignIn(context, ref)) return;
+    if (!mounted) return;
     final appUser = ref.read(currentAppUserProvider).valueOrNull;
     if (appUser == null) return;
     await Navigator.of(context)
@@ -65,6 +69,10 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   }
 
   Future<void> _placeOrder() async {
+    // Ordering needs an account: a guest is asked to sign in, and nothing is
+    // sent. (createOrder also rejects any unauthenticated call server-side.)
+    if (!await requireSignIn(context, ref)) return;
+    if (!mounted) return;
     if (!_formKey.currentState!.validate()) return;
     final cart = ref.read(cartProvider);
     final appUser = ref.read(currentAppUserProvider).valueOrNull;
@@ -222,7 +230,12 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                     ),
                   GradientButton(
                     key: const ValueKey('cart_place_order_button'),
-                    onPressed: (_isSubmitting || _selectedAddress == null || belowMinimum)
+                    // With no signed-in customer there's no saved address to
+                    // pick, so the button stays enabled and asks them to sign
+                    // in instead of sitting there disabled.
+                    onPressed: (_isSubmitting ||
+                            (customerId != null && _selectedAddress == null) ||
+                            belowMinimum)
                         ? null
                         : _placeOrder,
                     gradient: const LinearGradient(
