@@ -116,10 +116,21 @@ void main() {
     expect(find.text(adminTestL10n.orderLabel(displayOrderId('order-5')), skipOffstage: false), findsOneWidget);
     expect(find.text(adminTestL10n.orderLabel(displayOrderId('order-4')), skipOffstage: false), findsNothing);
 
+    // scrollUntilVisible stops as soon as the button is built, which can
+    // leave it at the viewport's edge; ensureVisible brings it fully on
+    // screen so the tap lands on it.
+    await tester.ensureVisible(loadMore);
+    await tester.pumpAndSettle();
     await tester.tap(loadMore);
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text(adminTestL10n.orderLabel(displayOrderId('order-0'))), 300, scrollable: list);
-    expect(find.text(adminTestL10n.orderLabel(displayOrderId('order-0'))), findsOneWidget);
+
+    // The last row is built lazily, so scroll to it first, then make sure
+    // it is fully on screen like the button above.
+    final oldest = find.text(adminTestL10n.orderLabel(displayOrderId('order-0')));
+    await tester.scrollUntilVisible(oldest, 300, scrollable: list);
+    await tester.ensureVisible(oldest);
+    await tester.pumpAndSettle();
+    expect(oldest, findsOneWidget);
     expect(find.byKey(const ValueKey('admin_load_more'), skipOffstage: false), findsNothing);
   });
 
