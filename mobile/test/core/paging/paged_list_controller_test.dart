@@ -9,10 +9,10 @@ import 'package:delivery_app/core/paging/paged_list_controller.dart';
 /// cursor is the last id returned. Each request can be held open with
 /// [gate] and failed with [failNext].
 class _Source {
-  _Source(this.total, {this.pageSize = 3});
+  _Source(this.total);
 
   final int total;
-  final int pageSize;
+  final int pageSize = 3;
   final requests = <Object?>[];
   Completer<void>? gate;
   bool failNext = false;
